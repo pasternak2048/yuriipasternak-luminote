@@ -1,0 +1,1063 @@
+package com.yp.luminote.app.ui.apps
+
+import android.graphics.Bitmap
+import android.graphics.Canvas as AndroidCanvas
+import android.util.LruCache
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.yp.luminote.app.data.apps.InstalledApp
+import com.yp.luminote.app.data.apps.InstalledAppsRepository
+import com.yp.luminote.app.data.settings.LuminoteSettings
+import com.yp.luminote.app.data.settings.NotificationSource
+import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
+import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+@Composable
+fun AppsScreen(
+    onBackClick: () -> Unit,
+    windowSizeClass: LuminoteWindowSizeClass,
+    viewModel: LuminoteSettingsViewModel
+) {
+    val context = LocalContext.current
+
+    val appsRepository =
+        remember {
+            InstalledAppsRepository(context)
+        }
+
+    val settings by
+    viewModel.settings.collectAsState()
+
+    val installedApps by produceState<List<InstalledApp>>(
+        initialValue = emptyList(),
+        key1 = appsRepository
+    ) {
+        value = withContext(Dispatchers.IO) {
+            appsRepository.getInstalledApps()
+        }
+    }
+
+    var sourceExpanded by
+    remember {
+        mutableStateOf(false)
+    }
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+    ) {
+
+        /*
+         * =========================================================
+         * HEADER
+         * =========================================================
+         */
+
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .luminoteSafeHorizontalPadding()
+        ) {
+
+            Spacer(
+                modifier =
+                    Modifier.height(32.dp)
+            )
+
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                Text(
+                    text = "‹",
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .clickable(
+                                onClick =
+                                    onBackClick
+                            )
+                            .padding(
+                                bottom = 4.dp
+                            ),
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = Color.White
+                )
+
+                Text(
+                    text = "Apps",
+                    modifier =
+                        Modifier.padding(
+                            start = 4.dp
+                        ),
+                    style = MaterialTheme.typography.displayLarge,
+                    fontWeight =
+                        FontWeight.SemiBold,
+                    color = Color.White
+                )
+            }
+
+            Spacer(
+                modifier =
+                    Modifier.height(10.dp)
+            )
+
+            Text(
+                text =
+                    "Choose which apps can trigger notifications",
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyLarge,
+                color = Color(0xFFAFAFB8)
+            )
+        }
+
+        Spacer(
+            modifier =
+                Modifier.height(24.dp)
+        )
+
+        when (windowSizeClass) {
+
+            LuminoteWindowSizeClass.COMPACT -> {
+
+                CompactAppsContent(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    settings =
+                        settings,
+                    installedApps =
+                        installedApps,
+                    sourceExpanded =
+                        sourceExpanded,
+                    onSourceToggle = {
+                        sourceExpanded =
+                            !sourceExpanded
+                    },
+                    onSourceSelected = { source ->
+
+                        viewModel.setNotificationSource(
+                            source
+                        )
+
+                        sourceExpanded = false
+                    },
+                    onAppClick = { app ->
+
+                        viewModel.setAppSelected(
+                            packageName =
+                                app.packageName,
+                            selected =
+                                app.packageName !in
+                                        settings.selectedApps
+                        )
+                    }
+                )
+            }
+
+            LuminoteWindowSizeClass.MEDIUM,
+            LuminoteWindowSizeClass.EXPANDED -> {
+
+                WideAppsContent(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    settings =
+                        settings,
+                    installedApps =
+                        installedApps,
+                    sourceExpanded =
+                        sourceExpanded,
+                    onSourceToggle = {
+                        sourceExpanded =
+                            !sourceExpanded
+                    },
+                    onSourceSelected = { source ->
+
+                        viewModel.setNotificationSource(
+                            source
+                        )
+
+                        sourceExpanded = false
+                    },
+                    onAppClick = { app ->
+
+                        viewModel.setAppSelected(
+                            packageName =
+                                app.packageName,
+                            selected =
+                                app.packageName !in
+                                        settings.selectedApps
+                        )
+                    }
+                )
+            }
+        }
+    }
+}
+
+/*
+ * ================================================================
+ * COMPACT
+ * ================================================================
+ */
+
+@Composable
+private fun CompactAppsContent(
+    modifier: Modifier,
+    settings: LuminoteSettings,
+    installedApps: List<InstalledApp>,
+    sourceExpanded: Boolean,
+    onSourceToggle: () -> Unit,
+    onSourceSelected: (NotificationSource) -> Unit,
+    onAppClick: (InstalledApp) -> Unit
+) {
+    Column(
+        modifier =
+            modifier
+                .luminoteSafeHorizontalPadding()
+    ) {
+
+        NotificationSourceGroup(
+            settings =
+                settings,
+            expanded =
+                sourceExpanded,
+            onToggle =
+                onSourceToggle,
+            onSourceSelected =
+                onSourceSelected
+        )
+
+        if (
+            settings.notificationSource ==
+            NotificationSource.SELECTED_APPS
+        ) {
+
+            Spacer(
+                modifier =
+                    Modifier.height(28.dp)
+            )
+
+            Text(
+                text = "Applications",
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleMedium,
+                fontWeight =
+                    FontWeight.SemiBold,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onBackground
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
+
+            AppsList(
+                modifier =
+                    Modifier.weight(1f),
+                installedApps =
+                    installedApps,
+                selectedApps =
+                    settings.selectedApps,
+                onAppClick =
+                    onAppClick
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.height(16.dp)
+            )
+        }
+    }
+}
+
+/*
+ * ================================================================
+ * MEDIUM / EXPANDED
+ * ================================================================
+ */
+
+@Composable
+private fun WideAppsContent(
+    modifier: Modifier,
+    settings: LuminoteSettings,
+    installedApps: List<InstalledApp>,
+    sourceExpanded: Boolean,
+    onSourceToggle: () -> Unit,
+    onSourceSelected: (NotificationSource) -> Unit,
+    onAppClick: (InstalledApp) -> Unit
+) {
+    Row(
+        modifier =
+            modifier
+                .luminoteSafeHorizontalPadding()
+                .padding(
+                    bottom = 24.dp
+                ),
+        horizontalArrangement =
+            Arrangement.spacedBy(24.dp),
+        verticalAlignment =
+            Alignment.Top
+    ) {
+
+        /*
+         * --------------------------------------------------------
+         * LEFT — SETTINGS
+         * --------------------------------------------------------
+         */
+
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+        ) {
+
+            NotificationSourceGroup(
+                settings =
+                    settings,
+                expanded =
+                    sourceExpanded,
+                onToggle =
+                    onSourceToggle,
+                onSourceSelected =
+                    onSourceSelected
+            )
+        }
+
+        /*
+         * --------------------------------------------------------
+         * RIGHT — APPLICATIONS
+         * --------------------------------------------------------
+         */
+
+        if (
+            settings.notificationSource ==
+            NotificationSource.SELECTED_APPS
+        ) {
+
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+            ) {
+
+                Text(
+                    text = "Applications",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+                    fontWeight =
+                        FontWeight.SemiBold,
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .onBackground
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(12.dp)
+                )
+
+                AppsList(
+                    modifier =
+                        Modifier.weight(1f),
+                    installedApps =
+                        installedApps,
+                    selectedApps =
+                        settings.selectedApps,
+                    onAppClick =
+                        onAppClick
+                )
+            }
+
+        } else {
+
+            Box(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                contentAlignment =
+                    Alignment.Center
+            ) {
+
+                Text(
+                    text =
+                        "All apps can trigger Luminote Halo",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodyLarge,
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .onBackground
+                            .copy(
+                                alpha = 0.55f
+                            )
+                )
+            }
+        }
+    }
+}
+
+/*
+ * ================================================================
+ * NOTIFICATION SOURCE PICKER
+ * ================================================================
+ */
+
+@Composable
+private fun NotificationSourceGroup(
+    settings: LuminoteSettings,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onSourceSelected: (NotificationSource) -> Unit
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(
+                    RoundedCornerShape(24.dp)
+                )
+                .background(Color(0xFF1B1B20))
+                .border(
+                    width = 1.dp,
+                    color = Color(0xFF303038),
+                    shape = RoundedCornerShape(24.dp)
+                )
+                .animateContentSize()
+                .padding(
+                    horizontal = 20.dp,
+                    vertical = 16.dp
+                )
+    ) {
+
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        onClick =
+                            onToggle
+                    ),
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+
+            Column(
+                modifier =
+                    Modifier.weight(1f)
+            ) {
+
+                Text(
+                    text =
+                        "Alerts from",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+                    fontWeight =
+                        FontWeight.SemiBold,
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .onSurface
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(4.dp)
+                )
+
+                Text(
+                    text =
+                        when (
+                            settings.notificationSource
+                        ) {
+
+                            NotificationSource.ALL_APPS ->
+                                "All apps"
+
+                            NotificationSource.SELECTED_APPS ->
+                                "Selected apps"
+                        },
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodyMedium,
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .onSurface
+                            .copy(
+                                alpha = 0.6f
+                            )
+                )
+            }
+
+            Text(
+                text =
+                    if (expanded) {
+                        "⌃"
+                    } else {
+                        "⌄"
+                    },
+                modifier =
+                    Modifier.padding(
+                        start = 16.dp
+                    ),
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleLarge,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurface
+                        .copy(
+                            alpha = 0.55f
+                        )
+            )
+        }
+
+        if (expanded) {
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
+
+            SourceOption(
+                title =
+                    "All apps",
+                description =
+                    "Notifications from every app",
+                selected =
+                    settings.notificationSource ==
+                            NotificationSource.ALL_APPS,
+                onClick = {
+                    onSourceSelected(
+                        NotificationSource.ALL_APPS
+                    )
+                }
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.height(4.dp)
+            )
+
+            SourceOption(
+                title =
+                    "Selected apps",
+                description =
+                    "Choose apps individually",
+                selected =
+                    settings.notificationSource ==
+                            NotificationSource.SELECTED_APPS,
+                onClick = {
+                    onSourceSelected(
+                        NotificationSource.SELECTED_APPS
+                    )
+                }
+            )
+        }
+    }
+}
+
+/*
+ * ================================================================
+ * SOURCE OPTION
+ * ================================================================
+ */
+
+@Composable
+private fun SourceOption(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val selectedBackground =
+        MaterialTheme
+            .colorScheme
+            .onSurface
+            .copy(
+                alpha = 0.08f
+            )
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(
+                    RoundedCornerShape(16.dp)
+                )
+                .background(
+                    if (selected) {
+                        selectedBackground
+                    } else {
+                        Color.Transparent
+                    }
+                )
+                .clickable(
+                    onClick =
+                        onClick
+                )
+                .padding(
+                    horizontal = 12.dp,
+                    vertical = 12.dp
+                ),
+        verticalAlignment =
+            Alignment.CenterVertically
+    ) {
+
+        SelectionIndicator(
+            selected =
+                selected
+        )
+
+        Spacer(
+            modifier =
+                Modifier.width(16.dp)
+        )
+
+        Column(
+            modifier =
+                Modifier.weight(1f)
+        ) {
+
+            Text(
+                text =
+                    title,
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyLarge,
+                fontWeight =
+                    if (selected) {
+                        FontWeight.SemiBold
+                    } else {
+                        FontWeight.Medium
+                    },
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurface
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.height(2.dp)
+            )
+
+            Text(
+                text =
+                    description,
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyMedium,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurface
+                        .copy(
+                            alpha = 0.55f
+                        )
+            )
+        }
+    }
+}
+
+/*
+ * ================================================================
+ * APPLICATIONS LIST
+ * ================================================================
+ */
+
+@Composable
+private fun AppsList(
+    modifier: Modifier,
+    installedApps: List<InstalledApp>,
+    selectedApps: Set<String>,
+    onAppClick: (InstalledApp) -> Unit
+) {
+    LazyColumn(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clip(
+                    RoundedCornerShape(24.dp)
+                )
+                .background(Color(0xFF1B1B20))
+                .border(
+                    width = 1.dp,
+                    color = Color(0xFF303038),
+                    shape = RoundedCornerShape(24.dp)
+                ),
+        contentPadding =
+            PaddingValues(
+                horizontal = 16.dp,
+                vertical = 8.dp
+            )
+    ) {
+
+        items(
+            items =
+                installedApps,
+            key =
+                { it.packageName }
+        ) { app ->
+
+            AppItemRow(
+                app =
+                    app,
+                selected =
+                    app.packageName in
+                            selectedApps,
+                onClick = {
+                    onAppClick(app)
+                }
+            )
+        }
+    }
+}
+
+/*
+ * ================================================================
+ * APP ROW
+ * ================================================================
+ */
+
+@Composable
+private fun AppItemRow(
+    app: InstalledApp,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val iconSizePx =
+        with(LocalDensity.current) {
+            32.dp.roundToPx()
+        }
+
+    val bitmap =
+        remember(app.packageName, iconSizePx) {
+            AppIconBitmapCache.get(
+                packageName = app.packageName,
+                sizePx = iconSizePx
+            ) ?: run {
+                val drawable = runCatching {
+                    context.packageManager.getApplicationIcon(app.packageName)
+                }.getOrElse {
+                    context.packageManager.defaultActivityIcon
+                }
+                drawableToBitmap(drawable, iconSizePx).also { generatedBitmap ->
+                    AppIconBitmapCache.put(
+                        packageName = app.packageName,
+                        sizePx = iconSizePx,
+                        bitmap = generatedBitmap
+                    )
+                }
+            }
+        }
+
+    Column {
+
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .clickable(
+                        onClick =
+                            onClick
+                    ),
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+
+            Image(
+                bitmap =
+                    bitmap.asImageBitmap(),
+                contentDescription =
+                    app.name,
+                modifier =
+                    Modifier.size(32.dp)
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.width(16.dp)
+            )
+
+            Text(
+                text =
+                    app.name,
+                modifier =
+                    Modifier.weight(1f),
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyLarge,
+                fontWeight =
+                    FontWeight.Medium,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurface
+            )
+
+            SelectionIndicator(
+                selected =
+                    selected
+            )
+        }
+
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(
+                        MaterialTheme
+                            .colorScheme
+                            .onSurface
+                            .copy(
+                                alpha = 0.10f
+                            )
+                    )
+        )
+    }
+}
+
+/*
+ * ================================================================
+ * DRAWABLE → BITMAP
+ * ================================================================
+ */
+
+/** Holds recently visible, display-sized icons without retaining every app. */
+private object AppIconBitmapCache {
+    private val bitmaps = object : LruCache<String, Bitmap>(MAX_CACHE_BYTES) {
+        override fun sizeOf(key: String, bitmap: Bitmap): Int =
+            bitmap.allocationByteCount
+    }
+
+    fun get(
+        packageName: String,
+        sizePx: Int
+    ): Bitmap? = bitmaps.get(key(packageName, sizePx))
+
+    fun put(
+        packageName: String,
+        sizePx: Int,
+        bitmap: Bitmap
+    ) {
+        bitmaps.put(key(packageName, sizePx), bitmap)
+    }
+
+    private fun key(packageName: String, sizePx: Int): String = "$packageName@$sizePx"
+
+    private const val MAX_CACHE_BYTES = 2 * 1024 * 1024
+}
+
+private fun drawableToBitmap(
+    drawable: android.graphics.drawable.Drawable,
+    sizePx: Int
+): Bitmap {
+    val bitmap =
+        Bitmap.createBitmap(
+            sizePx,
+            sizePx,
+            Bitmap.Config.ARGB_8888
+        )
+
+    val canvas =
+        AndroidCanvas(bitmap)
+
+    drawable.setBounds(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    )
+
+    drawable.draw(canvas)
+
+    return bitmap
+}
+
+/*
+ * ================================================================
+ * SELECTION INDICATOR
+ * ================================================================
+ */
+
+@Composable
+private fun SelectionIndicator(
+    selected: Boolean
+) {
+    val primaryColor =
+        MaterialTheme
+            .colorScheme
+            .primary
+
+    val onPrimaryColor =
+        MaterialTheme
+            .colorScheme
+            .onPrimary
+
+    val outlineColor =
+        MaterialTheme
+            .colorScheme
+            .outline
+
+    Canvas(
+        modifier =
+            Modifier.size(24.dp)
+    ) {
+
+        if (selected) {
+
+            drawCircle(
+                color =
+                    primaryColor,
+                radius =
+                    size.minDimension / 2f
+            )
+
+            val strokeWidth =
+                2.dp.toPx()
+
+            drawLine(
+                color =
+                    onPrimaryColor,
+                start =
+                    androidx.compose.ui.geometry.Offset(
+                        x =
+                            size.width * 0.28f,
+                        y =
+                            size.height * 0.52f
+                    ),
+                end =
+                    androidx.compose.ui.geometry.Offset(
+                        x =
+                            size.width * 0.45f,
+                        y =
+                            size.height * 0.68f
+                    ),
+                strokeWidth =
+                    strokeWidth
+            )
+
+            drawLine(
+                color =
+                    onPrimaryColor,
+                start =
+                    androidx.compose.ui.geometry.Offset(
+                        x =
+                            size.width * 0.45f,
+                        y =
+                            size.height * 0.68f
+                    ),
+                end =
+                    androidx.compose.ui.geometry.Offset(
+                        x =
+                            size.width * 0.75f,
+                        y =
+                            size.height * 0.34f
+                    ),
+                strokeWidth =
+                    strokeWidth
+            )
+
+        } else {
+
+            drawCircle(
+                color =
+                    outlineColor,
+                radius =
+                    size.minDimension / 2f -
+                            1.dp.toPx(),
+                style =
+                    Stroke(
+                        width =
+                            1.dp.toPx()
+                    )
+            )
+        }
+    }
+}
