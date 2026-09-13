@@ -16,3 +16,14 @@ local.properties
 
 # Build outputs
 /app/release/
+
+# Gradle
+.gradle/
+**/build/
+
+# Local configuration
+local.properties
+
+# Signing
+*.jks
+*.keystore
