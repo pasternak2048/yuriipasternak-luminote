@@ -1,7 +1,8 @@
 package com.yp.luminote.app.ui.navigation
 
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -53,26 +54,26 @@ fun LuminoteNavHost() {
         navController = navController,
         startDestination = LuminoteRoutes.HOME,
         enterTransition = {
-            slideIntoContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+            slideInHorizontally(
+                initialOffsetX = { fullWidth -> fullWidth },
                 animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
             )
         },
         exitTransition = {
-            slideOutOfContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+            slideOutHorizontally(
+                targetOffsetX = { fullWidth -> -fullWidth },
                 animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
             )
         },
         popEnterTransition = {
-            slideIntoContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+            slideInHorizontally(
+                initialOffsetX = { fullWidth -> -fullWidth },
                 animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
             )
         },
         popExitTransition = {
-            slideOutOfContainer(
-                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+            slideOutHorizontally(
+                targetOffsetX = { fullWidth -> fullWidth },
                 animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
             )
         }
