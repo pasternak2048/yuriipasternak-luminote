@@ -1,5 +1,7 @@
 package com.yp.luminote.app.ui.navigation
 
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
@@ -45,7 +47,31 @@ fun LuminoteNavHost() {
 
     NavHost(
         navController = navController,
-        startDestination = LuminoteRoutes.HOME
+        startDestination = LuminoteRoutes.HOME,
+        enterTransition = {
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
+            )
+        },
+        exitTransition = {
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Left,
+                animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
+            )
+        },
+        popEnterTransition = {
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
+            )
+        },
+        popExitTransition = {
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.Right,
+                animationSpec = tween(NAVIGATION_TRANSITION_DURATION_MS)
+            )
+        }
     ) {
         composable(LuminoteRoutes.HOME) {
             HomeScreen(
@@ -123,3 +149,5 @@ fun LuminoteNavHost() {
         }
     }
 }
+
+private const val NAVIGATION_TRANSITION_DURATION_MS = 300
