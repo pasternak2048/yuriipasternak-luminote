@@ -68,18 +68,20 @@ internal class HaloRenderer(
 
             val alpha = baseAlpha
             if (config.colorMode == HaloColorMode.GRADIENT && config.palette.size > 1) {
-                corePaint.shader = gradientShader().also { shader ->
+                val shader = gradientShader().also { gradient ->
                     gradientMatrix.setRotate(
                         (gradientPhase * GRADIENT_ROTATION_PER_CYCLE_DEGREES * config.gradientFlowSpeed) % FULL_ROTATION_DEGREES,
                         gradientCenterX,
                         gradientCenterY
                     )
-                    shader.setLocalMatrix(gradientMatrix)
+                    gradient.setLocalMatrix(gradientMatrix)
                 }
+                corePaint.shader = shader
                 corePaint.alpha = alpha
             } else {
                 corePaint.shader = null
-                corePaint.color = colorWithAlpha(alpha, colorForPhase(effectPhase))
+                val color = colorForPhase(effectPhase)
+                corePaint.color = colorWithAlpha(alpha, color)
             }
             val coreStrokeWidth = 4f + config.thickness * 10f
             corePaint.strokeWidth = coreStrokeWidth + outerGapWidth(coreStrokeWidth)

@@ -73,6 +73,13 @@ class HaloOverlayService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        if (intent?.getBooleanExtra(EXTRA_STOP_AMBIENT, false) == true) {
+            if (activeConfig?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE || overlayView == null) {
+                removeOverlay()
+                stopSelf()
+            }
+            return START_NOT_STICKY
+        }
         if (intent?.getBooleanExtra(EXTRA_STOP_PREVIEW, false) == true) {
             if (previewMode || overlayView == null) {
                 removeOverlay()
@@ -386,6 +393,7 @@ class HaloOverlayService : Service() {
         const val EXTRA_PREVIEW = "extra_preview_halo"
         const val EXTRA_STOP_PREVIEW = "extra_stop_preview_halo"
         const val EXTRA_STOP_REPEATING = "extra_stop_repeating_halo"
+        const val EXTRA_STOP_AMBIENT = "extra_stop_ambient_halo"
         const val EXTRA_INTENSITY = "extra_halo_intensity"
         const val EXTRA_THICKNESS = "extra_halo_thickness"
         const val EXTRA_FRAME = "extra_halo_frame"
@@ -455,6 +463,12 @@ class HaloOverlayService : Service() {
         fun createStopRepeatingIntent(context: Context): Intent =
             Intent(context, HaloOverlayService::class.java).apply {
                 putExtra(EXTRA_STOP_REPEATING, true)
+            }
+
+        /** Stops only the persistent Ambient Halo, never a notification effect. */
+        fun createStopAmbientIntent(context: Context): Intent =
+            Intent(context, HaloOverlayService::class.java).apply {
+                putExtra(EXTRA_STOP_AMBIENT, true)
             }
 
         fun createPreviewIntent(

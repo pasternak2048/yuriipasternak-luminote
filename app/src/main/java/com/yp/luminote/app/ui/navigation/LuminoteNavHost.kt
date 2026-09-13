@@ -3,6 +3,8 @@ package com.yp.luminote.app.ui.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -16,6 +18,7 @@ import com.yp.luminote.app.ui.ambient.AmbientHaloScreen
 import com.yp.luminote.app.ui.apps.AppsScreen
 import com.yp.luminote.app.ui.behavior.NotificationBehaviorScreen
 import com.yp.luminote.app.ui.effects.HaloScreen
+import com.yp.luminote.app.ui.easteregg.EasterEggScreen
 import com.yp.luminote.app.ui.home.HomeScreen
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
@@ -29,6 +32,7 @@ object LuminoteRoutes {
     const val ABOUT = "about"
     const val ACCESS = "access"
     const val AMBIENT = "ambient"
+    const val EASTER_EGG = "easter_egg"
 }
 
 @Composable
@@ -138,7 +142,16 @@ fun LuminoteNavHost() {
 
         composable(LuminoteRoutes.ABOUT) {
             AboutScreen(
-                onBackClick = { navController.popBackStack() }
+                onBackClick = { navController.popBackStack() },
+                onEasterEggClick = { navController.navigate(LuminoteRoutes.EASTER_EGG) }
+            )
+        }
+
+        composable(LuminoteRoutes.EASTER_EGG) {
+            val settings by settingsViewModel.settings.collectAsState()
+            EasterEggScreen(
+                ambientSettings = settings,
+                onClose = { navController.popBackStack() }
             )
         }
 

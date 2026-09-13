@@ -21,7 +21,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +36,10 @@ import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 
 @Composable
-fun AboutScreen(onBackClick: () -> Unit) {
+fun AboutScreen(
+    onBackClick: () -> Unit,
+    onEasterEggClick: () -> Unit
+) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val versionInfo = remember(context) {
@@ -43,6 +49,7 @@ fun AboutScreen(onBackClick: () -> Unit) {
         )
         "Version ${packageInfo.versionName ?: "Unknown"} (${packageInfo.longVersionCode})"
     }
+    var versionTapCount by remember { mutableIntStateOf(0) }
 
     Column(
         modifier = Modifier
@@ -140,7 +147,16 @@ fun AboutScreen(onBackClick: () -> Unit) {
                 }
             )
 
-            AboutBlock(title = "App version") {
+            AboutBlock(
+                title = "App version",
+                modifier = Modifier.clickable {
+                    versionTapCount += 1
+                    if (versionTapCount >= EASTER_EGG_TAP_COUNT) {
+                        versionTapCount = 0
+                        onEasterEggClick()
+                    }
+                }
+            ) {
                 Text(
                     text = versionInfo,
                     style = MaterialTheme.typography.bodyMedium,
@@ -151,10 +167,16 @@ fun AboutScreen(onBackClick: () -> Unit) {
     }
 }
 
+private const val EASTER_EGG_TAP_COUNT = 7
+
 @Composable
-private fun AboutBlock(title: String, content: @Composable () -> Unit) {
+private fun AboutBlock(
+    title: String,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
             .background(Color(0xFF1B1B20))

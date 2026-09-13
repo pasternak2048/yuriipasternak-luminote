@@ -61,6 +61,12 @@ class HaloAccessibilityService : AccessibilityService() {
             removeOverlay()
             return
         }
+        if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_AMBIENT, false) == true) {
+            if (activeConfig?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE || overlayView == null) {
+                removeOverlay()
+            }
+            return
+        }
         if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_PREVIEW, false) == true) {
             if (previewMode || overlayView == null) removeOverlay()
             return
