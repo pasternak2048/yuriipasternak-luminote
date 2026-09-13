@@ -2,6 +2,7 @@ package com.yp.luminote.app.effects
 
 import android.content.Context
 import android.graphics.Canvas
+import android.util.Log
 import android.animation.ValueAnimator
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -21,6 +22,9 @@ internal class HaloView(
     private var gradientPhase = 0f
     private var ambientEffectSpeed = 1f
     private var ambientCycle = 0L
+    private var pendingFiniteAnimation: FiniteAnimation? = null
+    private var hasLoggedDrawFrame = false
+    private var animationStartToken = 0L
     private val ambientEffectAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = AMBIENT_ROTATION_DURATION_MS
         interpolator = LinearInterpolator()
@@ -66,16 +70,46 @@ internal class HaloView(
         motion: com.yp.luminote.app.data.settings.HaloMotion
     ) {
         stopAmbientEffect()
-        animation.start(
+        val request = FiniteAnimation(
             duration = duration,
             interval = interval,
-            repeat = count != 1,
-            maxCycles = count.takeIf { it > 0 },
+            count = count,
             motion = motion
         )
+        if (width <= 0 || height <= 0) {
+            pendingFiniteAnimation = request
+            return
+        }
+        startFiniteAnimation(request)
+    }
+
+    private fun startFiniteAnimation(request: FiniteAnimation) {
+        pendingFiniteAnimation = null
+        val startToken = ++animationStartToken
+        hasLoggedDrawFrame = false
+        postOnAnimation {
+            if (
+                startToken != animationStartToken ||
+                !isAttachedToWindow ||
+                width <= 0 ||
+                height <= 0
+            ) {
+                return@postOnAnimation
+            }
+            Log.d(TAG, "Starting finite animation at ${width}x${height}")
+            animation.start(
+                duration = request.duration,
+                interval = request.interval,
+                repeat = request.count != 1,
+                maxCycles = request.count.takeIf { it > 0 },
+                motion = request.motion
+            )
+        }
     }
 
     fun cancelAnimation() {
+        animationStartToken += 1L
+        pendingFiniteAnimation = null
         stopAmbientEffect()
         animation.cancel()
     }
@@ -84,11 +118,18 @@ internal class HaloView(
         super.onSizeChanged(w, h, oldw, oldh)
         outline.resize(w, h)
         requestApplyInsets()
+        Log.d(TAG, "Halo view laid out at ${w}x${h}, pending=${pendingFiniteAnimation != null}")
+        if (w > 0 && h > 0) {
+            pendingFiniteAnimation?.let(::startFiniteAnimation)
+        }
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         requestApplyInsets()
+        if (width > 0 && height > 0) {
+            pendingFiniteAnimation?.let(::startFiniteAnimation)
+        }
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
@@ -104,10 +145,16 @@ internal class HaloView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        if (animationProgress > 0f && !hasLoggedDrawFrame) {
+            hasLoggedDrawFrame = true
+            Log.d(TAG, "Drawing animation frame; outlineVersion=${outline.version}")
+        }
         renderer.draw(canvas, animationProgress, animationPhase, gradientPhase)
     }
 
     fun startAmbientEffect(effectSpeed: Float) {
+        animationStartToken += 1L
+        pendingFiniteAnimation = null
         animation.cancel()
         ambientPhaseStart = animationPhase
         ambientGradientPhaseStart = gradientPhase
@@ -125,7 +172,15 @@ internal class HaloView(
         }
     }
 
+    private data class FiniteAnimation(
+        val duration: Float,
+        val interval: Float,
+        val count: Int,
+        val motion: com.yp.luminote.app.data.settings.HaloMotion
+    )
+
     private companion object {
+        const val TAG = "HaloView"
         const val AMBIENT_ROTATION_DURATION_MS = 16_000L
         const val AMBIENT_PHASE_SPAN = 360f / 220f
         const val MIN_EFFECT_SPEED = 0.25f

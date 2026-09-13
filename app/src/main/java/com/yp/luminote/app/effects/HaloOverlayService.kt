@@ -199,6 +199,7 @@ class HaloOverlayService : Service() {
         activeConfig = resolvedConfig
         try {
             windowManager.addView(view, params)
+            Log.d(TAG, "Application halo overlay attached")
             startAnimation(view, resolvedConfig)
             if (resolvedConfig.repeatCount > 0) scheduleRemoval(resolvedConfig)
         } catch (exception: Exception) {
@@ -437,8 +438,12 @@ class HaloOverlayService : Service() {
              * there before attempting an FGS start, which Android may reject
              * while the device is locked.
              */
-            if (HaloAccessibilityService.dispatch(intent)) return
+            if (HaloAccessibilityService.dispatch(intent)) {
+                Log.d(TAG, "Command routed to accessibility halo")
+                return
+            }
             try {
+                Log.d(TAG, "Starting application halo foreground service")
                 context.startForegroundService(intent)
             } catch (exception: IllegalStateException) {
                 Log.e(TAG, "System rejected background start for halo service", exception)

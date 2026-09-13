@@ -1,5 +1,6 @@
 package com.yp.luminote.app.ui.about
 
+import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,11 +19,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
@@ -30,6 +33,14 @@ import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 @Composable
 fun AboutScreen(onBackClick: () -> Unit) {
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val versionInfo = remember(context) {
+        val packageInfo = context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0)
+        )
+        "Version ${packageInfo.versionName ?: "Unknown"} (${packageInfo.longVersionCode})"
+    }
 
     Column(
         modifier = Modifier
@@ -80,6 +91,14 @@ fun AboutScreen(onBackClick: () -> Unit) {
             Text(
                 text = "Edge lighting for alerts and ambient style.",
                 style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFFAFAFB8)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = versionInfo,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFAFAFB8)
             )
         }

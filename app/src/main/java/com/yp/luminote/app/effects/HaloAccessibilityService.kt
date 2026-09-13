@@ -122,6 +122,7 @@ class HaloAccessibilityService : AccessibilityService() {
         previewMode = preview
         runCatching {
             windowManager.addView(view, params)
+            Log.d(TAG, "Accessibility halo overlay attached")
             startAnimation(view, resolvedConfig)
             scheduleRemoval(resolvedConfig)
         }.onFailure {

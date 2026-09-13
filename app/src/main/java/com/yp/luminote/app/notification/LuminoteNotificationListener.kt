@@ -154,9 +154,15 @@ class LuminoteNotificationListener :
 
         super.onNotificationPosted(sbn, rankingMap)
 
-        if (cachedSettings.get()?.ambientEnabled == true) return
+        Log.d(TAG, "Posted: key=${sbn.key}, package=${sbn.packageName}, postTime=${sbn.postTime}")
+
+        if (cachedSettings.get()?.ambientEnabled == true) {
+            Log.d(TAG, "Skipped: ambient halo is enabled")
+            return
+        }
 
         if (!shouldShowEffect(sbn, rankingMap)) {
+            Log.d(TAG, "Skipped: notification is silent")
             return
         }
 
@@ -169,6 +175,7 @@ class LuminoteNotificationListener :
                 sbn
             )
         ) {
+            Log.d(TAG, "Skipped: duplicate callback")
 
             return
         }
@@ -192,12 +199,14 @@ class LuminoteNotificationListener :
         if (settings.ambientEnabled) return
 
         if (settings.haloIntensity <= 0f) {
+            Log.d(TAG, "Skipped: halo intensity is zero")
             return
         }
 
         val shouldHandle = shouldHandleSource(sbn, settings)
 
         if (!shouldHandle) {
+            Log.d(TAG, "Skipped: package is not selected")
             return
         }
 
@@ -227,7 +236,7 @@ class LuminoteNotificationListener :
             settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE -> activePaletteColors(settings)
             else -> null
         }
-        Log.d(TAG, "Effect requested: key=${sbn.key}, postTime=${sbn.postTime}")
+        Log.d(TAG, "Effect started: key=${sbn.key}, postTime=${sbn.postTime}")
         startTransientEffect(
             settings = effectSettings,
             paletteColors = palette,
@@ -477,8 +486,9 @@ class LuminoteNotificationListener :
          * Callbacks for the same notification
          * inside this window are treated as duplicates.
          */
+        /* Only suppress the same framework callback, never a second message. */
         private const val DEDUP_WINDOW_MS =
-            750L
+            100L
 
         /*
          * A key cannot be a duplicate after the deduplication window ends.
