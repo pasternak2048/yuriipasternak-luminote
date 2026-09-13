@@ -87,14 +87,14 @@ internal class HaloView(
         pendingFiniteAnimation = null
         val startToken = ++animationStartToken
         hasLoggedDrawFrame = false
-        postOnAnimation {
+        post {
             if (
                 startToken != animationStartToken ||
                 !isAttachedToWindow ||
                 width <= 0 ||
                 height <= 0
             ) {
-                return@postOnAnimation
+                return@post
             }
             Log.d(TAG, "Starting finite animation at ${width}x${height}")
             animation.start(

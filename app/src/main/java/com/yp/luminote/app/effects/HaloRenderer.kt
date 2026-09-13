@@ -34,7 +34,6 @@ internal class HaloRenderer(
     private var gradientCenterX = 0f
     private var gradientCenterY = 0f
     private val corePaint = createPaint()
-    private val edgeSealPaint = createPaint()
 
     fun update(config: HaloConfig) {
         val next = config.sanitized()
@@ -82,10 +81,10 @@ internal class HaloRenderer(
                 corePaint.shader = null
                 corePaint.color = colorWithAlpha(alpha, colorForPhase(effectPhase))
             }
-            corePaint.strokeWidth = 4f + config.thickness * 10f
+            val coreStrokeWidth = 4f + config.thickness * 10f
+            corePaint.strokeWidth = coreStrokeWidth + outerGapWidth(coreStrokeWidth)
 
             drawStylePath(canvas, corePaint, effectPhase)
-            drawEdgeSeal(canvas, effectPhase)
         } finally {
             canvas.restoreToCount(saveCount)
         }
@@ -94,7 +93,7 @@ internal class HaloRenderer(
     private fun drawStylePath(canvas: Canvas, paint: Paint, phase: Float) {
         val path = cachedStylePath?.takeIf {
             cachedStyleStrokeWidth == paint.strokeWidth
-        } ?: buildStylePath(paint.strokeWidth).also { generatedPath ->
+        } ?: buildStylePath().also { generatedPath ->
             cachedStyleStrokeWidth = paint.strokeWidth
             cachedStylePath = generatedPath
         }
@@ -253,32 +252,21 @@ internal class HaloRenderer(
         }
     }
 
-    private fun buildStylePath(strokeWidth: Float): Path {
-        val strokePath = outline.strokePath(
-            maxOf(strokeWidth / 2f + 1f, outline.opticalInsetPx)
-        )
+    private fun buildStylePath(): Path {
+        val coreStrokeWidth = 4f + config.thickness * 10f
+        val coreInset = frameInsetFor(coreStrokeWidth)
+        /* Keep the inner edge fixed while extending only the outer edge. */
+        val strokePath = outline.strokePath(coreInset - outerGapWidth(coreStrokeWidth) / 2f)
         return when (config.frame) {
             HaloFrame.CLASSIC -> strokePath
         }
     }
 
-    /**
-     * Covers only the anti-aliased outermost pixels. The main path is left
-     * untouched, so device-specific contour fitting and perceived width stay
-     * identical to the validated base frame.
-     */
-    private fun drawEdgeSeal(canvas: Canvas, phase: Float) {
-        edgeSealPaint.set(corePaint)
-        edgeSealPaint.strokeWidth = EDGE_SEAL_STROKE_WIDTH_PX
-        val edgePath = outline.strokePath(0f)
-        when (config.motion) {
-            HaloMotion.PULSE -> canvas.drawPath(edgePath, edgeSealPaint)
-            HaloMotion.SNAKE -> drawSnakePath(canvas, edgePath, edgeSealPaint, phase)
-            HaloMotion.CORNER_PULSE -> drawCornerPulsePath(canvas, edgePath, edgeSealPaint, phase)
-            HaloMotion.RAIN -> drawRain(canvas, edgePath, edgeSealPaint, phase)
-            HaloMotion.RIPPLE_EDGE -> drawRippleEdge(canvas, edgePath, edgeSealPaint, phase)
-        }
-    }
+    private fun frameInsetFor(strokeWidth: Float): Float =
+        maxOf(strokeWidth / 2f + 1f, outline.opticalInsetPx)
+
+    private fun outerGapWidth(strokeWidth: Float): Float =
+        (frameInsetFor(strokeWidth) - strokeWidth / 2f).coerceAtLeast(0f)
 
     private fun clearStylePathCache() {
         cachedStyleStrokeWidth = Float.NaN
@@ -352,7 +340,6 @@ internal class HaloRenderer(
         }
 
     private companion object {
-        private const val EDGE_SEAL_STROKE_WIDTH_PX = 2f
         private const val SNAKE_SEGMENT_FRACTION = 0.18f
         private const val CORNER_SEGMENT_FRACTION = 0.14f
         private const val CORNER_COUNT = 4

@@ -43,6 +43,13 @@ class LuminoteSettingsViewModel(
 
     private var hasPendingSave = false
 
+    /*
+     * A cancelled or slow DataStore write must never mark a newer edit as
+     * persisted. Each UI change therefore owns a monotonically increasing
+     * revision, and only the latest revision may clear hasPendingSave.
+     */
+    private var settingsRevision = 0L
+
     init {
         viewModelScope.launch {
             repository.settings.collect { persistedSettings ->
@@ -222,7 +229,10 @@ class LuminoteSettingsViewModel(
         }
 
         pendingSaveJob?.cancel()
-        persistSettings()
+        persistSettings(
+            settings = _settings.value,
+            revision = settingsRevision
+        )
     }
 
     private fun updateSettings(
@@ -230,26 +240,39 @@ class LuminoteSettingsViewModel(
         transform: LuminoteSettings.() -> LuminoteSettings
     ) {
         _settings.value = _settings.value.transform()
+        val updatedSettings = _settings.value
+        val revision = ++settingsRevision
         hasPendingSave = true
         pendingSaveJob?.cancel()
 
         if (!debounce) {
-            persistSettings()
+            persistSettings(
+                settings = updatedSettings,
+                revision = revision
+            )
             return
         }
 
         pendingSaveJob = viewModelScope.launch {
             delay(SETTINGS_WRITE_DEBOUNCE_MS)
-            persistSettings()
+            persistSettings(
+                settings = updatedSettings,
+                revision = revision
+            )
         }
     }
 
-    private fun persistSettings() {
-        pendingSaveJob = viewModelScope.launch {
+    private fun persistSettings(
+        settings: LuminoteSettings,
+        revision: Long
+    ) {
+        viewModelScope.launch {
             try {
-                repository.saveSettings(_settings.value)
+                repository.saveSettings(settings)
             } finally {
-                hasPendingSave = false
+                if (revision == settingsRevision) {
+                    hasPendingSave = false
+                }
             }
         }
     }
