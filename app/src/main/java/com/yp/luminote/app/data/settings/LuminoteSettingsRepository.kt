@@ -189,7 +189,11 @@ class LuminoteSettingsRepository(
                         ?: defaultSettings.ambientThickness,
                     ambientMotion = preferences[Keys.ambientMotion]
                         ?.let { runCatching { HaloMotion.valueOf(it) }.getOrNull() }
-                        ?.takeIf { it == HaloMotion.PULSE || it == HaloMotion.SNAKE }
+                        ?.takeIf {
+                            it == HaloMotion.PULSE ||
+                                it == HaloMotion.SNAKE ||
+                                it == HaloMotion.EQUALIZER
+                        }
                         ?: defaultSettings.ambientMotion,
                     ambientEffectSpeed = preferences[Keys.ambientEffectSpeed]
                         ?.takeIf { it.isFinite() }

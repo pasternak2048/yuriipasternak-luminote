@@ -1,5 +1,9 @@
 package com.yp.luminote.app.ui.ambient
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +28,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,10 +40,12 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.effects.MusicVisualizerService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
@@ -48,6 +57,21 @@ fun AmbientHaloScreen(
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                PackageManager.PERMISSION_GRANTED
+        )
+    }
+    val audioPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasAudioPermission = granted
+        if (granted) {
+            viewModel.setAmbientMotion(HaloMotion.EQUALIZER)
+            viewModel.setAmbientColorMode(HaloColorMode.GRADIENT)
+        }
+    }
 
     LaunchedEffect(
         settings.ambientEnabled,
@@ -57,8 +81,18 @@ fun AmbientHaloScreen(
         settings.ambientThickness,
         settings.ambientMotion,
         settings.ambientEffectSpeed,
-        settings.ambientGradientFlowSpeed
+        settings.ambientGradientFlowSpeed,
+        hasAudioPermission
     ) {
+        val musicEqualizerActive =
+            settings.ambientEnabled &&
+                settings.ambientMotion == HaloMotion.EQUALIZER &&
+                hasAudioPermission
+        if (musicEqualizerActive) {
+            MusicVisualizerService.start(context)
+        } else {
+            MusicVisualizerService.stop(context)
+        }
         if (settings.ambientEnabled) {
             HaloOverlayService.start(context, HaloOverlayService.createAmbientIntent(context, settings))
         }
@@ -150,8 +184,21 @@ fun AmbientHaloScreen(
                         modifier = Modifier.fillMaxWidth(),
                         frame = HaloFrame.CLASSIC,
                         motion = settings.ambientMotion,
-                        availableMotions = listOf(HaloMotion.PULSE, HaloMotion.SNAKE),
-                        onMotionSelected = viewModel::setAmbientMotion
+                        availableMotions = listOf(
+                            HaloMotion.PULSE,
+                            HaloMotion.SNAKE,
+                            HaloMotion.EQUALIZER
+                        ),
+                        onMotionSelected = { motion ->
+                            if (motion == HaloMotion.EQUALIZER && !hasAudioPermission) {
+                                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            } else {
+                                viewModel.setAmbientMotion(motion)
+                                if (motion == HaloMotion.EQUALIZER) {
+                                    viewModel.setAmbientColorMode(HaloColorMode.GRADIENT)
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -168,6 +215,18 @@ fun AmbientHaloScreen(
                             onValueChange = viewModel::setAmbientEffectSpeed,
                             onValueChangeFinished = viewModel::flushPendingSettings
                         )
+                        if (settings.ambientMotion == HaloMotion.EQUALIZER) {
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = if (hasAudioPermission) {
+                                    "Responds to the device audio output. No microphone audio is used."
+                                } else {
+                                    "Allow music and audio access to activate the live equalizer."
+                                },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color(0xFFAFAFB8)
+                            )
+                        }
                     }
                 }
             }

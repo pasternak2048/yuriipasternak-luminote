@@ -211,7 +211,13 @@ class LuminoteSettingsViewModel(
 
     fun setAmbientMotion(motion: HaloMotion) {
         updateSettings {
-            copy(ambientMotion = motion.takeIf { it == HaloMotion.PULSE || it == HaloMotion.SNAKE } ?: HaloMotion.PULSE)
+            copy(
+                ambientMotion = motion.takeIf {
+                    it == HaloMotion.PULSE ||
+                        it == HaloMotion.SNAKE ||
+                        it == HaloMotion.EQUALIZER
+                } ?: HaloMotion.PULSE
+            )
         }
     }
 

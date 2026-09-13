@@ -9,7 +9,8 @@ enum class HaloMotion {
     SNAKE,
     CORNER_PULSE,
     RAIN,
-    RIPPLE_EDGE
+    RIPPLE_EDGE,
+    EQUALIZER
 }
 
 data class HaloFrameDefinition(
@@ -73,6 +74,13 @@ object HaloEffectCatalog {
             description = "Two waves spread around the frame",
             baseDurationSeconds = 2.8f,
             ambientDescription = "Keeps soft waves moving around the edge"
+        ),
+        HaloMotionDefinition(
+            motion = HaloMotion.EQUALIZER,
+            title = "Music equalizer",
+            description = "Audio-reactive light from music playback",
+            baseDurationSeconds = 2.5f,
+            ambientDescription = "Responds to the frequencies in current music playback"
         )
     )
 

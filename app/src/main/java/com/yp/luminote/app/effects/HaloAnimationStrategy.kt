@@ -19,6 +19,7 @@ internal object HaloAnimationStrategies {
         HaloMotion.CORNER_PULSE -> CornerPulse
         HaloMotion.RAIN -> Rain
         HaloMotion.RIPPLE_EDGE -> RippleEdge
+        HaloMotion.EQUALIZER -> Equalizer
     }
 
     private object Pulse : HaloAnimationStrategy {
@@ -39,5 +40,9 @@ internal object HaloAnimationStrategies {
 
     private object RippleEdge : HaloAnimationStrategy {
         override fun envelope(totalDurationMs: Long) = HaloAnimationEnvelope(200L, 420L)
+    }
+
+    private object Equalizer : HaloAnimationStrategy {
+        override fun envelope(totalDurationMs: Long) = HaloAnimationEnvelope(180L, 420L)
     }
 }
