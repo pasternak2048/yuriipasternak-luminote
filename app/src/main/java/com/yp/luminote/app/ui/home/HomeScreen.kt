@@ -3,6 +3,7 @@ package com.yp.luminote.app.ui.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -30,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 @Composable
@@ -46,6 +50,7 @@ fun HomeScreen(
     val settings by viewModel.settings.collectAsState()
     val settingsLoaded by
     viewModel.settingsLoaded.collectAsState()
+    val uiMetrics = rememberLuminoteUiMetrics()
 
     if (!settingsLoaded) {
         Box(
@@ -72,15 +77,17 @@ fun HomeScreen(
                 .background(Color.Black)
                 .statusBarsPadding()
                 .luminoteSafeHorizontalPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
     ) {
         Spacer(
             modifier =
-                    Modifier.height(32.dp)
+                    Modifier.height(if (uiMetrics.isCompactHeight) 20.dp else 32.dp)
         )
 
         Text(
             text = "Luminote",
-            style = MaterialTheme.typography.displayLarge,
+            style = if (uiMetrics.isCompactHeight) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,
             fontWeight = FontWeight.SemiBold,
             color = Color.White
         )
@@ -101,7 +108,7 @@ fun HomeScreen(
 
         Spacer(
             modifier =
-                    Modifier.height(36.dp)
+                    Modifier.height(if (uiMetrics.isCompactHeight) 24.dp else 36.dp)
         )
 
         when (windowSizeClass) {

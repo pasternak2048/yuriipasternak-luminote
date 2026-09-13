@@ -4,6 +4,8 @@ import android.content.pm.PackageManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -45,9 +47,10 @@ fun AboutScreen(onBackClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .statusBarsPadding()
-            .navigationBarsPadding()
+                .background(Color.Black)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
     ) {
         Column(
             modifier = Modifier

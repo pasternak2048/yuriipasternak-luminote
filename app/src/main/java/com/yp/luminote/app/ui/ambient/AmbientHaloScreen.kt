@@ -3,6 +3,7 @@ package com.yp.luminote.app.ui.ambient
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
@@ -48,6 +50,7 @@ fun AmbientHaloScreen(
 ) {
     val context = LocalContext.current
     val settings by viewModel.settings.collectAsState()
+    val uiMetrics = rememberLuminoteUiMetrics()
 
     LaunchedEffect(
         settings.ambientEnabled,
@@ -76,19 +79,19 @@ fun AmbientHaloScreen(
                 .fillMaxWidth()
                 .luminoteSafeHorizontalPadding()
         ) {
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(uiMetrics.headerTopSpacing))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     text = "‹",
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(uiMetrics.backButtonSize)
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White
                 )
                 Text(
                     text = "Ambient Halo",
-                    style = MaterialTheme.typography.displaySmall,
+                    style = if (uiMetrics.isCompactHeight) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
                 )
@@ -101,16 +104,16 @@ fun AmbientHaloScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(uiMetrics.sectionSpacing))
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = uiMetrics.sectionSpacing),
+            verticalArrangement = Arrangement.spacedBy(uiMetrics.sectionSpacing)
         ) {
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Ambient Halo") {
+                    AmbientGroup(title = "Ambient Halo", uiMetrics = uiMetrics) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -158,7 +161,7 @@ fun AmbientHaloScreen(
 
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Animation") {
+                    AmbientGroup(title = "Animation", uiMetrics = uiMetrics) {
                         AmbientSlider(
                             title = "Effect speed",
                             value = settings.ambientEffectSpeed,
@@ -174,7 +177,7 @@ fun AmbientHaloScreen(
 
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Colors") {
+                    AmbientGroup(title = "Colors", uiMetrics = uiMetrics) {
                         Text("Ambient color", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
                         Spacer(Modifier.height(12.dp))
                         AmbientColorGrid(
@@ -201,7 +204,7 @@ fun AmbientHaloScreen(
 
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Appearance") {
+                    AmbientGroup(title = "Appearance", uiMetrics = uiMetrics) {
                         AmbientSlider(
                             title = "Halo brightness",
                             value = settings.ambientIntensity,
@@ -225,17 +228,21 @@ fun AmbientHaloScreen(
 }
 
 @Composable
-private fun AmbientGroup(title: String, content: @Composable () -> Unit) {
+private fun AmbientGroup(
+    title: String,
+    uiMetrics: com.yp.luminote.app.ui.adaptive.LuminoteUiMetrics,
+    content: @Composable () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
             .background(Color(0xFF1B1B20))
-            .border(1.dp, Color(0xFF303038), androidx.compose.foundation.shape.RoundedCornerShape(28.dp))
-            .padding(20.dp)
+            .border(1.dp, Color(0xFF303038), androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
+            .padding(uiMetrics.cardPadding)
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(if (uiMetrics.isCompactHeight) 8.dp else 12.dp))
         content()
     }
 }
@@ -270,7 +277,9 @@ private fun AmbientColorGrid(
         Color(0xFFFF375F), Color(0xFFFF6482), Color(0xFFBF5AF2), Color(0xFFAF52DE),
         Color(0xFF5E5CE6), Color(0xFF007AFF), Color.White
     )
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    BoxWithConstraints {
+        val optionSize = minOf(40.dp, maxWidth / 8f)
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         colors.chunked(8).forEachIndexed { rowIndex, row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -280,25 +289,28 @@ private fun AmbientColorGrid(
                     AmbientColorOption(
                         color = color,
                         selected = !gradientSelected && color.value == selectedColor.value,
+                        size = optionSize,
                         onClick = { onColorSelected(color) }
                     )
                 }
                 if (rowIndex == 1) {
                     AmbientGradientColorOption(
                         selected = gradientSelected,
+                        size = optionSize,
                         onClick = onGradientSelected
                     )
                 }
             }
         }
+        }
     }
 }
 
 @Composable
-private fun AmbientColorOption(color: Color, selected: Boolean, onClick: () -> Unit) {
+private fun AmbientColorOption(color: Color, selected: Boolean, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(size)
             .clip(androidx.compose.foundation.shape.CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -306,13 +318,13 @@ private fun AmbientColorOption(color: Color, selected: Boolean, onClick: () -> U
         if (selected) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(size)
                     .border(2.dp, color, androidx.compose.foundation.shape.CircleShape)
             )
         }
         Box(
             modifier = Modifier
-                .size(if (selected) 30.dp else 32.dp)
+                .size(size * if (selected) 0.75f else 0.8f)
                 .clip(androidx.compose.foundation.shape.CircleShape)
                 .background(color)
         )
@@ -320,17 +332,17 @@ private fun AmbientColorOption(color: Color, selected: Boolean, onClick: () -> U
 }
 
 @Composable
-private fun AmbientGradientColorOption(selected: Boolean, onClick: () -> Unit) {
+private fun AmbientGradientColorOption(selected: Boolean, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
     Box(
         modifier = Modifier
-            .size(40.dp)
+            .size(size)
             .clip(androidx.compose.foundation.shape.CircleShape)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(size)
                 .clip(androidx.compose.foundation.shape.CircleShape)
                 .background(
                     Brush.sweepGradient(
@@ -344,7 +356,7 @@ private fun AmbientGradientColorOption(selected: Boolean, onClick: () -> Unit) {
         if (selected) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(size)
                     .border(2.dp, Color.White, androidx.compose.foundation.shape.CircleShape)
             )
         }

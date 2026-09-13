@@ -3,6 +3,8 @@ package com.yp.luminote.app.ui.behavior
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -43,6 +45,7 @@ fun NotificationBehaviorScreen(
             .statusBarsPadding()
             .navigationBarsPadding()
             .luminoteSafeHorizontalPadding()
+            .verticalScroll(rememberScrollState())
     ) {
         Spacer(modifier = Modifier.height(24.dp))
 

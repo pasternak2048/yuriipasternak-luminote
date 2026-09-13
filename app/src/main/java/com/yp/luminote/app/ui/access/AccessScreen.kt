@@ -11,6 +11,8 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -69,6 +71,7 @@ fun AccessScreen(onBackClick: () -> Unit) {
             .background(Color.Black)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
     ) {
         Column(
             modifier = Modifier

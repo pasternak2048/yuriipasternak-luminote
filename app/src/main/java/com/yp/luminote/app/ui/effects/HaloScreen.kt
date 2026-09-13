@@ -3,6 +3,7 @@ package com.yp.luminote.app.ui.effects
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -701,10 +702,12 @@ private fun ColorGrid(
             Color.White
         )
 
-    Column(
-        verticalArrangement =
-            Arrangement.spacedBy(10.dp)
-    ) {
+    BoxWithConstraints {
+        val optionSize = minOf(40.dp, maxWidth / 8f)
+        Column(
+            verticalArrangement =
+                Arrangement.spacedBy(10.dp)
+        ) {
 
         colors.take(15)
             .chunked(8)
@@ -723,6 +726,7 @@ private fun ColorGrid(
                             color = color,
                             selected =
                                 !gradientSelected && color.value == selectedColor.value,
+                            size = optionSize,
                             onClick = {
                                 onColorSelected(
                                     color
@@ -733,23 +737,29 @@ private fun ColorGrid(
                     if (rowIndex == 1) {
                         GradientColorOption(
                             selected = gradientSelected,
+                            size = optionSize,
                             onClick = onGradientSelected
                         )
                     }
                 }
             }
+        }
     }
 }
 
 @Composable
-private fun GradientColorOption(selected: Boolean, onClick: () -> Unit) {
+private fun GradientColorOption(
+    selected: Boolean,
+    size: androidx.compose.ui.unit.Dp,
+    onClick: () -> Unit
+) {
     Box(
-        modifier = Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onClick),
+        modifier = Modifier.size(size).clip(CircleShape).clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
-                .size(40.dp)
+                .size(size)
                 .clip(CircleShape)
                 .background(
                     Brush.sweepGradient(
@@ -760,7 +770,7 @@ private fun GradientColorOption(selected: Boolean, onClick: () -> Unit) {
         if (selected) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(size)
                     .border(2.dp, Color.White, CircleShape)
             )
         }
@@ -771,12 +781,13 @@ private fun GradientColorOption(selected: Boolean, onClick: () -> Unit) {
 private fun ColorOption(
     color: Color,
     selected: Boolean,
+    size: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
     Box(
         modifier =
             Modifier
-                .size(40.dp)
+                .size(size)
                 .clip(CircleShape)
                 .clickable(
                     onClick = onClick
@@ -789,7 +800,7 @@ private fun ColorOption(
             Box(
                 modifier =
                     Modifier
-                        .size(40.dp)
+                        .size(size)
                         .border(
                             width = 2.dp,
                             color = color,
@@ -802,11 +813,7 @@ private fun ColorOption(
             modifier =
                 Modifier
                     .size(
-                        if (selected) {
-                            30.dp
-                        } else {
-                            32.dp
-                        }
+                        size * if (selected) 0.75f else 0.8f
                     )
                     .clip(CircleShape)
                     .background(
