@@ -432,6 +432,12 @@ class HaloOverlayService : Service() {
 
         /** Starts the overlay from a notification callback while the app is backgrounded. */
         fun start(context: Context, intent: Intent) {
+            /*
+             * Accessibility overlays are the lock-screen/AoD renderer. Route
+             * there before attempting an FGS start, which Android may reject
+             * while the device is locked.
+             */
+            if (HaloAccessibilityService.dispatch(intent)) return
             try {
                 context.startForegroundService(intent)
             } catch (exception: IllegalStateException) {

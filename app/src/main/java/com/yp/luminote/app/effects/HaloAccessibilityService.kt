@@ -8,6 +8,7 @@ import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
@@ -55,6 +56,7 @@ class HaloAccessibilityService : AccessibilityService() {
     }
 
     private fun handleCommand(intent: Intent?) {
+        Log.d(TAG, "Accessibility halo command received")
         if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_REPEATING, false) == true) {
             removeOverlay()
             return
@@ -123,6 +125,7 @@ class HaloAccessibilityService : AccessibilityService() {
             startAnimation(view, resolvedConfig)
             scheduleRemoval(resolvedConfig)
         }.onFailure {
+            Log.e(TAG, "Unable to attach accessibility halo overlay", it)
             removeOverlay()
         }
     }
@@ -191,8 +194,21 @@ class HaloAccessibilityService : AccessibilityService() {
 
         fun dispatch(intent: Intent?): Boolean {
             val service = activeService ?: return false
-            service.handleCommand(intent)
+            /*
+             * onStartCommand() and normal notification callbacks are already on
+             * the main thread. Handle them immediately so a lock-screen effect
+             * is not deferred behind a paused/frozen app queue.
+             */
+            if (Looper.myLooper() == Looper.getMainLooper()) {
+                service.handleCommand(intent)
+            } else {
+                service.handler.post {
+                    if (activeService === service) service.handleCommand(intent)
+                }
+            }
             return true
         }
+
+        private const val TAG = "HaloAccessibility"
     }
 }
