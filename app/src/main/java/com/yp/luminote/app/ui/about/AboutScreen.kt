@@ -97,13 +97,6 @@ fun AboutScreen(onBackClick: () -> Unit) {
                 color = Color(0xFFAFAFB8)
             )
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = versionInfo,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFAFAFB8)
-            )
         }
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -146,6 +139,14 @@ fun AboutScreen(onBackClick: () -> Unit) {
                     uriHandler.openUri("https://github.com/pasternak2048/yuriipasternak-luminote")
                 }
             )
+
+            AboutBlock(title = "App version") {
+                Text(
+                    text = versionInfo,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color(0xFFAFAFB8)
+                )
+            }
         }
     }
 }
