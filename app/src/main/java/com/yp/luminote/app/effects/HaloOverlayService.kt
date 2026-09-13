@@ -1,18 +1,24 @@
 package com.yp.luminote.app.effects
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import android.view.Display
 import android.view.Gravity
 import android.view.WindowManager
+import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.HaloFrame
@@ -30,6 +36,7 @@ class HaloOverlayService : Service() {
     private var overlayLayoutParams: WindowManager.LayoutParams? = null
     private var previewMode = false
     private var activeConfig: HaloConfig? = null
+    private var foregroundStarted = false
 
     private val removeOverlayTask = Runnable {
         removeOverlay()
@@ -48,9 +55,14 @@ class HaloOverlayService : Service() {
         super.onCreate()
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager.registerDisplayListener(displayListener, handler)
+        startAsForeground()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!foregroundStarted) {
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
         if (HaloAccessibilityService.dispatch(intent)) {
             removeOverlay()
             stopSelf()
@@ -142,6 +154,11 @@ class HaloOverlayService : Service() {
         }
 
         if (config.intensity <= 0f) {
+            stopSelf()
+            return
+        }
+        if (!Settings.canDrawOverlays(this)) {
+            Log.e(TAG, "Halo requested without overlay permission")
             stopSelf()
             return
         }
@@ -320,7 +337,41 @@ class HaloOverlayService : Service() {
         handler.removeCallbacks(removeOverlayTask)
         overlayView?.cancelAnimation()
         removeOverlay()
+        if (foregroundStarted) stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
+    }
+
+    private fun startAsForeground() {
+        val notificationManager = getSystemService(NotificationManager::class.java)
+        notificationManager.createNotificationChannel(
+            NotificationChannel(
+                FOREGROUND_CHANNEL_ID,
+                getString(R.string.halo_foreground_channel_name),
+                NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+            }
+        )
+        val notification = Notification.Builder(this, FOREGROUND_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_halo_notification)
+            .setContentTitle(getString(R.string.halo_foreground_notification_title))
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setShowWhen(false)
+            .build()
+        try {
+            startForeground(
+                FOREGROUND_NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+            )
+            foregroundStarted = true
+        } catch (exception: Exception) {
+            Log.e(TAG, "Unable to start halo foreground service", exception)
+            stopSelf()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -343,6 +394,8 @@ class HaloOverlayService : Service() {
         const val EXTRA_COLOR_MODE = "extra_halo_color_mode"
         const val EXTRA_NOTIFICATION_PLAYBACK = "extra_notification_playback"
         private const val TAG = "HaloOverlay"
+        private const val FOREGROUND_CHANNEL_ID = "halo_overlay"
+        private const val FOREGROUND_NOTIFICATION_ID = 1001
         private const val OVERLAY_REMOVAL_GRACE_MS = 50L
 
         fun createIntent(
@@ -375,6 +428,17 @@ class HaloOverlayService : Service() {
             putExtra(EXTRA_NOTIFICATION_PLAYBACK, settings.notificationPlayback.name)
             paletteColors?.let { putExtra(EXTRA_PALETTE_COLORS, it) }
             if (restart) putExtra(EXTRA_RESTART, true)
+        }
+
+        /** Starts the overlay from a notification callback while the app is backgrounded. */
+        fun start(context: Context, intent: Intent) {
+            try {
+                context.startForegroundService(intent)
+            } catch (exception: IllegalStateException) {
+                Log.e(TAG, "System rejected background start for halo service", exception)
+            } catch (exception: SecurityException) {
+                Log.e(TAG, "Missing permission to start halo foreground service", exception)
+            }
         }
 
         fun createStopRepeatingIntent(context: Context): Intent =

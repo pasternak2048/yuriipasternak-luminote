@@ -60,7 +60,7 @@ fun AmbientHaloScreen(
         settings.ambientGradientFlowSpeed
     ) {
         if (settings.ambientEnabled) {
-            context.startService(HaloOverlayService.createAmbientIntent(context, settings))
+            HaloOverlayService.start(context, HaloOverlayService.createAmbientIntent(context, settings))
         }
     }
 
@@ -124,7 +124,10 @@ fun AmbientHaloScreen(
                                 onCheckedChange = { enabled ->
                                     viewModel.setAmbientEnabled(enabled)
                                     if (!enabled) {
-                                        context.startService(HaloOverlayService.createStopRepeatingIntent(context))
+                                        HaloOverlayService.start(
+                                            context,
+                                            HaloOverlayService.createStopRepeatingIntent(context)
+                                        )
                                     }
                                 }
                             )

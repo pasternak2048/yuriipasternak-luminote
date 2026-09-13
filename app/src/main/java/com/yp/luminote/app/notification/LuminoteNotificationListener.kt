@@ -59,7 +59,7 @@ class LuminoteNotificationListener :
      * multiple times for the same notification.
      */
     private val recentNotifications =
-        mutableMapOf<String, Long>()
+        mutableMapOf<String, RecentNotification>()
 
     private val recentNotificationOrder =
         ArrayDeque<RecentNotification>()
@@ -67,15 +67,9 @@ class LuminoteNotificationListener :
     private val dedupLock =
         Any()
 
-    private val burstLock =
-        Any()
-
     /* Keeps one entry per notification for the active app-color palette. */
     private val activeNotificationPackages = linkedMapOf<String, String>()
     private val activeNotificationsLock = Any()
-
-    private var lastEffectRequestElapsedMs =
-        0L
 
     override fun onCreate() {
 
@@ -92,7 +86,10 @@ class LuminoteNotificationListener :
             settingsRepository.settings.collect { settings ->
                 val previous = previousSettings
                 if (settings.ambientEnabled) {
-                    startService(HaloOverlayService.createAmbientIntent(this@LuminoteNotificationListener, settings))
+                    HaloOverlayService.start(
+                        this@LuminoteNotificationListener,
+                        HaloOverlayService.createAmbientIntent(this@LuminoteNotificationListener, settings)
+                    )
                     previousSettings = settings
                     cachedSettings.set(settings)
                     settingsReady.complete(settings)
@@ -103,7 +100,10 @@ class LuminoteNotificationListener :
                         (previous?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE &&
                             settings.notificationPlayback != NotificationPlayback.KEEP_VISIBLE)
                 ) {
-                    startService(HaloOverlayService.createStopRepeatingIntent(this@LuminoteNotificationListener))
+                    HaloOverlayService.start(
+                        this@LuminoteNotificationListener,
+                        HaloOverlayService.createStopRepeatingIntent(this@LuminoteNotificationListener)
+                    )
                 }
                 previousSettings = settings
                 cachedSettings.set(settings)
@@ -217,35 +217,22 @@ class LuminoteNotificationListener :
                 NotificationPlayback.KEEP_VISIBLE -> -1
             }
         )
-        val isPersistentReminder = settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE
         val isGradient = settings.colorSource == HaloColorSource.GRADIENT
-        val needsPaletteUpdate = isGradient || isPersistentReminder
         val palette = when {
             isGradient && settings.gradientPalette == GradientPalette.NOTIFICATION_APPS -> activePaletteColors(
                 settings = settings,
                 useAppColors = true
             )
             isGradient -> HaloConfig.defaultGradientPalette()
-            isPersistentReminder -> activePaletteColors(settings)
+            settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE -> activePaletteColors(settings)
             else -> null
         }
-        if (isPersistentReminder || acquireEffectBurstSlot()) {
-            startTransientEffect(
-                settings = effectSettings,
-                paletteColors = palette,
-                restart = isPersistentReminder
-            )
-        } else if (needsPaletteUpdate) {
-            /*
-             * The burst already owns one animation, but a new app color must
-             * still reach the gradient so simultaneous notifications share one
-             * multi-color contour instead of becoming separate pulses.
-             */
-            startTransientEffect(
-                settings = effectSettings,
-                paletteColors = palette
-            )
-        }
+        Log.d(TAG, "Effect requested: key=${sbn.key}, postTime=${sbn.postTime}")
+        startTransientEffect(
+            settings = effectSettings,
+            paletteColors = palette,
+            restart = true
+        )
     }
 
     private fun startTransientEffect(
@@ -253,8 +240,9 @@ class LuminoteNotificationListener :
         paletteColors: IntArray? = null,
         restart: Boolean = false
     ) {
-        startService(
-            HaloOverlayService.createIntent(
+        HaloOverlayService.start(
+            context = this,
+            intent = HaloOverlayService.createIntent(
                 context = this,
                 settings = settings,
                 paletteColors = paletteColors,
@@ -336,27 +324,26 @@ class LuminoteNotificationListener :
 
             cleanupRecentNotifications(now)
 
-            val previousTimestamp =
+            val previous =
                 recentNotifications[key]
 
             if (
-                previousTimestamp != null &&
-                now - previousTimestamp <
+                previous != null &&
+                previous.postTime == sbn.postTime &&
+                now - previous.timestamp <
                 DEDUP_WINDOW_MS
             ) {
 
                 return true
             }
 
-            recentNotifications[key] =
-                now
-
-            recentNotificationOrder.addLast(
-                RecentNotification(
-                    key = key,
-                    timestamp = now
-                )
+            val entry = RecentNotification(
+                key = key,
+                timestamp = now,
+                postTime = sbn.postTime
             )
+            recentNotifications[key] = entry
+            recentNotificationOrder.addLast(entry)
 
             return false
         }
@@ -377,7 +364,7 @@ class LuminoteNotificationListener :
             }
 
             recentNotificationOrder.removeFirst()
-            if (recentNotifications[entry.key] == entry.timestamp) {
+            if (recentNotifications[entry.key]?.timestamp == entry.timestamp) {
                 recentNotifications.remove(entry.key)
             }
         }
@@ -416,29 +403,16 @@ class LuminoteNotificationListener :
         val hasChannelSound =
             hasRanking &&
                     ranking.channel?.sound != null
+        val hasExplicitVibration =
+            notification.vibrate != null ||
+                    (notification.defaults and Notification.DEFAULT_VIBRATE) != 0
+        val hasChannelVibration =
+            hasRanking && ranking.channel?.shouldVibrate() == true
 
-        return hasExplicitSound || hasChannelSound
-    }
-
-    /*
-     * Different apps can post several notifications in the same UI frame.
-     * One halo is enough for that burst, and avoiding redundant service
-     * starts also avoids extra main-thread and overlay work.
-     */
-    private fun acquireEffectBurstSlot(): Boolean {
-        val now = SystemClock.elapsedRealtime()
-
-        synchronized(burstLock) {
-            if (
-                lastEffectRequestElapsedMs > 0L &&
-                now - lastEffectRequestElapsedMs < EFFECT_BURST_WINDOW_MS
-            ) {
-                return false
-            }
-
-            lastEffectRequestElapsedMs = now
-            return true
-        }
+        return hasExplicitSound ||
+                hasChannelSound ||
+                hasExplicitVibration ||
+                hasChannelVibration
     }
 
     override fun onNotificationRemoved(
@@ -455,7 +429,7 @@ class LuminoteNotificationListener :
         if (settings?.ambientEnabled == true) return
         if (settings?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             if (noRelevantNotifications) {
-                startService(HaloOverlayService.createStopRepeatingIntent(this))
+                HaloOverlayService.start(this, HaloOverlayService.createStopRepeatingIntent(this))
             } else {
                 startPersistentReminderIfNeeded(settings)
             }
@@ -477,10 +451,6 @@ class LuminoteNotificationListener :
         ) {
             recentNotifications.clear()
             recentNotificationOrder.clear()
-        }
-
-        synchronized(burstLock) {
-            lastEffectRequestElapsedMs = 0L
         }
 
         synchronized(activeNotificationsLock) { activeNotificationPackages.clear() }
@@ -516,14 +486,11 @@ class LuminoteNotificationListener :
         private const val RECENT_NOTIFICATION_RETENTION_MS =
             DEDUP_WINDOW_MS
 
-        /* Different notifications within this window share one effect. */
-        private const val EFFECT_BURST_WINDOW_MS =
-            400L
-
     }
 
     private data class RecentNotification(
         val key: String,
-        val timestamp: Long
+        val timestamp: Long,
+        val postTime: Long
     )
 }

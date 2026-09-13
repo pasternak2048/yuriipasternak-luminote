@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Luminote</string>
+    <string name="halo_foreground_channel_name">Notification halo</string>
+    <string name="halo_foreground_notification_title">Notification halo is active</string>
 </resources>

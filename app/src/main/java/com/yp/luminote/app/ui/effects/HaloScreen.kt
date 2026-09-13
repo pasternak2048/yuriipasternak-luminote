@@ -60,7 +60,7 @@ fun HaloScreen(
 
     DisposableEffect(context) {
         onDispose {
-            context.startService(HaloOverlayService.createStopPreviewIntent(context))
+            HaloOverlayService.start(context, HaloOverlayService.createStopPreviewIntent(context))
         }
     }
 
@@ -595,7 +595,8 @@ private fun TestEffectButton(
 
         Button(
             onClick = {
-                context.startService(
+                HaloOverlayService.start(
+                    context,
                     HaloOverlayService.createPreviewIntent(
                         context = context,
                         settings = settings.copy(
