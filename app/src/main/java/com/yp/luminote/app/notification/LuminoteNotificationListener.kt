@@ -69,6 +69,8 @@ class LuminoteNotificationListener :
 
     /* Keeps one entry per notification for the active app-color palette. */
     private val activeNotificationPackages = linkedMapOf<String, String>()
+    /* All active notifications eligible for the persistent Reminder palette. */
+    private val activePaletteNotificationPackages = linkedMapOf<String, String>()
     private val activeNotificationsLock = Any()
 
     override fun onCreate() {
@@ -182,8 +184,17 @@ class LuminoteNotificationListener :
             return
         }
 
+        cachedSettings.get()?.let { settings ->
+            if (shouldTrackPersistentPalette(sbn, settings)) {
+                synchronized(activeNotificationsLock) {
+                    activePaletteNotificationPackages[sbn.key] = sbn.packageName
+                }
+            }
+        }
+
         if (!shouldShowEffect(sbn, rankingMap)) {
             Log.d(TAG, "Skipped: notification is silent")
+            cachedSettings.get()?.let(::startPersistentReminderIfNeeded)
             return
         }
 
@@ -233,6 +244,9 @@ class LuminoteNotificationListener :
 
         synchronized(activeNotificationsLock) {
             activeNotificationPackages[sbn.key] = sbn.packageName
+            if (shouldTrackPersistentPalette(sbn, settings)) {
+                activePaletteNotificationPackages[sbn.key] = sbn.packageName
+            }
         }
 
         val effectSettings = settings.copy(
@@ -285,7 +299,7 @@ class LuminoteNotificationListener :
         settings: LuminoteSettings,
         useAppColors: Boolean = settings.colorSource == HaloColorSource.APP_ICON
     ): IntArray = synchronized(activeNotificationsLock) {
-        activeNotificationPackages.values
+        activePaletteNotificationPackages.values
             .distinct()
             .map { packageName ->
                 if (useAppColors) {
@@ -306,7 +320,11 @@ class LuminoteNotificationListener :
 
         synchronized(activeNotificationsLock) {
             activeNotificationPackages.clear()
+            activePaletteNotificationPackages.clear()
             notifications.forEach { notification ->
+                if (shouldTrackPersistentPalette(notification, settings)) {
+                    activePaletteNotificationPackages[notification.key] = notification.packageName
+                }
                 if (
                     shouldShowEffect(notification, rankingMap) &&
                     shouldHandleSource(notification, settings)
@@ -455,6 +473,7 @@ class LuminoteNotificationListener :
 
         val noRelevantNotifications = synchronized(activeNotificationsLock) {
             activeNotificationPackages.remove(sbn.key)
+            activePaletteNotificationPackages.remove(sbn.key)
             activeNotificationPackages.isEmpty()
         }
         val settings = cachedSettings.get()
@@ -476,6 +495,14 @@ class LuminoteNotificationListener :
         NotificationSource.SELECTED_APPS -> sbn.packageName in settings.selectedApps
     }
 
+    private fun shouldTrackPersistentPalette(
+        sbn: StatusBarNotification,
+        settings: LuminoteSettings
+    ): Boolean =
+        isPersistentReminder(settings) &&
+            sbn.packageName != packageName &&
+            shouldHandleSource(sbn, settings)
+
     override fun onDestroy() {
 
         synchronized(
@@ -485,7 +512,10 @@ class LuminoteNotificationListener :
             recentNotificationOrder.clear()
         }
 
-        synchronized(activeNotificationsLock) { activeNotificationPackages.clear() }
+        synchronized(activeNotificationsLock) {
+            activeNotificationPackages.clear()
+            activePaletteNotificationPackages.clear()
+        }
 
         cachedSettings.set(null)
         settingsReady.cancel()

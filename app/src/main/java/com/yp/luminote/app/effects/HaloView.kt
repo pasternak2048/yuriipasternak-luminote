@@ -22,6 +22,7 @@ internal class HaloView(
     private var gradientPhase = 0f
     private var ambientEffectSpeed = 1f
     private var ambientCycle = 0L
+    private var ambientPaused = false
     private var pendingFiniteAnimation: FiniteAnimation? = null
     private var hasLoggedDrawFrame = false
     private var animationStartToken = 0L
@@ -160,16 +161,35 @@ internal class HaloView(
         ambientGradientPhaseStart = gradientPhase
         ambientEffectSpeed = effectSpeed.coerceIn(MIN_EFFECT_SPEED, MAX_EFFECT_SPEED)
         ambientCycle = 0L
+        ambientPaused = false
         animationProgress = 1f
         if (!ambientEffectAnimator.isStarted) {
             ambientEffectAnimator.start()
         }
     }
 
+    /** Stops ambient frame production without detaching the lock-screen overlay. */
+    fun pauseAmbientEffect() {
+        if (!ambientEffectAnimator.isStarted) return
+        ambientEffectAnimator.cancel()
+        ambientPaused = true
+    }
+
+    /** Continues the paused ambient effect from its last visual phase. */
+    fun resumeAmbientEffect() {
+        if (!ambientPaused || ambientEffectAnimator.isStarted) return
+        ambientPaused = false
+        ambientPhaseStart = animationPhase
+        ambientGradientPhaseStart = gradientPhase
+        ambientCycle = 0L
+        ambientEffectAnimator.start()
+    }
+
     private fun stopAmbientEffect() {
         if (ambientEffectAnimator.isStarted) {
             ambientEffectAnimator.cancel()
         }
+        ambientPaused = false
     }
 
     private data class FiniteAnimation(

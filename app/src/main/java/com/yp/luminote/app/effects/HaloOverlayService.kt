@@ -63,6 +63,12 @@ class HaloOverlayService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        if (intent?.getBooleanExtra(EXTRA_STOP_APPLICATION_AMBIENT, false) == true) {
+            pendingApplicationAmbientIntent = null
+            removeOverlay()
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (HaloAccessibilityService.dispatch(intent)) {
             removeOverlay()
             stopSelf()
@@ -394,6 +400,7 @@ class HaloOverlayService : Service() {
         const val EXTRA_STOP_PREVIEW = "extra_stop_preview_halo"
         const val EXTRA_STOP_REPEATING = "extra_stop_repeating_halo"
         const val EXTRA_STOP_AMBIENT = "extra_stop_ambient_halo"
+        private const val EXTRA_STOP_APPLICATION_AMBIENT = "extra_stop_application_ambient_halo"
         const val EXTRA_INTENSITY = "extra_halo_intensity"
         const val EXTRA_THICKNESS = "extra_halo_thickness"
         const val EXTRA_FRAME = "extra_halo_frame"
@@ -406,6 +413,7 @@ class HaloOverlayService : Service() {
         private const val FOREGROUND_CHANNEL_ID = "halo_overlay"
         private const val FOREGROUND_NOTIFICATION_ID = 1001
         private const val OVERLAY_REMOVAL_GRACE_MS = 50L
+        @Volatile private var pendingApplicationAmbientIntent: Intent? = null
 
         fun createIntent(
             context: Context,
@@ -448,7 +456,13 @@ class HaloOverlayService : Service() {
              */
             if (HaloAccessibilityService.dispatch(intent)) {
                 Log.d(TAG, "Command routed to accessibility halo")
+                if (isPersistentAmbientIntent(intent)) {
+                    pendingApplicationAmbientIntent = null
+                }
                 return
+            }
+            if (isPersistentAmbientIntent(intent)) {
+                pendingApplicationAmbientIntent = Intent(intent)
             }
             try {
                 Log.d(TAG, "Starting application halo foreground service")
@@ -459,6 +473,25 @@ class HaloOverlayService : Service() {
                 Log.e(TAG, "Missing permission to start halo foreground service", exception)
             }
         }
+
+        /**
+         * Returns the Ambient command currently rendered by the fallback
+         * application overlay, if any. It is used once accessibility connects.
+         */
+        internal fun takePendingApplicationAmbientIntent(): Intent? =
+            pendingApplicationAmbientIntent?.let { pendingIntent -> Intent(pendingIntent) }
+
+        /** Stops only the fallback FGS overlay after accessibility takes it over. */
+        internal fun stopApplicationAmbientOverlay(context: Context) {
+            context.startService(
+                Intent(context, HaloOverlayService::class.java).apply {
+                    putExtra(EXTRA_STOP_APPLICATION_AMBIENT, true)
+                }
+            )
+        }
+
+        private fun isPersistentAmbientIntent(intent: Intent): Boolean =
+            intent.getStringExtra(EXTRA_NOTIFICATION_PLAYBACK) == NotificationPlayback.KEEP_VISIBLE.name
 
         fun createStopRepeatingIntent(context: Context): Intent =
             Intent(context, HaloOverlayService::class.java).apply {

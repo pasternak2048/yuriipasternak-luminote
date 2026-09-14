@@ -1,13 +1,16 @@
 package com.yp.luminote.app.effects
 
 import android.accessibilityservice.AccessibilityService
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.Display
 import android.view.Gravity
@@ -25,6 +28,7 @@ import kotlin.math.max
 class HaloAccessibilityService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var displayManager: DisplayManager
+    private lateinit var powerManager: PowerManager
     private lateinit var windowManager: WindowManager
     private var overlayView: HaloView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
@@ -32,11 +36,34 @@ class HaloAccessibilityService : AccessibilityService() {
     private var previewMode = false
 
     private val removeOverlayTask = Runnable { removeOverlay() }
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                Intent.ACTION_SCREEN_OFF -> pausePersistentAmbientForScreenOff()
+                Intent.ACTION_SCREEN_ON -> handler.post { resumePersistentAmbientAfterScreenOn() }
+            }
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+        powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        registerReceiver(
+            screenStateReceiver,
+            IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_SCREEN_ON)
+            },
+            Context.RECEIVER_NOT_EXPORTED
+        )
         activeService = this
+        Log.i(TAG, "Lock-screen accessibility service connected")
+        HaloOverlayService.takePendingApplicationAmbientIntent()?.let { ambientIntent ->
+            handleCommand(ambientIntent)
+            HaloOverlayService.stopApplicationAmbientOverlay(this)
+            Log.i(TAG, "Persistent Ambient Halo handed off from application overlay")
+        }
     }
 
     override fun onAccessibilityEvent(event: android.view.accessibility.AccessibilityEvent?) = Unit
@@ -49,8 +76,10 @@ class HaloAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        Log.w(TAG, "Lock-screen accessibility service destroyed")
         if (activeService === this) activeService = null
         handler.removeCallbacks(removeOverlayTask)
+        unregisterReceiver(screenStateReceiver)
         removeOverlay()
         super.onDestroy()
     }
@@ -141,6 +170,10 @@ class HaloAccessibilityService : AccessibilityService() {
         if (config.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             handler.removeCallbacks(removeOverlayTask)
             view.startAmbientEffect(config.effectSpeed)
+            if (!powerManager.isInteractive) {
+                view.pauseAmbientEffect()
+                Log.d(TAG, "Persistent ambient halo paused because the screen is off")
+            }
         } else {
             view.repeatAnimation(config.durationSeconds, config.intervalSeconds, config.repeatCount, config.motion)
         }
@@ -162,6 +195,20 @@ class HaloAccessibilityService : AccessibilityService() {
         params.width = metrics.widthPixels
         params.height = metrics.heightPixels
         runCatching { windowManager.updateViewLayout(view, params) }
+    }
+
+    private fun pausePersistentAmbientForScreenOff() {
+        val config = activeConfig ?: return
+        if (config.notificationPlayback != NotificationPlayback.KEEP_VISIBLE) return
+        overlayView?.pauseAmbientEffect()
+        Log.d(TAG, "Persistent ambient halo paused for screen off")
+    }
+
+    private fun resumePersistentAmbientAfterScreenOn() {
+        val config = activeConfig ?: return
+        if (config.notificationPlayback != NotificationPlayback.KEEP_VISIBLE) return
+        overlayView?.resumeAmbientEffect()
+        Log.d(TAG, "Persistent ambient halo resumed for screen on")
     }
 
     private fun removeOverlay() {
@@ -200,7 +247,10 @@ class HaloAccessibilityService : AccessibilityService() {
         @Volatile private var activeService: HaloAccessibilityService? = null
 
         fun dispatch(intent: Intent?): Boolean {
-            val service = activeService ?: return false
+            val service = activeService ?: run {
+                Log.w(TAG, "Accessibility halo unavailable; falling back to application overlay")
+                return false
+            }
             /*
              * onStartCommand() and normal notification callbacks are already on
              * the main thread. Handle them immediately so a lock-screen effect

@@ -19,6 +19,9 @@ class HaloAnimation(
     private val handler = Handler(Looper.getMainLooper())
     private val fadeInInterpolator = DecelerateInterpolator()
     private val fadeOutInterpolator = AccelerateInterpolator()
+    private val restartGlowTask = Runnable {
+        if (repeat) startGlow()
+    }
 
     /*
      * The same animator is reused for notification effects and preview cycles.
@@ -48,12 +51,7 @@ class HaloAnimation(
                     }
 
                     if (intervalMs > 0L) {
-                        handler.postDelayed(
-                            {
-                                if (repeat) startGlow()
-                            },
-                            intervalMs
-                        )
+                        handler.postDelayed(restartGlowTask, intervalMs)
                     } else {
                         startGlow()
                     }

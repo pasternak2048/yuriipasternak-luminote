@@ -24,8 +24,7 @@ internal class HaloRenderer(
     private var cachedOutlineVersion = -1
     private var cachedStyleStrokeWidth = Float.NaN
     private var cachedStylePath: Path? = null
-    private var cachedCornerFractions: FloatArray? = null
-    private var cachedRippleOriginFraction: Float? = null
+    private var cachedStyleGeometry: StyleGeometry? = null
     private val segmentPath = Path()
     private var gradientShader: SweepGradient? = null
     private var gradientOutlineVersion = -1
@@ -101,37 +100,38 @@ internal class HaloRenderer(
         }
         when (config.motion) {
             HaloMotion.PULSE -> canvas.drawPath(path, paint)
-            HaloMotion.SNAKE -> drawSnakePath(canvas, path, paint, phase)
-            HaloMotion.CORNER_PULSE -> drawCornerPulsePath(canvas, path, paint, phase)
-            HaloMotion.RAIN -> drawRain(canvas, path, paint, phase)
-            HaloMotion.RIPPLE_EDGE -> drawRippleEdge(canvas, path, paint, phase)
+            HaloMotion.SNAKE -> drawSnakePath(canvas, styleGeometryFor(path), paint, phase)
+            HaloMotion.CORNER_PULSE -> drawCornerPulsePath(canvas, styleGeometryFor(path), paint, phase)
+            HaloMotion.RAIN -> drawRain(canvas, styleGeometryFor(path), paint, phase)
+            HaloMotion.RIPPLE_EDGE -> drawRippleEdge(canvas, styleGeometryFor(path), paint, phase)
         }
     }
 
-    private fun drawSnakePath(canvas: Canvas, path: Path, paint: Paint, phase: Float) {
-        val measure = PathMeasure(path, false)
-        val length = measure.length
+    private fun drawSnakePath(canvas: Canvas, geometry: StyleGeometry, paint: Paint, phase: Float) {
+        val measure = geometry.measure
+        val length = geometry.length
         if (length <= 0f) return
         val start = ((phase % 1f + 1f) % 1f) * length
         val segmentLength = length * SNAKE_SEGMENT_FRACTION
-        drawWrappedSegment(canvas, measure, start, segmentLength, paint)
+        drawWrappedSegment(canvas, measure, length, start, segmentLength, paint)
     }
 
-    private fun drawCornerPulsePath(canvas: Canvas, path: Path, paint: Paint, phase: Float) {
-        val measure = PathMeasure(path, false)
-        val length = measure.length
+    private fun drawCornerPulsePath(canvas: Canvas, geometry: StyleGeometry, paint: Paint, phase: Float) {
+        val measure = geometry.measure
+        val length = geometry.length
         if (length <= 0f) return
         val normalizedPhase = (phase % 1f + 1f) % 1f
         val cornerProgress = normalizedPhase * CORNER_COUNT
         val cornerIndex = cornerProgress.toInt().coerceIn(0, CORNER_COUNT - 1)
         val cornerAlpha = sin((cornerProgress - cornerIndex) * PI).toFloat().coerceIn(0f, 1f)
         if (cornerAlpha <= 0f) return
-        val center = cornerFractionsFor(path, measure, length)[cornerIndex] * length
+        val center = cornerFractionsFor(geometry)[cornerIndex] * length
         val baseAlpha = paint.alpha
         paint.alpha = (baseAlpha * cornerAlpha).roundToInt()
         drawWrappedSegment(
             canvas = canvas,
             measure = measure,
+            length = length,
             start = center - length * CORNER_SEGMENT_FRACTION / 2f,
             segmentLength = length * CORNER_SEGMENT_FRACTION,
             paint = paint
@@ -139,8 +139,8 @@ internal class HaloRenderer(
         paint.alpha = baseAlpha
     }
 
-    private fun drawRain(canvas: Canvas, path: Path, paint: Paint, phase: Float) {
-        val bounds = boundsOf(path)
+    private fun drawRain(canvas: Canvas, geometry: StyleGeometry, paint: Paint, phase: Float) {
+        val bounds = geometry.bounds
         val height = bounds.height()
         if (height <= 0f) return
         val normalizedPhase = (phase % 1f + 1f) % 1f
@@ -154,32 +154,32 @@ internal class HaloRenderer(
         }
     }
 
-    private fun drawRippleEdge(canvas: Canvas, path: Path, paint: Paint, phase: Float) {
-        val measure = PathMeasure(path, false)
-        val length = measure.length
+    private fun drawRippleEdge(canvas: Canvas, geometry: StyleGeometry, paint: Paint, phase: Float) {
+        val measure = geometry.measure
+        val length = geometry.length
         if (length <= 0f) return
         val normalizedPhase = (phase % 1f + 1f) % 1f
         val rippleAlpha = sin(normalizedPhase * PI).toFloat().coerceIn(0f, 1f)
         if (rippleAlpha <= 0f) return
-        val bounds = boundsOf(path)
-        val origin = rippleOriginFraction(path, measure, length, bounds.centerX(), bounds.top) * length
+        val bounds = geometry.bounds
+        val origin = rippleOriginFraction(geometry, bounds.centerX(), bounds.top) * length
         val distance = normalizedPhase * length / 2f
         val segmentLength = length * RIPPLE_SEGMENT_FRACTION
         val baseAlpha = paint.alpha
         paint.alpha = (baseAlpha * rippleAlpha).roundToInt()
-        drawWrappedSegment(canvas, measure, origin + distance - segmentLength, segmentLength, paint)
-        drawWrappedSegment(canvas, measure, origin - distance, segmentLength, paint)
+        drawWrappedSegment(canvas, measure, length, origin + distance - segmentLength, segmentLength, paint)
+        drawWrappedSegment(canvas, measure, length, origin - distance, segmentLength, paint)
         paint.alpha = baseAlpha
     }
 
     private fun drawWrappedSegment(
         canvas: Canvas,
         measure: PathMeasure,
+        length: Float,
         start: Float,
         segmentLength: Float,
         paint: Paint
     ) {
-        val length = measure.length
         if (length <= 0f) return
         val normalizedStart = (start % length + length) % length
         val end = normalizedStart + segmentLength
@@ -193,11 +193,9 @@ internal class HaloRenderer(
         canvas.drawPath(segmentPath, paint)
     }
 
-    private fun cornerFractionsFor(path: Path, measure: PathMeasure, length: Float): FloatArray {
-        if (path === cachedStylePath) {
-            cachedCornerFractions?.let { return it }
-        }
-        val bounds = boundsOf(path)
+    private fun cornerFractionsFor(geometry: StyleGeometry): FloatArray {
+        geometry.cornerFractions?.let { return it }
+        val bounds = geometry.bounds
         val targets = floatArrayOf(
             bounds.left, bounds.top,
             bounds.right, bounds.top,
@@ -212,7 +210,7 @@ internal class HaloRenderer(
             var nearestDistance = Float.MAX_VALUE
             for (sample in 0..CORNER_PATH_SAMPLES) {
                 val fraction = sample.toFloat() / CORNER_PATH_SAMPLES
-                measure.getPosTan(length * fraction, position, null)
+                geometry.measure.getPosTan(geometry.length * fraction, position, null)
                 val distance = (position[0] - targetX) * (position[0] - targetX) +
                     (position[1] - targetY) * (position[1] - targetY)
                 if (distance < nearestDistance) {
@@ -221,27 +219,21 @@ internal class HaloRenderer(
                 }
             }
             nearestFraction
-        }.also { fractions ->
-            if (path === cachedStylePath) cachedCornerFractions = fractions
-        }
+        }.also { fractions -> geometry.cornerFractions = fractions }
     }
 
     private fun rippleOriginFraction(
-        path: Path,
-        measure: PathMeasure,
-        length: Float,
+        geometry: StyleGeometry,
         targetX: Float,
         targetY: Float
     ): Float {
-        if (path === cachedStylePath) {
-            cachedRippleOriginFraction?.let { return it }
-        }
+        geometry.rippleOriginFraction?.let { return it }
         val position = FloatArray(2)
         var nearestFraction = 0f
         var nearestDistance = Float.MAX_VALUE
         for (sample in 0..CORNER_PATH_SAMPLES) {
             val fraction = sample.toFloat() / CORNER_PATH_SAMPLES
-            measure.getPosTan(length * fraction, position, null)
+            geometry.measure.getPosTan(geometry.length * fraction, position, null)
             val distance = (position[0] - targetX) * (position[0] - targetX) +
                 (position[1] - targetY) * (position[1] - targetY)
             if (distance < nearestDistance) {
@@ -249,9 +241,7 @@ internal class HaloRenderer(
                 nearestFraction = fraction
             }
         }
-        return nearestFraction.also { fraction ->
-            if (path === cachedStylePath) cachedRippleOriginFraction = fraction
-        }
+        return nearestFraction.also { fraction -> geometry.rippleOriginFraction = fraction }
     }
 
     private fun buildStylePath(): Path {
@@ -273,8 +263,19 @@ internal class HaloRenderer(
     private fun clearStylePathCache() {
         cachedStyleStrokeWidth = Float.NaN
         cachedStylePath = null
-        cachedCornerFractions = null
-        cachedRippleOriginFraction = null
+        cachedStyleGeometry = null
+    }
+
+    private fun styleGeometryFor(path: Path): StyleGeometry {
+        cachedStyleGeometry?.takeIf { it.path === path }?.let { return it }
+        return StyleGeometry(
+            path = path,
+            measure = PathMeasure(path, false),
+            bounds = boundsOf(path)
+        ).also { geometry ->
+            geometry.length = geometry.measure.length
+            cachedStyleGeometry = geometry
+        }
     }
 
     private fun gradientShader(): SweepGradient {
@@ -340,6 +341,15 @@ internal class HaloRenderer(
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
         }
+
+    private class StyleGeometry(
+        val path: Path,
+        val measure: PathMeasure,
+        val bounds: RectF,
+        var length: Float = 0f,
+        var cornerFractions: FloatArray? = null,
+        var rippleOriginFraction: Float? = null
+    )
 
     private companion object {
         private const val SNAKE_SEGMENT_FRACTION = 0.18f
