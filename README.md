@@ -27,6 +27,17 @@ The core effect, **Luminote Halo**, provides a customizable visual indication fo
 - Repeatable notification effects
 - Ambient Halo for persistent decorative edge lighting
 
+## Tested Devices
+
+Luminote has been tested on:
+
+- Samsung Galaxy S25
+- Google Pixel 6
+- Google Pixel 9a
+- Xiaomi 14T Pro
+
+The Halo outline correctly follows the physical display contour on all tested devices.
+
 ## Project Structure
 
 Luminote is built natively for Android using:
