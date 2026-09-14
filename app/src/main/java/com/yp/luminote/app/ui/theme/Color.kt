@@ -16,15 +16,15 @@ val LuminoteLightSecondaryText = Color(0xFF74747C)
 
 // Dark theme
 val LuminoteDarkBackground = Color(0xFF000000)
-val LuminoteDarkSurface = Color(0xFF1C1C20)
-val LuminoteDarkSurfaceVariant = Color(0xFF292A2F)
+val LuminoteDarkSurface = Color(0xFF101010)
+val LuminoteDarkSurfaceVariant = Color(0xFF202020)
 
-val LuminoteDarkPrimary = Color(0xFF79B8FF)
-val LuminoteDarkPrimaryDark = Color(0xFF79B8FF)
+val LuminoteDarkPrimary = Color.White
+val LuminoteDarkPrimaryDark = Color.White
 
 val LuminoteDarkOnBackground = Color(0xFFF5F5F5)
 val LuminoteDarkOnSurface = Color(0xFFF5F5F5)
-val LuminoteDarkSecondaryText = Color(0xFFAAAAAA)
+val LuminoteDarkSecondaryText = Color(0xFFBDBDBD)
 
 // Semantic colors
 val LuminoteSuccess = Color(0xFF34C759)

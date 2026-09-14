@@ -99,7 +99,7 @@ fun AmbientHaloScreen(
             Text(
                 text = "Personalize the edge of your screen while it is on.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
         }
 
@@ -200,8 +200,8 @@ private fun AmbientGroup(
         modifier = Modifier
             .fillMaxWidth()
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
-            .background(Color(0xFF1B1B20))
-            .border(1.dp, Color(0xFF303038), androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
+            .background(Color(0xFF101010))
+            .border(1.dp, Color(0xFF3D3D3D), androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
             .padding(uiMetrics.cardPadding)
     ) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
@@ -222,7 +222,7 @@ private fun AmbientSlider(
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-        Text(valueText, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFAFAFB8))
+        Text(valueText, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBDBDBD))
     }
     Slider(value = value, onValueChange = onValueChange, valueRange = range, steps = steps, onValueChangeFinished = onValueChangeFinished)
 }

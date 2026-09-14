@@ -127,7 +127,7 @@ fun HomeScreen(
                 MaterialTheme
                     .typography
                     .bodyLarge,
-            color = Color(0xFFAFAFB8)
+            color = Color(0xFFBDBDBD)
         )
 
         Spacer(
@@ -361,10 +361,10 @@ private fun HomeModeSelector(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF1B1B20))
+            .background(Color(0xFF101010))
             .border(
                 width = 1.dp,
-                color = Color(0xFF303038),
+                color = Color(0xFF3D3D3D),
                 shape = RoundedCornerShape(24.dp)
             )
             .padding(20.dp)
@@ -379,7 +379,7 @@ private fun HomeModeSelector(
         Text(
             text = "Choose when Luminote uses the screen edge",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFAFAFB8)
+            color = Color(0xFFBDBDBD)
         )
         Spacer(modifier = Modifier.height(16.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -413,10 +413,10 @@ private fun RowScope.HomeModeChoice(
         modifier = Modifier
             .weight(1f)
             .clip(shape)
-            .background(if (selected) Color(0xFF1E3650) else Color(0xFF25252C))
+            .background(if (selected) Color(0xFF303030) else Color(0xFF202020))
             .border(
                 width = 1.dp,
-                color = if (selected) Color(0xFF74B9FF) else Color.Transparent,
+                color = if (selected) Color.White else Color.Transparent,
                 shape = shape
             )
             .clickable(onClick = onClick)
@@ -427,7 +427,7 @@ private fun RowScope.HomeModeChoice(
             text = label,
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.Medium,
-            color = if (selected) Color.White else Color(0xFFAFAFB8)
+            color = if (selected) Color.White else Color(0xFFBDBDBD)
         )
     }
 }
@@ -446,10 +446,10 @@ private fun HomeSettingItem(
                 .clip(
                     RoundedCornerShape(24.dp)
                 )
-                .background(Color(0xFF1B1B20))
+                .background(Color(0xFF101010))
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF303038),
+                    color = Color(0xFF3D3D3D),
                     shape = RoundedCornerShape(24.dp)
                 )
                 .clickable(
@@ -467,7 +467,7 @@ private fun HomeSettingItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = if (enabled) Color.White else Color(0xFF74747C)
+            color = if (enabled) Color.White else Color(0xFF808080)
             )
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -475,14 +475,14 @@ private fun HomeSettingItem(
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = if (enabled) Color(0xFFAFAFB8) else Color(0xFF5F5F66)
+            color = if (enabled) Color(0xFFBDBDBD) else Color(0xFF5A5A5A)
             )
         }
 
         Text(
             text = "›",
             style = MaterialTheme.typography.headlineMedium,
-            color = if (enabled) Color(0xFF8ECAE9) else Color(0xFF5F5F66)
+            color = if (enabled) Color.White else Color(0xFF5A5A5A)
         )
     }
 }
