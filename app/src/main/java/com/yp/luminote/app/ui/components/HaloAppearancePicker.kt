@@ -31,8 +31,8 @@ fun HaloAppearancePicker(
 ) {
     Column(
         modifier = modifier
-            .background(Color(0xFF1B1B20), RoundedCornerShape(28.dp))
-            .border(1.dp, Color(0xFF303038), RoundedCornerShape(28.dp))
+            .background(Color(0xFF101010), RoundedCornerShape(28.dp))
+            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(28.dp))
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -71,12 +71,12 @@ private fun AppearanceChoice(
     Row(
         modifier = Modifier
             .background(
-                if (selected) Color(0xFF2478D4).copy(alpha = 0.16f) else Color(0xFF24242A),
+                if (selected) Color.White.copy(alpha = 0.14f) else Color(0xFF1C1C1C),
                 RoundedCornerShape(18.dp)
             )
             .border(
                 if (selected) 1.dp else 0.dp,
-                if (selected) Color(0xFF4C9BFF) else Color.Transparent,
+                if (selected) Color.White else Color.Transparent,
                 RoundedCornerShape(18.dp)
             )
             .then(onClick?.takeIf { enabled }?.let { Modifier.clickable(onClick = it) } ?: Modifier)
@@ -91,12 +91,12 @@ private fun AppearanceChoice(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                color = if (enabled) Color.White else Color(0xFF74747C)
+                color = if (enabled) Color.White else Color(0xFF808080)
             )
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (enabled) Color(0xFFAFAFB8) else Color(0xFF74747C)
+                color = if (enabled) Color(0xFFBDBDBD) else Color(0xFF808080)
             )
         }
     }

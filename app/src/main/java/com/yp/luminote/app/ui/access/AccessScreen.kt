@@ -43,6 +43,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.effects.HaloAccessibilityService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.ui.theme.LuminoteSuccess
+import com.yp.luminote.app.ui.theme.LuminoteWarning
 
 @Composable
 fun AccessScreen(onBackClick: () -> Unit) {
@@ -103,7 +105,7 @@ fun AccessScreen(onBackClick: () -> Unit) {
             Text(
                 text = "Manage the permissions Luminote needs for alerts and edge personalization.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
         }
 
@@ -164,8 +166,8 @@ private fun AccessItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF1B1B20))
-            .border(1.dp, Color(0xFF303038), RoundedCornerShape(24.dp))
+            .background(Color(0xFF101010))
+            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -181,7 +183,7 @@ private fun AccessItem(
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
         }
 
@@ -190,7 +192,7 @@ private fun AccessItem(
             text = if (granted) "Allowed" else "Required",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = if (granted) Color(0xFF79D9A2) else Color(0xFFFFC870)
+            color = if (granted) LuminoteSuccess else LuminoteWarning
         )
     }
 }

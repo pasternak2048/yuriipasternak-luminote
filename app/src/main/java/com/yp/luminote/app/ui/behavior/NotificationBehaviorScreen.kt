@@ -74,7 +74,7 @@ fun NotificationBehaviorScreen(
         Text(
             text = "Choose which notification events can show Luminote Halo.",
             style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFFAFAFB8)
+            color = Color(0xFFBDBDBD)
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -83,8 +83,8 @@ fun NotificationBehaviorScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF1B1B20))
-                .border(1.dp, Color(0xFF303038), RoundedCornerShape(28.dp))
+                .background(Color(0xFF101010))
+                .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(28.dp))
                 .clickable {
                     viewModel.setIncludeSilentUpdates(!settings.includeSilentUpdates)
                 }
@@ -102,7 +102,7 @@ fun NotificationBehaviorScreen(
                 Text(
                     text = "Allow reactions, likes, and other notifications that arrive without a sound or heads-up card.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFAFAFB8)
+                    color = Color(0xFFBDBDBD)
                 )
             }
 

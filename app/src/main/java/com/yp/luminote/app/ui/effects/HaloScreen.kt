@@ -141,7 +141,7 @@ fun HaloScreen(
                     MaterialTheme
                         .typography
                         .bodyLarge,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
         }
 
@@ -353,7 +353,7 @@ private fun AppearanceGroup(
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text("Match app color", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                Text("Use the notifying app’s icon color", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAFAFB8))
+                Text("Use the notifying app’s icon color", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
             }
             Switch(
                 checked = settings.colorSource == HaloColorSource.APP_ICON,
@@ -381,7 +381,7 @@ private fun AppearanceGroup(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Use app palette", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                    Text("Build the palette from active alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAFAFB8))
+                    Text("Build the palette from active alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
                 }
                 Switch(
                     checked = settings.gradientPalette == com.yp.luminote.app.data.settings.GradientPalette.NOTIFICATION_APPS,
@@ -539,8 +539,8 @@ private fun TimingGroup(
 
         if (settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(settings.haloMotion.definition.ambientDescription, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAFAFB8))
-            Text("Stops after all relevant alerts are dismissed", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAFAFB8))
+            Text(settings.haloMotion.definition.ambientDescription, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text("Stops after all relevant alerts are dismissed", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
         }
 
     }
@@ -551,7 +551,7 @@ private fun RepeatHaloSetting(enabled: Boolean, onEnabledChange: (Boolean) -> Un
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text("Repeat notification effect", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-            Text("Replay the effect for unread alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAFAFB8))
+            Text("Replay the effect for unread alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
         }
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
@@ -569,8 +569,8 @@ private fun PlaybackChoice(
         modifier = modifier.height(42.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color(0xFF2478D4) else Color(0xFF303038),
-            contentColor = Color.White
+            containerColor = if (selected) Color.White else Color(0xFF202020),
+            contentColor = if (selected) Color.Black else Color.White
         )
     ) {
         Text(title)
@@ -615,8 +615,8 @@ private fun TestEffectButton(
             enabled = !settings.ambientEnabled,
             shape = RoundedCornerShape(28.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color(0xFF2478D4),
-                contentColor = Color.White
+                containerColor = Color.White,
+                contentColor = Color.Black
             )
         ) {
 
@@ -643,10 +643,10 @@ private fun SettingsGroup(
                 .clip(
                     RoundedCornerShape(28.dp)
                 )
-                .background(Color(0xFF1B1B20))
+                .background(Color(0xFF101010))
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF303038),
+                    color = Color(0xFF3D3D3D),
                     shape = RoundedCornerShape(28.dp)
                 )
                 .padding(
@@ -867,7 +867,7 @@ private fun SliderSetting(
                     MaterialTheme
                         .typography
                         .bodyMedium,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
         }
 

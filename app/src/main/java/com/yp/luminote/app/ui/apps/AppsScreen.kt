@@ -164,7 +164,7 @@ fun AppsScreen(
                     MaterialTheme
                         .typography
                         .bodyLarge,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
         }
 
@@ -490,10 +490,10 @@ private fun NotificationSourceGroup(
                 .clip(
                     RoundedCornerShape(24.dp)
                 )
-                .background(Color(0xFF1B1B20))
+                .background(Color(0xFF101010))
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF303038),
+                    color = Color(0xFF3D3D3D),
                     shape = RoundedCornerShape(24.dp)
                 )
                 .animateContentSize()
@@ -761,10 +761,10 @@ private fun AppsList(
                 .clip(
                     RoundedCornerShape(24.dp)
                 )
-                .background(Color(0xFF1B1B20))
+                .background(Color(0xFF101010))
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF303038),
+                    color = Color(0xFF3D3D3D),
                     shape = RoundedCornerShape(24.dp)
                 ),
         contentPadding =
