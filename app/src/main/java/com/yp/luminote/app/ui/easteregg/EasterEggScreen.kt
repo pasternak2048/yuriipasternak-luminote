@@ -282,26 +282,6 @@ private val NIGHT_BACKGROUND = androidx.compose.ui.graphics.Color.Black
 private val MAIN_TEXT_COLOR = androidx.compose.ui.graphics.Color(0xFFE7E7F0)
 private val SECONDARY_TEXT_COLOR = androidx.compose.ui.graphics.Color(0xFF8D8B9B)
 
-private val WARM_GOLD = 0xFFFFC86A.toInt()
-private val SOFT_PEACH = 0xFFF29A73.toInt()
-private val MUTED_PINK_PURPLE = 0xFFC77BCB.toInt()
-private val DEEP_SEA_RED = 0xFF7E2C42.toInt()
-private val SEA_CRIMSON = 0xFF9E3D4F.toInt()
-private val VIOLET = 0xFF765FA8.toInt()
-private val TWILIGHT_BLUE = 0xFF394B83.toInt()
-private val DEEP_NIGHT_BLUE = 0xFF182B55.toInt()
-
-private val EASTER_EGG_PALETTE = intArrayOf(
-    DEEP_NIGHT_BLUE,
-    TWILIGHT_BLUE,
-    VIOLET,
-    MUTED_PINK_PURPLE,
-    DEEP_SEA_RED,
-    SEA_CRIMSON,
-    SOFT_PEACH,
-    WARM_GOLD
-)
-
 private tailrec fun Context.findActivity(): Activity? =
     when (this) {
         is Activity -> this

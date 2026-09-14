@@ -127,7 +127,7 @@ class LuminoteNotificationListener :
                 cachedSettings.set(settings)
                 settingsReady.complete(settings)
                 if (isPersistentReminder(settings)) {
-                    startPersistentReminderIfNeeded(settings)
+                    refreshActiveNotifications(settings)
                 }
             }
         }
@@ -335,6 +335,19 @@ class LuminoteNotificationListener :
         }
 
         startPersistentReminderIfNeeded(settings)
+    }
+
+    /**
+     * Keep Visible must also reflect alerts that existed before a mode or app
+     * filter changed. Notification callbacks alone cannot provide that
+     * guarantee, so rebuild the small in-memory snapshot from the system list.
+     */
+    private fun refreshActiveNotifications(settings: LuminoteSettings) {
+        restoreActiveNotifications(
+            notifications = activeNotifications,
+            rankingMap = currentRanking,
+            settings = settings
+        )
     }
 
     private fun isPersistentReminder(settings: LuminoteSettings): Boolean =
