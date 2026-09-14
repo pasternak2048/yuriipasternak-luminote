@@ -69,7 +69,7 @@ class LuminoteNotificationListener :
 
     /* Keeps one entry per notification for the active app-color palette. */
     private val activeNotificationPackages = linkedMapOf<String, String>()
-    /* All active notifications eligible for the persistent Reminder palette. */
+    /* All active notifications from apps allowed to contribute palette colors. */
     private val activePaletteNotificationPackages = linkedMapOf<String, String>()
     private val activeNotificationsLock = Any()
 
@@ -185,7 +185,7 @@ class LuminoteNotificationListener :
         }
 
         cachedSettings.get()?.let { settings ->
-            if (shouldTrackPersistentPalette(sbn, settings)) {
+            if (shouldTrackPaletteNotification(sbn, settings)) {
                 synchronized(activeNotificationsLock) {
                     activePaletteNotificationPackages[sbn.key] = sbn.packageName
                 }
@@ -244,7 +244,7 @@ class LuminoteNotificationListener :
 
         synchronized(activeNotificationsLock) {
             activeNotificationPackages[sbn.key] = sbn.packageName
-            if (shouldTrackPersistentPalette(sbn, settings)) {
+            if (shouldTrackPaletteNotification(sbn, settings)) {
                 activePaletteNotificationPackages[sbn.key] = sbn.packageName
             }
         }
@@ -322,7 +322,7 @@ class LuminoteNotificationListener :
             activeNotificationPackages.clear()
             activePaletteNotificationPackages.clear()
             notifications.forEach { notification ->
-                if (shouldTrackPersistentPalette(notification, settings)) {
+                if (shouldTrackPaletteNotification(notification, settings)) {
                     activePaletteNotificationPackages[notification.key] = notification.packageName
                 }
                 if (
@@ -495,12 +495,11 @@ class LuminoteNotificationListener :
         NotificationSource.SELECTED_APPS -> sbn.packageName in settings.selectedApps
     }
 
-    private fun shouldTrackPersistentPalette(
+    private fun shouldTrackPaletteNotification(
         sbn: StatusBarNotification,
         settings: LuminoteSettings
     ): Boolean =
-        isPersistentReminder(settings) &&
-            sbn.packageName != packageName &&
+        sbn.packageName != packageName &&
             shouldHandleSource(sbn, settings)
 
     override fun onDestroy() {

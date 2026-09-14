@@ -58,11 +58,9 @@ class HaloAccessibilityService : AccessibilityService() {
             Context.RECEIVER_NOT_EXPORTED
         )
         activeService = this
-        Log.i(TAG, "Lock-screen accessibility service connected")
         HaloOverlayService.takePendingApplicationAmbientIntent()?.let { ambientIntent ->
             handleCommand(ambientIntent)
             HaloOverlayService.stopApplicationAmbientOverlay(this)
-            Log.i(TAG, "Persistent Ambient Halo handed off from application overlay")
         }
     }
 
@@ -76,7 +74,6 @@ class HaloAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        Log.w(TAG, "Lock-screen accessibility service destroyed")
         if (activeService === this) activeService = null
         handler.removeCallbacks(removeOverlayTask)
         unregisterReceiver(screenStateReceiver)
@@ -85,7 +82,6 @@ class HaloAccessibilityService : AccessibilityService() {
     }
 
     private fun handleCommand(intent: Intent?) {
-        Log.d(TAG, "Accessibility halo command received")
         if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_REPEATING, false) == true) {
             removeOverlay()
             return
@@ -157,7 +153,6 @@ class HaloAccessibilityService : AccessibilityService() {
         previewMode = preview
         runCatching {
             windowManager.addView(view, params)
-            Log.d(TAG, "Accessibility halo overlay attached")
             startAnimation(view, resolvedConfig)
             scheduleRemoval(resolvedConfig)
         }.onFailure {
@@ -172,7 +167,6 @@ class HaloAccessibilityService : AccessibilityService() {
             view.startAmbientEffect(config.effectSpeed)
             if (!powerManager.isInteractive) {
                 view.pauseAmbientEffect()
-                Log.d(TAG, "Persistent ambient halo paused because the screen is off")
             }
         } else {
             view.repeatAnimation(config.durationSeconds, config.intervalSeconds, config.repeatCount, config.motion)
@@ -201,14 +195,12 @@ class HaloAccessibilityService : AccessibilityService() {
         val config = activeConfig ?: return
         if (config.notificationPlayback != NotificationPlayback.KEEP_VISIBLE) return
         overlayView?.pauseAmbientEffect()
-        Log.d(TAG, "Persistent ambient halo paused for screen off")
     }
 
     private fun resumePersistentAmbientAfterScreenOn() {
         val config = activeConfig ?: return
         if (config.notificationPlayback != NotificationPlayback.KEEP_VISIBLE) return
         overlayView?.resumeAmbientEffect()
-        Log.d(TAG, "Persistent ambient halo resumed for screen on")
     }
 
     private fun removeOverlay() {

@@ -2,7 +2,6 @@ package com.yp.luminote.app.effects
 
 import android.content.Context
 import android.graphics.Canvas
-import android.util.Log
 import android.animation.ValueAnimator
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
@@ -24,7 +23,6 @@ internal class HaloView(
     private var ambientCycle = 0L
     private var ambientPaused = false
     private var pendingFiniteAnimation: FiniteAnimation? = null
-    private var hasLoggedDrawFrame = false
     private var animationStartToken = 0L
     private val ambientEffectAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = AMBIENT_ROTATION_DURATION_MS
@@ -87,7 +85,6 @@ internal class HaloView(
     private fun startFiniteAnimation(request: FiniteAnimation) {
         pendingFiniteAnimation = null
         val startToken = ++animationStartToken
-        hasLoggedDrawFrame = false
         post {
             if (
                 startToken != animationStartToken ||
@@ -97,7 +94,6 @@ internal class HaloView(
             ) {
                 return@post
             }
-            Log.d(TAG, "Starting finite animation at ${width}x${height}")
             animation.start(
                 duration = request.duration,
                 interval = request.interval,
@@ -119,7 +115,6 @@ internal class HaloView(
         super.onSizeChanged(w, h, oldw, oldh)
         outline.resize(w, h)
         requestApplyInsets()
-        Log.d(TAG, "Halo view laid out at ${w}x${h}, pending=${pendingFiniteAnimation != null}")
         if (w > 0 && h > 0) {
             pendingFiniteAnimation?.let(::startFiniteAnimation)
         }
@@ -146,10 +141,6 @@ internal class HaloView(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (animationProgress > 0f && !hasLoggedDrawFrame) {
-            hasLoggedDrawFrame = true
-            Log.d(TAG, "Drawing animation frame; outlineVersion=${outline.version}")
-        }
         renderer.draw(canvas, animationProgress, animationPhase, gradientPhase)
     }
 
@@ -200,7 +191,6 @@ internal class HaloView(
     )
 
     private companion object {
-        const val TAG = "HaloView"
         const val AMBIENT_ROTATION_DURATION_MS = 16_000L
         const val AMBIENT_PHASE_SPAN = 360f / 220f
         const val MIN_EFFECT_SPEED = 0.25f

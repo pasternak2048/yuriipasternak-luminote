@@ -212,7 +212,6 @@ class HaloOverlayService : Service() {
         activeConfig = resolvedConfig
         try {
             windowManager.addView(view, params)
-            Log.d(TAG, "Application halo overlay attached")
             startAnimation(view, resolvedConfig)
             if (resolvedConfig.repeatCount > 0) scheduleRemoval(resolvedConfig)
         } catch (exception: Exception) {
@@ -455,7 +454,6 @@ class HaloOverlayService : Service() {
              * while the device is locked.
              */
             if (HaloAccessibilityService.dispatch(intent)) {
-                Log.d(TAG, "Command routed to accessibility halo")
                 if (isPersistentAmbientIntent(intent)) {
                     pendingApplicationAmbientIntent = null
                 }
@@ -465,7 +463,6 @@ class HaloOverlayService : Service() {
                 pendingApplicationAmbientIntent = Intent(intent)
             }
             try {
-                Log.d(TAG, "Starting application halo foreground service")
                 context.startForegroundService(intent)
             } catch (exception: IllegalStateException) {
                 Log.e(TAG, "System rejected background start for halo service", exception)
