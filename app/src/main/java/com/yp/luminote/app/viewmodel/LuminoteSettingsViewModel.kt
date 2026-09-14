@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.HaloMode
 import com.yp.luminote.app.data.settings.GradientPalette
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
@@ -67,6 +68,10 @@ class LuminoteSettingsViewModel(
         updateSettings {
             copy(haloColor = color)
         }
+    }
+
+    fun setHaloMode(mode: HaloMode) {
+        updateSettings { copy(haloMode = mode) }
     }
 
     fun setHaloIntensity(
@@ -187,10 +192,6 @@ class LuminoteSettingsViewModel(
                 haloRepeatCount = if (playback == NotificationPlayback.REPEAT && haloRepeatCount < 2) 2 else haloRepeatCount
             )
         }
-    }
-
-    fun setAmbientEnabled(enabled: Boolean) {
-        updateSettings { copy(ambientEnabled = enabled) }
     }
 
     fun setAmbientColor(color: Int) {

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,12 +30,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.data.settings.HaloMode
 
 @Composable
 fun HomeScreen(
@@ -51,6 +56,25 @@ fun HomeScreen(
     val settingsLoaded by
     viewModel.settingsLoaded.collectAsState()
     val uiMetrics = rememberLuminoteUiMetrics()
+    val context = LocalContext.current
+    val onModeSelected: (HaloMode) -> Unit = { mode ->
+        viewModel.setHaloMode(mode)
+        when (mode) {
+            HaloMode.AMBIENT -> HaloOverlayService.start(
+                context,
+                HaloOverlayService.createAmbientIntent(
+                    context,
+                    settings.copy(haloMode = HaloMode.AMBIENT)
+                )
+            )
+
+            HaloMode.NOTIFICATIONS,
+            HaloMode.OFF -> HaloOverlayService.start(
+                context,
+                HaloOverlayService.createStopRepeatingIntent(context)
+            )
+        }
+    }
 
     if (!settingsLoaded) {
         Box(
@@ -124,7 +148,8 @@ fun HomeScreen(
                     onNotificationBehaviorClick = onNotificationBehaviorClick,
                     onAboutClick = onAboutClick,
                     onAccessClick = onAccessClick,
-                    notificationsLocked = settings.ambientEnabled
+                    mode = settings.haloMode,
+                    onModeSelected = onModeSelected
                 )
             }
 
@@ -139,7 +164,8 @@ fun HomeScreen(
                     onNotificationBehaviorClick = onNotificationBehaviorClick,
                     onAboutClick = onAboutClick,
                     onAccessClick = onAccessClick,
-                    notificationsLocked = settings.ambientEnabled
+                    mode = settings.haloMode,
+                    onModeSelected = onModeSelected
                 )
             }
 
@@ -154,10 +180,12 @@ fun HomeScreen(
                     onNotificationBehaviorClick = onNotificationBehaviorClick,
                     onAboutClick = onAboutClick,
                     onAccessClick = onAccessClick,
-                    notificationsLocked = settings.ambientEnabled
+                    mode = settings.haloMode,
+                    onModeSelected = onModeSelected
                 )
             }
         }
+
     }
 }
 
@@ -169,62 +197,19 @@ private fun CompactHomeContent(
     onNotificationBehaviorClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
-    notificationsLocked: Boolean
+    mode: HaloMode,
+    onModeSelected: (HaloMode) -> Unit
 ) {
-    HomeSettingItem(
-        title = "Luminote Halo",
-        subtitle =
-            "Notification effects and appearance",
-        onClick =
-            onHaloClick,
-        enabled = !notificationsLocked
-    )
-
-    Spacer(
-        modifier =
-            Modifier.height(12.dp)
-    )
-
-    HomeSettingItem(
-        title = "Ambient Halo",
-        subtitle = "Keep a custom edge effect visible",
-        onClick = onAmbientClick
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    HomeSettingItem(
-        title = "Apps",
-        subtitle =
-            "Choose which apps can trigger the effect",
-        onClick =
-            onAppsClick,
-        enabled = !notificationsLocked
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    HomeSettingItem(
-        title = "Access",
-        subtitle = "Permissions for alerts and edge effects",
-        onClick = onAccessClick
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    HomeSettingItem(
-        title = "Notification behavior",
-        subtitle = "Control silent notification updates",
-        onClick = onNotificationBehaviorClick,
-        enabled = !notificationsLocked
-    )
-
-    Spacer(modifier = Modifier.height(12.dp))
-
-    HomeSettingItem(
-        title = "About",
-        subtitle = "Luminote, developer and source code",
-        onClick = onAboutClick
+    HomeSettingsList(
+        mode = mode,
+        onModeSelected = onModeSelected,
+        onHaloClick = onHaloClick,
+        onAmbientClick = onAmbientClick,
+        onAppsClick = onAppsClick,
+        onNotificationBehaviorClick = onNotificationBehaviorClick,
+        onAboutClick = onAboutClick,
+        onAccessClick = onAccessClick,
+        spacing = 12.dp
     )
 }
 
@@ -236,7 +221,8 @@ private fun MediumHomeContent(
     onNotificationBehaviorClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
-    notificationsLocked: Boolean
+    mode: HaloMode,
+    onModeSelected: (HaloMode) -> Unit
 ) {
     Row(
         modifier =
@@ -253,47 +239,16 @@ private fun MediumHomeContent(
             verticalArrangement =
                 Arrangement.spacedBy(12.dp)
         ) {
-            HomeSettingItem(
-                title = "Luminote Halo",
-                subtitle =
-            "Notification effects and appearance",
-                onClick =
-                    onHaloClick,
-                enabled = !notificationsLocked
-            )
-
-            HomeSettingItem(
-                title = "Apps",
-                subtitle =
-                    "Choose which apps can trigger the effect",
-                onClick =
-                    onAppsClick,
-                enabled = !notificationsLocked
-            )
-
-            HomeSettingItem(
-                title = "Notification behavior",
-                subtitle = "Control silent notification updates",
-                onClick = onNotificationBehaviorClick,
-                enabled = !notificationsLocked
-            )
-
-            HomeSettingItem(
-                title = "Ambient Halo",
-                subtitle = "Keep a custom edge effect visible",
-                onClick = onAmbientClick
-            )
-
-            HomeSettingItem(
-                title = "Access",
-                subtitle = "Permissions for alerts and edge effects",
-                onClick = onAccessClick
-            )
-
-            HomeSettingItem(
-                title = "About",
-                subtitle = "Luminote, developer and source code",
-                onClick = onAboutClick
+            HomeSettingsList(
+                mode = mode,
+                onModeSelected = onModeSelected,
+                onHaloClick = onHaloClick,
+                onAmbientClick = onAmbientClick,
+                onAppsClick = onAppsClick,
+                onNotificationBehaviorClick = onNotificationBehaviorClick,
+                onAboutClick = onAboutClick,
+                onAccessClick = onAccessClick,
+                spacing = 12.dp
             )
         }
     }
@@ -307,7 +262,8 @@ private fun ExpandedHomeContent(
     onNotificationBehaviorClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
-    notificationsLocked: Boolean
+    mode: HaloMode,
+    onModeSelected: (HaloMode) -> Unit
 ) {
     Row(
         modifier =
@@ -325,49 +281,154 @@ private fun ExpandedHomeContent(
             verticalArrangement =
                 Arrangement.spacedBy(16.dp)
         ) {
-            HomeSettingItem(
-                title = "Luminote Halo",
-                subtitle =
-                    "Notification effects and appearance",
-                onClick =
-                    onHaloClick,
-                enabled = !notificationsLocked
+            HomeSettingsList(
+                mode = mode,
+                onModeSelected = onModeSelected,
+                onHaloClick = onHaloClick,
+                onAmbientClick = onAmbientClick,
+                onAppsClick = onAppsClick,
+                onNotificationBehaviorClick = onNotificationBehaviorClick,
+                onAboutClick = onAboutClick,
+                onAccessClick = onAccessClick,
+                spacing = 16.dp
             )
+        }
+    }
+}
 
-            HomeSettingItem(
-                title = "Apps",
-                subtitle =
-                    "Choose which apps can trigger the effect",
-                onClick =
-                    onAppsClick,
-                enabled = !notificationsLocked
-            )
+@Composable
+private fun HomeSettingsList(
+    mode: HaloMode,
+    onModeSelected: (HaloMode) -> Unit,
+    onHaloClick: () -> Unit,
+    onAmbientClick: () -> Unit,
+    onAppsClick: () -> Unit,
+    onNotificationBehaviorClick: () -> Unit,
+    onAboutClick: () -> Unit,
+    onAccessClick: () -> Unit,
+    spacing: Dp
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(spacing)) {
+        HomeModeSelector(mode = mode, onModeSelected = onModeSelected)
 
-            HomeSettingItem(
-                title = "Notification behavior",
-                subtitle = "Control silent notification updates",
-                onClick = onNotificationBehaviorClick,
-                enabled = !notificationsLocked
-            )
+        when (mode) {
+            HaloMode.NOTIFICATIONS -> {
+                HomeSettingItem(
+                    title = "Luminote Halo",
+                    subtitle = "Notification effects and appearance",
+                    onClick = onHaloClick
+                )
+                HomeSettingItem(
+                    title = "Apps",
+                    subtitle = "Choose which apps can trigger the effect",
+                    onClick = onAppsClick
+                )
+                HomeSettingItem(
+                    title = "Notification behavior",
+                    subtitle = "Control silent notification updates",
+                    onClick = onNotificationBehaviorClick
+                )
+            }
 
-            HomeSettingItem(
+            HaloMode.AMBIENT -> HomeSettingItem(
                 title = "Ambient Halo",
                 subtitle = "Keep a custom edge effect visible",
                 onClick = onAmbientClick
             )
 
-            HomeSettingItem(
-                title = "Access",
-                subtitle = "Permissions for alerts and edge effects",
-                onClick = onAccessClick
-            )
+            HaloMode.OFF -> Unit
+        }
 
-            HomeSettingItem(
-                title = "About",
-                subtitle = "Luminote, developer and source code",
-                onClick = onAboutClick
+        HomeSettingItem(
+            title = "Access",
+            subtitle = "Permissions for alerts and edge effects",
+            onClick = onAccessClick
+        )
+        HomeSettingItem(
+            title = "About",
+            subtitle = "Luminote, developer and source code",
+            onClick = onAboutClick
+        )
+    }
+}
+
+@Composable
+private fun HomeModeSelector(
+    mode: HaloMode,
+    onModeSelected: (HaloMode) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color(0xFF1B1B20))
+            .border(
+                width = 1.dp,
+                color = Color(0xFF303038),
+                shape = RoundedCornerShape(24.dp)
+            )
+            .padding(20.dp)
+    ) {
+        Text(
+            text = "Mode",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Choose when Luminote uses the screen edge",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFFAFAFB8)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            HomeModeChoice(
+                label = "Alerts",
+                selected = mode == HaloMode.NOTIFICATIONS,
+                onClick = { onModeSelected(HaloMode.NOTIFICATIONS) }
+            )
+            HomeModeChoice(
+                label = "Ambient",
+                selected = mode == HaloMode.AMBIENT,
+                onClick = { onModeSelected(HaloMode.AMBIENT) }
+            )
+            HomeModeChoice(
+                label = "Off",
+                selected = mode == HaloMode.OFF,
+                onClick = { onModeSelected(HaloMode.OFF) }
             )
         }
+    }
+}
+
+@Composable
+private fun RowScope.HomeModeChoice(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier = Modifier
+            .weight(1f)
+            .clip(shape)
+            .background(if (selected) Color(0xFF1E3650) else Color(0xFF25252C))
+            .border(
+                width = 1.dp,
+                color = if (selected) Color(0xFF74B9FF) else Color.Transparent,
+                shape = shape
+            )
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Medium,
+            color = if (selected) Color.White else Color(0xFFAFAFB8)
+        )
     }
 }
 

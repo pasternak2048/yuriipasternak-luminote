@@ -25,6 +25,11 @@ class LuminoteSettingsRepository(
 
     private object Keys {
 
+        val haloMode = stringPreferencesKey("halo_mode")
+
+        /* Read-only migration keys for versions that used independent switches. */
+        val legacyHaloEnabled = booleanPreferencesKey("halo_enabled")
+
         val haloColor =
             intPreferencesKey(
                 "halo_color_int"
@@ -75,7 +80,7 @@ class LuminoteSettingsRepository(
                 "selected_apps"
             )
 
-        val ambientEnabled = booleanPreferencesKey("ambient_enabled")
+        val legacyAmbientEnabled = booleanPreferencesKey("ambient_enabled")
         val ambientColor = intPreferencesKey("ambient_color")
         val ambientColorMode = stringPreferencesKey("ambient_color_mode")
         val ambientIntensity = floatPreferencesKey("ambient_intensity")
@@ -92,6 +97,14 @@ class LuminoteSettingsRepository(
             .map { preferences ->
 
                 LuminoteSettings(
+
+                    haloMode = preferences[Keys.haloMode]
+                        ?.let { runCatching { HaloMode.valueOf(it) }.getOrNull() }
+                        ?: when {
+                            preferences[Keys.legacyAmbientEnabled] == true -> HaloMode.AMBIENT
+                            preferences[Keys.legacyHaloEnabled] == false -> HaloMode.OFF
+                            else -> defaultSettings.haloMode
+                        },
 
                     haloColor =
                         preferences[
@@ -173,7 +186,6 @@ class LuminoteSettingsRepository(
                             Keys.selectedApps
                         ] ?: defaultSettings.selectedApps,
 
-                    ambientEnabled = preferences[Keys.ambientEnabled] ?: defaultSettings.ambientEnabled,
                     ambientColor = preferences[Keys.ambientColor] ?: defaultSettings.ambientColor,
                     ambientColorMode = preferences[Keys.ambientColorMode]
                         ?.let { runCatching { HaloColorMode.valueOf(it) }.getOrNull() }
@@ -206,6 +218,7 @@ class LuminoteSettingsRepository(
     /** Persists one coherent settings snapshot in a single DataStore transaction. */
     suspend fun saveSettings(settings: LuminoteSettings) {
         context.luminoteDataStore.edit { preferences ->
+            preferences[Keys.haloMode] = settings.haloMode.name
             preferences[Keys.haloColor] = settings.haloColor
             preferences[Keys.haloIntensity] = settings.haloIntensity
             preferences[Keys.haloThickness] = settings.haloThickness
@@ -221,7 +234,6 @@ class LuminoteSettingsRepository(
             preferences[Keys.notificationSource] = settings.notificationSource.name
             preferences[Keys.includeSilentUpdates] = settings.includeSilentUpdates
             preferences[Keys.selectedApps] = settings.selectedApps
-            preferences[Keys.ambientEnabled] = settings.ambientEnabled
             preferences[Keys.ambientColor] = settings.ambientColor
             preferences[Keys.ambientColorMode] = settings.ambientColorMode.name
             preferences[Keys.ambientIntensity] = settings.ambientIntensity

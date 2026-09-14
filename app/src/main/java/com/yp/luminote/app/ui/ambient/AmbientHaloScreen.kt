@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -111,42 +110,6 @@ fun AmbientHaloScreen(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = uiMetrics.sectionSpacing),
             verticalArrangement = Arrangement.spacedBy(uiMetrics.sectionSpacing)
         ) {
-            item {
-                Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Ambient Halo", uiMetrics = uiMetrics) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text("Show Ambient Halo", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                                Text("Keeps a decorative effect visible while the screen is on", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFAFAFB8))
-                            }
-                            Switch(
-                                checked = settings.ambientEnabled,
-                                onCheckedChange = { enabled ->
-                                    viewModel.setAmbientEnabled(enabled)
-                                    if (!enabled) {
-                                        HaloOverlayService.start(
-                                            context,
-                                            HaloOverlayService.createStopRepeatingIntent(context)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                        if (settings.ambientEnabled) {
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                "Notification effects are paused while Ambient Halo is active.",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = Color(0xFFFFC870)
-                            )
-                        }
-                    }
-                }
-            }
-
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
                     HaloAppearancePicker(

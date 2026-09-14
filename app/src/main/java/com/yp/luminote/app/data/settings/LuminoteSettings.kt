@@ -11,7 +11,16 @@ enum class NotificationPlayback {
     KEEP_VISIBLE
 }
 
+/** Only one screen-edge experience can own the overlay at a time. */
+enum class HaloMode {
+    NOTIFICATIONS,
+    AMBIENT,
+    OFF
+}
+
 data class LuminoteSettings(
+    val haloMode: HaloMode = HaloMode.NOTIFICATIONS,
+
     val haloColor: Int =
         0xFF3E91FF.toInt(),
 
@@ -53,9 +62,6 @@ data class LuminoteSettings(
     val selectedApps: Set<String> =
         emptySet(),
 
-    /** A screen-personalisation effect that deliberately takes precedence over alerts. */
-    val ambientEnabled: Boolean = false,
-
     val ambientColor: Int = 0xFF3E91FF.toInt(),
 
     val ambientColorMode: HaloColorMode = HaloColorMode.SOLID,
@@ -69,4 +75,10 @@ data class LuminoteSettings(
     val ambientEffectSpeed: Float = 1f,
 
     val ambientGradientFlowSpeed: Float = 1f
-)
+) {
+    val haloEnabled: Boolean
+        get() = haloMode == HaloMode.NOTIFICATIONS
+
+    val ambientEnabled: Boolean
+        get() = haloMode == HaloMode.AMBIENT
+}

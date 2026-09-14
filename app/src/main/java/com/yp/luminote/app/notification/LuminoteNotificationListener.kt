@@ -95,6 +95,22 @@ class LuminoteNotificationListener :
                     settingsReady.complete(settings)
                     return@collect
                 }
+                if (!settings.haloEnabled) {
+                    if (
+                        previous?.ambientEnabled == true ||
+                            previous?.haloEnabled == true ||
+                            previous?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE
+                    ) {
+                        HaloOverlayService.start(
+                            this@LuminoteNotificationListener,
+                            HaloOverlayService.createStopRepeatingIntent(this@LuminoteNotificationListener)
+                        )
+                    }
+                    previousSettings = settings
+                    cachedSettings.set(settings)
+                    settingsReady.complete(settings)
+                    return@collect
+                }
                 if (
                     previous?.ambientEnabled == true ||
                         (previous?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE &&
@@ -161,6 +177,11 @@ class LuminoteNotificationListener :
             return
         }
 
+        if (cachedSettings.get()?.haloEnabled == false) {
+            Log.d(TAG, "Skipped: Luminote Halo is disabled")
+            return
+        }
+
         if (!shouldShowEffect(sbn, rankingMap)) {
             Log.d(TAG, "Skipped: notification is silent")
             return
@@ -196,7 +217,7 @@ class LuminoteNotificationListener :
         sbn: StatusBarNotification,
         settings: LuminoteSettings
     ) {
-        if (settings.ambientEnabled) return
+        if (!settings.haloEnabled || settings.ambientEnabled) return
 
         if (settings.haloIntensity <= 0f) {
             Log.d(TAG, "Skipped: halo intensity is zero")
@@ -281,6 +302,8 @@ class LuminoteNotificationListener :
         rankingMap: NotificationListenerService.RankingMap,
         settings: LuminoteSettings
     ) {
+        if (!settings.haloEnabled || settings.ambientEnabled) return
+
         synchronized(activeNotificationsLock) {
             activeNotificationPackages.clear()
             notifications.forEach { notification ->
@@ -297,7 +320,7 @@ class LuminoteNotificationListener :
     }
 
     private fun isPersistentReminder(settings: LuminoteSettings): Boolean =
-        settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE
+        settings.haloEnabled && settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE
 
     private fun startPersistentReminderIfNeeded(settings: LuminoteSettings) {
         if (!isPersistentReminder(settings)) return
@@ -435,7 +458,7 @@ class LuminoteNotificationListener :
             activeNotificationPackages.isEmpty()
         }
         val settings = cachedSettings.get()
-        if (settings?.ambientEnabled == true) return
+        if (settings?.ambientEnabled == true || settings?.haloEnabled == false) return
         if (settings?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             if (noRelevantNotifications) {
                 HaloOverlayService.start(this, HaloOverlayService.createStopRepeatingIntent(this))
