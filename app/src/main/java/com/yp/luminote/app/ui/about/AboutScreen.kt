@@ -93,7 +93,7 @@ fun AboutScreen(
                 text = "Luminote",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF79B8FF)
+                color = Color.White
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -101,7 +101,7 @@ fun AboutScreen(
             Text(
                 text = "Edge lighting for alerts and ambient style.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
 
         }
@@ -120,7 +120,7 @@ fun AboutScreen(
                         "to modern displays. It follows the physical contour of the screen while " +
                         "keeping the experience fast and unobtrusive.",
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFAFAFB8)
+                    color = Color(0xFFBDBDBD)
                 )
             }
 
@@ -160,7 +160,7 @@ fun AboutScreen(
                 Text(
                     text = versionInfo,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFAFAFB8)
+                    color = Color(0xFFBDBDBD)
                 )
             }
         }
@@ -179,8 +179,8 @@ private fun AboutBlock(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
-            .background(Color(0xFF1B1B20))
-            .border(1.dp, Color(0xFF303038), RoundedCornerShape(28.dp))
+            .background(Color(0xFF101010))
+            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(28.dp))
             .padding(20.dp)
     ) {
         Text(
@@ -200,8 +200,8 @@ private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF1B1B20))
-            .border(1.dp, Color(0xFF303038), RoundedCornerShape(24.dp))
+            .background(Color(0xFF101010))
+            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -217,13 +217,13 @@ private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFAFAFB8)
+                color = Color(0xFFBDBDBD)
             )
         }
         Text(
             text = "↗",
             style = MaterialTheme.typography.titleLarge,
-            color = Color(0xFF79B8FF)
+            color = Color.White
         )
     }
 }
