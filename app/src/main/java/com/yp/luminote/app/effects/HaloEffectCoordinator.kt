@@ -16,12 +16,18 @@ import java.util.ArrayDeque
  */
 internal class HaloEffectCoordinator {
 
-    private val pendingRequests = ArrayDeque<HaloEffectRequest>()
+    private val pendingRequests =
+        ArrayDeque<HaloEffectRequest>()
 
-    private var activeRequest: HaloEffectRequest? = null
-    private var onRequestStarted: ((HaloEffectRequest) -> Unit)? = null
+    private var activeRequest:
+            HaloEffectRequest? = null
 
-    fun enqueue(request: HaloEffectRequest) {
+    private var onRequestStarted:
+            ((HaloEffectRequest) -> Unit)? = null
+
+    fun enqueue(
+        request: HaloEffectRequest
+    ) {
         Log.d(
             TAG,
             "enqueue package=${request.packageName}, " +
@@ -29,20 +35,26 @@ internal class HaloEffectCoordinator {
                     "pending=${pendingRequests.size}"
         )
 
-        val active = activeRequest
+        val active =
+            activeRequest
 
-        if (active?.packageName == request.packageName) {
+        if (
+            active?.packageName ==
+            request.packageName
+        ) {
             Log.d(
                 TAG,
                 "coalesced active package=${request.packageName}, " +
                         "notificationKey=${request.notificationKey}"
             )
+
             return
         }
 
         if (
             pendingRequests.any {
-                it.packageName == request.packageName
+                it.packageName ==
+                        request.packageName
             }
         ) {
             Log.d(
@@ -50,15 +62,21 @@ internal class HaloEffectCoordinator {
                 "coalesced pending package=${request.packageName}, " +
                         "notificationKey=${request.notificationKey}"
             )
+
             return
         }
 
         if (active == null) {
-            start(request)
+            start(
+                request
+            )
+
             return
         }
 
-        pendingRequests.addLast(request)
+        pendingRequests.addLast(
+            request
+        )
 
         Log.d(
             TAG,
@@ -67,64 +85,95 @@ internal class HaloEffectCoordinator {
         )
     }
 
-    fun onRequestCompleted(request: HaloEffectRequest) {
-        if (activeRequest !== request) {
+    fun onRequestCompleted(
+        request: HaloEffectRequest
+    ) {
+        if (
+            activeRequest !==
+            request
+        ) {
             Log.d(
                 TAG,
-                "Ignoring stale completion: package=${request.packageName}, " +
+                "Ignoring stale completion: " +
+                        "package=${request.packageName}, " +
                         "active=${activeRequest?.packageName}"
             )
+
             return
         }
 
         Log.d(
             TAG,
-            "completed active=${request.packageName}, pending=${pendingRequests.size}"
+            "completed active=${request.packageName}, " +
+                    "pending=${pendingRequests.size}"
         )
 
         activeRequest = null
+
         startNext()
     }
 
     fun clear() {
         pendingRequests.clear()
+
         activeRequest = null
         onRequestStarted = null
     }
 
-    fun updateRenderer(onRequestStarted: (HaloEffectRequest) -> Unit) {
-        this.onRequestStarted = onRequestStarted
+    fun updateRenderer(
+        onRequestStarted:
+            (HaloEffectRequest) -> Unit
+    ) {
+        this.onRequestStarted =
+            onRequestStarted
     }
 
     private fun startNext() {
-        val next = pendingRequests.pollFirst() ?: return
-        start(next)
+        val next =
+            pendingRequests.pollFirst()
+                ?: return
+
+        start(
+            next
+        )
     }
 
-    private fun start(request: HaloEffectRequest) {
-        activeRequest = request
+    private fun start(
+        request: HaloEffectRequest
+    ) {
+        activeRequest =
+            request
 
         Log.d(
             TAG,
-            "start package=${request.packageName}, pending=${pendingRequests.size}"
+            "start package=${request.packageName}, " +
+                    "pending=${pendingRequests.size}"
         )
 
-        val renderer = onRequestStarted
+        val renderer =
+            onRequestStarted
 
         if (renderer == null) {
             Log.w(
                 TAG,
-                "No renderer available for package=${request.packageName}"
+                "No renderer available for " +
+                        "package=${request.packageName}"
             )
+
             activeRequest = null
+
             startNext()
+
             return
         }
 
-        renderer(request)
+        renderer(
+            request
+        )
     }
 
     private companion object {
-        const val TAG = "HaloCoordinator"
+        const val TAG =
+            "HaloCoordinator"
     }
 }
