@@ -41,6 +41,9 @@ class LuminoteNotificationListener :
     private lateinit var appIconColorResolver:
             AppIconColorResolver
 
+    private val notificationEventClassifier =
+        NotificationEventClassifier()
+
     private val cachedSettings =
         AtomicReference<LuminoteSettings?>(null)
 
@@ -260,6 +263,59 @@ class LuminoteNotificationListener :
             )
 
             return
+        }
+
+        val ranking =
+            NotificationListenerService.Ranking()
+
+        val hasRanking =
+            rankingMap.getRanking(
+                sbn.key,
+                ranking
+            )
+
+        val event =
+            notificationEventClassifier.classify(
+                sbn = sbn,
+                ranking = ranking.takeIf { hasRanking }
+            )
+
+        Log.d(
+            TAG,
+            "Notification audit: " +
+                    "package=${sbn.packageName}, " +
+                    "key=${sbn.key}, " +
+                    "category=${sbn.notification.category}, " +
+                    "flags=0x${sbn.notification.flags.toString(16)}, " +
+                    "importance=${ranking.takeIf { hasRanking }?.importance}, " +
+                    "event=$event"
+        )
+
+        when (event) {
+            is NotificationEvent.UserVisible,
+            is NotificationEvent.MediaChanged -> Unit
+
+            is NotificationEvent.TechnicalUpdate -> {
+                Log.d(
+                    TAG,
+                    "Skipped technical notification: " +
+                            "package=${sbn.packageName}, " +
+                            "key=${sbn.key}, " +
+                            "reason=${event.reason}"
+                )
+                return
+            }
+
+            is NotificationEvent.SystemEvent -> {
+                Log.d(
+                    TAG,
+                    "Skipped system notification: " +
+                            "package=${sbn.packageName}, " +
+                            "key=${sbn.key}, " +
+                            "reason=${event.reason}"
+                )
+                return
+            }
         }
 
         cachedSettings.get()?.let { settings ->
@@ -842,8 +898,11 @@ class LuminoteNotificationListener :
     }
 
     override fun onNotificationRemoved(
+
         sbn: StatusBarNotification
     ) {
+        notificationEventClassifier.onNotificationRemoved(sbn)
+
         super.onNotificationRemoved(
             sbn
         )
