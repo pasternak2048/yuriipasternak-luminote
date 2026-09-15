@@ -332,23 +332,6 @@ class LuminoteNotificationListener :
             }
         }
 
-        if (
-            !shouldShowEffect(
-                sbn,
-                rankingMap
-            )
-        ) {
-            Log.d(
-                TAG,
-                "Skipped: notification is silent"
-            )
-
-            cachedSettings.get()
-                ?.let(::startPersistentReminderIfNeeded)
-
-            return
-        }
-
         /*
          * Ignore repeated callbacks for the same
          * notification inside the deduplication window.
