@@ -14,7 +14,8 @@ import kotlin.math.min
 class HaloAnimation(
     private val onProgressChanged: (Float) -> Unit,
     private val onPhaseChanged: (Float) -> Unit = {},
-    private val shouldContinueRepeating: (() -> Boolean)? = null
+    private val shouldContinueRepeating: (() -> Boolean)? = null,
+    private val onCompleted: () -> Unit = {}
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private val fadeInInterpolator = DecelerateInterpolator()
@@ -22,6 +23,8 @@ class HaloAnimation(
     private val restartGlowTask = Runnable {
         if (repeat) startGlow()
     }
+
+    private var wasCancelled = false
 
     /*
      * The same animator is reused for notification effects and preview cycles.
@@ -40,13 +43,29 @@ class HaloAnimation(
                     onProgressChanged(0f)
                     phaseOffset += lastPhaseFraction
 
-                    if (!repeat) return
+                    if (wasCancelled) {
+                        wasCancelled = false
+                        return
+                    }
+
+                    if (!repeat) {
+                        onCompleted()
+                        return
+                    }
+
                     remainingCycles?.let { cycles ->
                         remainingCycles = cycles - 1
-                        if (cycles <= 1) { repeat = false; return }
+
+                        if (cycles <= 1) {
+                            repeat = false
+                            onCompleted()
+                            return
+                        }
                     }
+
                     if (shouldContinueRepeating?.invoke() == false) {
                         repeat = false
+                        onCompleted()
                         return
                     }
 
@@ -55,6 +74,9 @@ class HaloAnimation(
                     } else {
                         startGlow()
                     }
+                }
+                override fun onAnimationCancel(animation: Animator) {
+                    wasCancelled = true
                 }
             }
         )
@@ -111,6 +133,7 @@ class HaloAnimation(
         onProgressChanged(0f)
         lastPhaseFraction = 0f
         animator.duration = totalDuration
+        wasCancelled = false
         animator.start()
     }
 
