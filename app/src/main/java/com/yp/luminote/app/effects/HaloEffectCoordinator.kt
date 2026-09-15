@@ -25,26 +25,35 @@ internal class HaloEffectCoordinator {
         Log.d(
             TAG,
             "enqueue package=${request.packageName}, " +
-                    "active=${activeRequest?.packageName}, pending=${pendingRequests.size}"
+                    "active=${activeRequest?.packageName}, " +
+                    "pending=${pendingRequests.size}"
         )
 
-        if (activeRequest?.notificationKey == request.notificationKey) {
+        val active = activeRequest
+
+        if (active?.packageName == request.packageName) {
             Log.d(
                 TAG,
-                "coalesced active notification key=${request.notificationKey}"
+                "coalesced active package=${request.packageName}, " +
+                        "notificationKey=${request.notificationKey}"
             )
             return
         }
 
-        if (pendingRequests.any { it.notificationKey == request.notificationKey }) {
+        if (
+            pendingRequests.any {
+                it.packageName == request.packageName
+            }
+        ) {
             Log.d(
                 TAG,
-                "coalesced pending notification key=${request.notificationKey}"
+                "coalesced pending package=${request.packageName}, " +
+                        "notificationKey=${request.notificationKey}"
             )
             return
         }
 
-        if (activeRequest == null) {
+        if (active == null) {
             start(request)
             return
         }
@@ -53,7 +62,8 @@ internal class HaloEffectCoordinator {
 
         Log.d(
             TAG,
-            "queued package=${request.packageName}, pending=${pendingRequests.size}"
+            "queued package=${request.packageName}, " +
+                    "pending=${pendingRequests.size}"
         )
     }
 
