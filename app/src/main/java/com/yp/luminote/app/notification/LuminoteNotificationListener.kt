@@ -228,6 +228,17 @@ class LuminoteNotificationListener :
         sbn: StatusBarNotification,
         settings: LuminoteSettings
     ) {
+        if (
+            sbn.packageName == "android" &&
+            sbn.key.contains("AlertWindowNotification - $packageName")
+        ) {
+            Log.d(
+                TAG,
+                "Ignoring own alert-window notification: key=${sbn.key}"
+            )
+            return
+        }
+
         if (!settings.haloEnabled || settings.ambientEnabled) return
 
         if (settings.haloIntensity <= 0f) {

@@ -56,6 +56,7 @@ class HaloOverlayService : Service() {
         displayManager = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         displayManager.registerDisplayListener(displayListener, handler)
         startAsForeground()
+        Log.d(TAG, "HaloOverlayService created")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -69,7 +70,12 @@ class HaloOverlayService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
-        if (HaloAccessibilityService.dispatch(intent)) {
+
+        val packageName = intent?.getStringExtra(EXTRA_PACKAGE_NAME)
+        val notificationKey = intent?.getStringExtra(EXTRA_NOTIFICATION_KEY)
+        val isNotificationEffect = packageName != null && notificationKey != null
+
+        if (!isNotificationEffect && HaloAccessibilityService.dispatch(intent)) {
             removeOverlay()
             stopSelf()
             return START_NOT_STICKY
@@ -95,33 +101,34 @@ class HaloOverlayService : Service() {
         }
         val config = readConfig(intent)
         val paletteColors = intent?.getIntArrayExtra(EXTRA_PALETTE_COLORS)
+
+        if (packageName != null && notificationKey != null) {
+            val request = HaloEffectRequest(
+                packageName = packageName,
+                notificationKey = notificationKey,
+                config = config,
+                paletteColors = paletteColors
+            )
+
+            Log.d(
+                TAG,
+                "Notification effect request: package=${request.packageName}, " +
+                        "key=${request.notificationKey}, enqueuedAt=${request.enqueuedAt}"
+            )
+
+            effectCoordinator.updateRenderer(::startQueuedEffect)
+            effectCoordinator.enqueue(request)
+
+            return START_NOT_STICKY
+        }
+
         showOverlay(
             config = config,
             restart = intent?.getBooleanExtra(EXTRA_RESTART, false) == true,
             preview = intent?.getBooleanExtra(EXTRA_PREVIEW, false) == true,
             paletteColors = paletteColors
         )
-        val packageName = intent?.getStringExtra(EXTRA_PACKAGE_NAME)
-        val notificationKey = intent?.getStringExtra(EXTRA_NOTIFICATION_KEY)
 
-        val effectRequest =
-            if (packageName != null && notificationKey != null) {
-                HaloEffectRequest(
-                    packageName = packageName,
-                    notificationKey = notificationKey,
-                    config = config,
-                    paletteColors = paletteColors
-                )
-            } else {
-                null
-            }
-        effectRequest?.let { request ->
-            Log.d(
-                TAG,
-                "Notification effect request: package=${request.packageName}, " +
-                        "key=${request.notificationKey}, enqueuedAt=${request.enqueuedAt}"
-            )
-        }
         return START_NOT_STICKY
     }
 
@@ -160,8 +167,19 @@ class HaloOverlayService : Service() {
         config: HaloConfig,
         restart: Boolean,
         preview: Boolean,
-        paletteColors: IntArray?
+        paletteColors: IntArray?,
+        scheduleRemoval: Boolean = true,
+        onFiniteAnimationCompleted: (() -> Unit)? = null
+
     ) {
+        val completeWithoutAnimation = {
+            if (onFiniteAnimationCompleted != null) {
+                onFiniteAnimationCompleted()
+            } else {
+                stopSelf()
+            }
+        }
+
         overlayView?.let { view ->
             /*
              * A running overlay represents the whole notification burst.
@@ -173,8 +191,9 @@ class HaloOverlayService : Service() {
                 val resolvedConfig = configurePalette(config, paletteColors)
                 activeConfig = resolvedConfig
                 view.update(resolvedConfig)
+                view.setOnFiniteAnimationCompletedListener(onFiniteAnimationCompleted)
                 startAnimation(view, resolvedConfig)
-                if (resolvedConfig.repeatCount > 0) {
+                if (resolvedConfig.repeatCount > 0 && scheduleRemoval) {
                     scheduleRemoval(resolvedConfig)
                 }
             } else if (paletteColors != null && activeConfig != null) {
@@ -188,16 +207,16 @@ class HaloOverlayService : Service() {
         }
 
         if (config.intensity <= 0f) {
-            stopSelf()
+            completeWithoutAnimation()
             return
         }
         if (!Settings.canDrawOverlays(this)) {
             Log.e(TAG, "Halo requested without overlay permission")
-            stopSelf()
+            completeWithoutAnimation()
             return
         }
         val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: run {
-            stopSelf()
+            completeWithoutAnimation()
             return
         }
         val windowContext = createDisplayContext(display).createWindowContext(
@@ -208,6 +227,7 @@ class HaloOverlayService : Service() {
         val metrics = OverlayDisplayMetrics.realMetrics(display)
         val resolvedConfig = configurePalette(config, paletteColors)
         val view = HaloView(windowContext, resolvedConfig)
+        view.setOnFiniteAnimationCompletedListener(onFiniteAnimationCompleted)
         val params = WindowManager.LayoutParams(
             metrics.widthPixels,
             metrics.heightPixels,
@@ -234,11 +254,15 @@ class HaloOverlayService : Service() {
         try {
             windowManager.addView(view, params)
             startAnimation(view, resolvedConfig)
-            if (resolvedConfig.repeatCount > 0) scheduleRemoval(resolvedConfig)
+            if (resolvedConfig.repeatCount > 0 && scheduleRemoval) {
+                scheduleRemoval(resolvedConfig)
+            }
         } catch (exception: Exception) {
             Log.w(TAG, "Unable to attach halo overlay", exception)
+
+            view.setOnFiniteAnimationCompletedListener(null)
             removeOverlay()
-            stopSelf()
+            completeWithoutAnimation()
         }
     }
 
@@ -372,6 +396,7 @@ class HaloOverlayService : Service() {
         overlayView?.cancelAnimation()
         removeOverlay()
         if (foregroundStarted) stopForeground(STOP_FOREGROUND_REMOVE)
+        Log.d(TAG, "HaloOverlayService destroyed - clearing coordinator")
         super.onDestroy()
     }
 
@@ -408,6 +433,53 @@ class HaloOverlayService : Service() {
         }
     }
 
+    private fun startQueuedEffect(request: HaloEffectRequest) {
+        Log.d(
+            TAG,
+            "Starting queued effect: package=${request.packageName}, key=${request.notificationKey}"
+        )
+
+        if (
+            HaloAccessibilityService.dispatchQueuedEffect(
+                request = request,
+                onFiniteAnimationCompleted = {
+                    effectCoordinator.onRequestCompleted(request)
+                }
+            )
+        ) {
+            Log.d(TAG, "Queued effect rendered by accessibility overlay")
+            return
+        }
+
+        Log.d(TAG, "Queued effect rendered by application overlay")
+
+        showOverlay(
+            config = request.config,
+            restart = true,
+            preview = false,
+            paletteColors = request.paletteColors,
+            scheduleRemoval = false,
+            onFiniteAnimationCompleted = {
+                onQueuedEffectCompleted(request)
+            }
+        )
+    }
+
+    private fun onQueuedEffectCompleted(request: HaloEffectRequest) {
+        Log.d(
+            TAG,
+            "Queued effect completed: package=${request.packageName}, key=${request.notificationKey}"
+        )
+
+        handler.removeCallbacks(removeOverlayTask)
+        removeOverlay()
+        effectCoordinator.onRequestCompleted(request)
+
+        if (overlayView == null) {
+            stopSelf()
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
@@ -436,6 +508,7 @@ class HaloOverlayService : Service() {
         private const val FOREGROUND_NOTIFICATION_ID = 1001
         private const val OVERLAY_REMOVAL_GRACE_MS = 50L
         @Volatile private var pendingApplicationAmbientIntent: Intent? = null
+        private val effectCoordinator = HaloEffectCoordinator()
 
         fun createIntent(
             context: Context,
@@ -481,7 +554,11 @@ class HaloOverlayService : Service() {
              * there before attempting an FGS start, which Android may reject
              * while the device is locked.
              */
-            if (HaloAccessibilityService.dispatch(intent)) {
+            val isNotificationEffect =
+                intent.hasExtra(EXTRA_PACKAGE_NAME) &&
+                        intent.hasExtra(EXTRA_NOTIFICATION_KEY)
+
+            if (!isNotificationEffect && HaloAccessibilityService.dispatch(intent)) {
                 if (isPersistentAmbientIntent(intent)) {
                     pendingApplicationAmbientIntent = null
                 }
@@ -573,6 +650,5 @@ class HaloOverlayService : Service() {
                 restart = true
             )
         }
-
     }
 }
