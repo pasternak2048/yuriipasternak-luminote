@@ -275,14 +275,18 @@ class LuminoteNotificationListener :
         startTransientEffect(
             settings = effectSettings,
             paletteColors = palette,
-            restart = true
+            restart = true,
+            packageName = sbn.packageName,
+            notificationKey = sbn.key
         )
     }
 
     private fun startTransientEffect(
         settings: LuminoteSettings,
         paletteColors: IntArray? = null,
-        restart: Boolean = false
+        restart: Boolean = false,
+        packageName: String? = null,
+        notificationKey: String? = null
     ) {
         HaloOverlayService.start(
             context = this,
@@ -290,7 +294,9 @@ class LuminoteNotificationListener :
                 context = this,
                 settings = settings,
                 paletteColors = paletteColors,
-                restart = restart
+                restart = restart,
+                packageName = packageName,
+                notificationKey = notificationKey
             )
         )
     }

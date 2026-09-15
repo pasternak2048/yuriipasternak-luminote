@@ -101,6 +101,27 @@ class HaloOverlayService : Service() {
             preview = intent?.getBooleanExtra(EXTRA_PREVIEW, false) == true,
             paletteColors = paletteColors
         )
+        val packageName = intent?.getStringExtra(EXTRA_PACKAGE_NAME)
+        val notificationKey = intent?.getStringExtra(EXTRA_NOTIFICATION_KEY)
+
+        val effectRequest =
+            if (packageName != null && notificationKey != null) {
+                HaloEffectRequest(
+                    packageName = packageName,
+                    notificationKey = notificationKey,
+                    config = config,
+                    paletteColors = paletteColors
+                )
+            } else {
+                null
+            }
+        effectRequest?.let { request ->
+            Log.d(
+                TAG,
+                "Notification effect request: package=${request.packageName}, " +
+                        "key=${request.notificationKey}, enqueuedAt=${request.enqueuedAt}"
+            )
+        }
         return START_NOT_STICKY
     }
 
@@ -408,6 +429,8 @@ class HaloOverlayService : Service() {
         const val EXTRA_GRADIENT_FLOW_SPEED = "extra_gradient_flow_speed"
         const val EXTRA_COLOR_MODE = "extra_halo_color_mode"
         const val EXTRA_NOTIFICATION_PLAYBACK = "extra_notification_playback"
+        const val EXTRA_PACKAGE_NAME = "extra_notification_package_name"
+        const val EXTRA_NOTIFICATION_KEY = "extra_notification_key"
         private const val TAG = "HaloOverlay"
         private const val FOREGROUND_CHANNEL_ID = "halo_overlay"
         private const val FOREGROUND_NOTIFICATION_ID = 1001
@@ -418,7 +441,9 @@ class HaloOverlayService : Service() {
             context: Context,
             settings: LuminoteSettings,
             paletteColors: IntArray? = null,
-            restart: Boolean = false
+            restart: Boolean = false,
+            packageName: String? = null,
+            notificationKey: String? = null
         ): Intent = Intent(context, HaloOverlayService::class.java).apply {
             putExtra(EXTRA_COLOR, settings.haloColor)
             putExtra(EXTRA_INTERVAL, settings.haloInterval)
@@ -443,6 +468,9 @@ class HaloOverlayService : Service() {
             )
             putExtra(EXTRA_NOTIFICATION_PLAYBACK, settings.notificationPlayback.name)
             paletteColors?.let { putExtra(EXTRA_PALETTE_COLORS, it) }
+            packageName?.let { putExtra(EXTRA_PACKAGE_NAME, it) }
+            notificationKey?.let { putExtra(EXTRA_NOTIFICATION_KEY, it) }
+
             if (restart) putExtra(EXTRA_RESTART, true)
         }
 
