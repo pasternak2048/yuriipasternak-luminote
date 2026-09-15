@@ -10,7 +10,10 @@ import java.util.ArrayDeque
  * FIFO order until the active animation reports natural completion.
  *
  * The coordinator itself does not own a renderer. The latest available
- * renderer is supplied when requests are enqueued.
+ * renderer is supplied by a HaloOverlayService instance.
+ *
+ * Renderer ownership is tracked explicitly so a destroyed service cannot
+ * accidentally detach a newer renderer.
  *
  * All methods are expected to be called from the main thread.
  */
@@ -21,6 +24,9 @@ internal class HaloEffectCoordinator {
 
     private var activeRequest:
             HaloEffectRequest? = null
+
+    private var rendererOwner:
+            Any? = null
 
     private var onRequestStarted:
             ((HaloEffectRequest) -> Unit)? = null
@@ -117,15 +123,44 @@ internal class HaloEffectCoordinator {
         pendingRequests.clear()
 
         activeRequest = null
+        rendererOwner = null
         onRequestStarted = null
     }
 
-    fun updateRenderer(
-        onRequestStarted:
-            (HaloEffectRequest) -> Unit
+    fun attachRenderer(
+        owner: Any,
+        onRequestStarted: (HaloEffectRequest) -> Unit
     ) {
+        rendererOwner = owner
         this.onRequestStarted =
             onRequestStarted
+
+        Log.d(
+            TAG,
+            "renderer attached: owner=${System.identityHashCode(owner)}"
+        )
+    }
+
+    fun detachRenderer(
+        owner: Any
+    ) {
+        if (rendererOwner !== owner) {
+            Log.d(
+                TAG,
+                "Ignoring renderer detach from stale owner=" +
+                        System.identityHashCode(owner)
+            )
+
+            return
+        }
+
+        Log.d(
+            TAG,
+            "renderer detached: owner=${System.identityHashCode(owner)}"
+        )
+
+        rendererOwner = null
+        onRequestStarted = null
     }
 
     private fun startNext() {
@@ -141,6 +176,31 @@ internal class HaloEffectCoordinator {
     private fun start(
         request: HaloEffectRequest
     ) {
+        val renderer =
+            onRequestStarted
+
+        if (renderer == null) {
+            /*
+             * Do not discard the request.
+             *
+             * The application overlay service may currently be between
+             * instances. Put the request back at the front and wait for a
+             * renderer to attach.
+             */
+            pendingRequests.addFirst(
+                request
+            )
+
+            Log.w(
+                TAG,
+                "No renderer available; waiting: " +
+                        "package=${request.packageName}, " +
+                        "pending=${pendingRequests.size}"
+            )
+
+            return
+        }
+
         activeRequest =
             request
 
@@ -150,26 +210,20 @@ internal class HaloEffectCoordinator {
                     "pending=${pendingRequests.size}"
         )
 
-        val renderer =
-            onRequestStarted
-
-        if (renderer == null) {
-            Log.w(
-                TAG,
-                "No renderer available for " +
-                        "package=${request.packageName}"
-            )
-
-            activeRequest = null
-
-            startNext()
-
-            return
-        }
-
         renderer(
             request
         )
+    }
+
+    private fun startPendingIfIdle() {
+        if (
+            activeRequest != null ||
+            pendingRequests.isEmpty()
+        ) {
+            return
+        }
+
+        startNext()
     }
 
     private companion object {
