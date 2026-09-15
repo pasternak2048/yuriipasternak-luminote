@@ -1,7 +1,5 @@
 package com.yp.luminote.app.notification
 
-import android.app.Notification
-import android.app.NotificationManager
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -53,9 +51,6 @@ class LuminoteNotificationListener :
     private val settingsReady =
         CompletableDeferred<LuminoteSettings>()
 
-    private val rankingByThread =
-        ThreadLocal<NotificationListenerService.Ranking>()
-
     /*
      * Recently processed notification keys.
      *
@@ -72,13 +67,14 @@ class LuminoteNotificationListener :
         Any()
 
     /*
-     * Keeps one entry per notification for the active app-color palette.
+     * Keeps one entry per semantically relevant active notification.
      */
     private val activeNotificationPackages =
         linkedMapOf<String, String>()
 
     /*
-     * All active notifications from apps allowed to contribute palette colors.
+     * Semantically relevant active notifications allowed to contribute
+     * app colors to the notification-app gradient palette.
      */
     private val activePaletteNotificationPackages =
         linkedMapOf<String, String>()
@@ -277,9 +273,18 @@ class LuminoteNotificationListener :
         val event =
             notificationEventClassifier.classify(
                 sbn = sbn,
-                ranking = ranking.takeIf { hasRanking }
+                ranking =
+                    ranking.takeIf {
+                        hasRanking
+                    }
             )
 
+        /*
+         * Do not log notification title/text here.
+         *
+         * NotificationEvent.MediaChanged can contain user-visible media
+         * metadata, so only log the event type and technical reason.
+         */
         Log.d(
             TAG,
             "Notification audit: " +
@@ -288,12 +293,29 @@ class LuminoteNotificationListener :
                     "category=${sbn.notification.category}, " +
                     "flags=0x${sbn.notification.flags.toString(16)}, " +
                     "importance=${ranking.takeIf { hasRanking }?.importance}, " +
-                    "event=$event"
+                    "event=${event::class.simpleName}"
         )
 
         when (event) {
             is NotificationEvent.UserVisible,
-            is NotificationEvent.MediaChanged -> Unit
+            is NotificationEvent.MediaChanged ->
+                Unit
+
+            /*
+             * Media is a snapshot-only representation.
+             *
+             * classify() converts it to either MediaChanged or
+             * TechnicalUpdate before returning. Seeing it here would mean
+             * the classifier contract was broken.
+             */
+            is NotificationEvent.Media -> {
+                Log.w(
+                    TAG,
+                    "Unexpected snapshot media event in live flow"
+                )
+
+                return
+            }
 
             is NotificationEvent.TechnicalUpdate -> {
                 Log.d(
@@ -303,6 +325,7 @@ class LuminoteNotificationListener :
                             "key=${sbn.key}, " +
                             "reason=${event.reason}"
                 )
+
                 return
             }
 
@@ -314,27 +337,24 @@ class LuminoteNotificationListener :
                             "key=${sbn.key}, " +
                             "reason=${event.reason}"
                 )
+
                 return
             }
         }
 
-        cachedSettings.get()?.let { settings ->
-            if (
-                shouldTrackPaletteNotification(
-                    sbn,
-                    settings
-                )
-            ) {
-                synchronized(activeNotificationsLock) {
-                    activePaletteNotificationPackages[sbn.key] =
-                        sbn.packageName
-                }
-            }
+        val settings =
+            cachedSettings.get()
+
+        if (settings != null) {
+            trackRelevantNotification(
+                sbn = sbn,
+                settings = settings
+            )
         }
 
         /*
-         * Ignore repeated callbacks for the same
-         * notification inside the deduplication window.
+         * Ignore repeated callbacks for the same notification inside the
+         * deduplication window.
          */
         if (
             isDuplicateNotification(
@@ -349,9 +369,6 @@ class LuminoteNotificationListener :
             return
         }
 
-        val settings =
-            cachedSettings.get()
-
         if (settings != null) {
             handleEligibleNotification(
                 sbn,
@@ -362,14 +379,56 @@ class LuminoteNotificationListener :
         }
 
         /*
-         * Only the first callback after listener startup
-         * can take this path.
+         * Only the first callback after listener startup can take this path.
          */
         serviceScope.launch {
+            val readySettings =
+                settingsReady.await()
+
+            trackRelevantNotification(
+                sbn = sbn,
+                settings = readySettings
+            )
+
             handleEligibleNotification(
                 sbn,
-                settingsReady.await()
+                readySettings
             )
+        }
+    }
+
+    /*
+     * Tracks only notifications that have already passed semantic live-event
+     * classification.
+     *
+     * Technical updates return before reaching this method.
+     */
+    private fun trackRelevantNotification(
+        sbn: StatusBarNotification,
+        settings: LuminoteSettings
+    ) {
+        if (
+            !shouldHandleSource(
+                sbn,
+                settings
+            )
+        ) {
+            return
+        }
+
+        synchronized(activeNotificationsLock) {
+            activeNotificationPackages[sbn.key] =
+                sbn.packageName
+
+            if (
+                shouldTrackPaletteNotification(
+                    sbn,
+                    settings
+                )
+            ) {
+                activePaletteNotificationPackages[sbn.key] =
+                    sbn.packageName
+            }
         }
     }
 
@@ -408,34 +467,18 @@ class LuminoteNotificationListener :
             return
         }
 
-        val shouldHandle =
-            shouldHandleSource(
+        if (
+            !shouldHandleSource(
                 sbn,
                 settings
             )
-
-        if (!shouldHandle) {
+        ) {
             Log.d(
                 TAG,
                 "Skipped: package is not selected"
             )
 
             return
-        }
-
-        synchronized(activeNotificationsLock) {
-            activeNotificationPackages[sbn.key] =
-                sbn.packageName
-
-            if (
-                shouldTrackPaletteNotification(
-                    sbn,
-                    settings
-                )
-            ) {
-                activePaletteNotificationPackages[sbn.key] =
-                    sbn.packageName
-            }
         }
 
         /*
@@ -572,6 +615,14 @@ class LuminoteNotificationListener :
                 .toIntArray()
         }
 
+    /*
+     * Rebuilds persistent notification state without mutating the live media
+     * fingerprint cache.
+     *
+     * classifySnapshot() is intentionally stateless. Existing media
+     * notifications are relevant to KEEP_VISIBLE, but inspecting them here
+     * must not consume the next MediaChanged live event.
+     */
     private fun restoreActiveNotifications(
         notifications: Array<StatusBarNotification>,
         rankingMap: NotificationListenerService.RankingMap,
@@ -590,27 +641,51 @@ class LuminoteNotificationListener :
 
             notifications.forEach { notification ->
                 if (
+                    !shouldHandleSource(
+                        notification,
+                        settings
+                    )
+                ) {
+                    return@forEach
+                }
+
+                val ranking =
+                    NotificationListenerService.Ranking()
+
+                val hasRanking =
+                    rankingMap.getRanking(
+                        notification.key,
+                        ranking
+                    )
+
+                val snapshotEvent =
+                    notificationEventClassifier.classifySnapshot(
+                        sbn = notification,
+                        ranking =
+                            ranking.takeIf {
+                                hasRanking
+                            }
+                    )
+
+                if (
+                    !isRelevantActiveNotification(
+                        snapshotEvent
+                    )
+                ) {
+                    return@forEach
+                }
+
+                activeNotificationPackages[
+                    notification.key
+                ] = notification.packageName
+
+                if (
                     shouldTrackPaletteNotification(
                         notification,
                         settings
                     )
                 ) {
                     activePaletteNotificationPackages[
-                        notification.key
-                    ] = notification.packageName
-                }
-
-                if (
-                    shouldShowEffect(
-                        notification,
-                        rankingMap
-                    ) &&
-                    shouldHandleSource(
-                        notification,
-                        settings
-                    )
-                ) {
-                    activeNotificationPackages[
                         notification.key
                     ] = notification.packageName
                 }
@@ -622,10 +697,24 @@ class LuminoteNotificationListener :
         )
     }
 
+    private fun isRelevantActiveNotification(
+        event: NotificationEvent
+    ): Boolean =
+        when (event) {
+            is NotificationEvent.UserVisible,
+            is NotificationEvent.Media,
+            is NotificationEvent.MediaChanged ->
+                true
+
+            is NotificationEvent.TechnicalUpdate,
+            is NotificationEvent.SystemEvent ->
+                false
+        }
+
     /**
-     * Keep Visible must also reflect alerts that existed before a mode or app
-     * filter changed. Notification callbacks alone cannot provide that
-     * guarantee, so rebuild the small in-memory snapshot from the system list.
+     * KEEP_VISIBLE must also reflect notifications that existed before a mode
+     * or app filter changed. Notification callbacks alone cannot provide that
+     * guarantee, so rebuild the in-memory snapshot from the system list.
      */
     private fun refreshActiveNotifications(
         settings: LuminoteSettings
@@ -708,8 +797,8 @@ class LuminoteNotificationListener :
         /*
          * Intentionally omit packageName and notificationKey.
          *
-         * KEEP_VISIBLE remains a persistent overlay command instead of
-         * a finite HaloEffectRequest handled by HaloEffectCoordinator.
+         * KEEP_VISIBLE remains a persistent overlay command instead of a
+         * finite HaloEffectRequest handled by HaloEffectCoordinator.
          */
         startTransientEffect(
             settings = settings,
@@ -806,85 +895,12 @@ class LuminoteNotificationListener :
         }
     }
 
-    /*
-     * NotificationListenerService does not expose a reliable "heads-up is
-     * currently visible" flag. Channel importance is the system signal used
-     * to make a notification eligible for a heads-up card, while the sound
-     * fields cover audible notifications at lower importance.
-     */
-    private fun shouldShowEffect(
-        sbn: StatusBarNotification,
-        rankingMap: NotificationListenerService.RankingMap
-    ): Boolean {
-        if (
-            cachedSettings.get()
-                ?.includeSilentUpdates ==
-            true
-        ) {
-            return true
-        }
-
-        val ranking =
-            rankingByThread.get()
-                ?: NotificationListenerService.Ranking()
-                    .also {
-                        rankingByThread.set(
-                            it
-                        )
-                    }
-
-        val hasRanking =
-            rankingMap.getRanking(
-                sbn.key,
-                ranking
-            )
-
-        val isHeadsUpEligible =
-            hasRanking &&
-                    ranking.importance >=
-                    NotificationManager.IMPORTANCE_HIGH
-
-        if (isHeadsUpEligible) {
-            return true
-        }
-
-        val notification =
-            sbn.notification
-
-        val hasExplicitSound =
-            notification.sound != null ||
-                    (
-                            notification.defaults and
-                                    Notification.DEFAULT_SOUND
-                            ) != 0
-
-        val hasChannelSound =
-            hasRanking &&
-                    ranking.channel?.sound != null
-
-        val hasExplicitVibration =
-            notification.vibrate != null ||
-                    (
-                            notification.defaults and
-                                    Notification.DEFAULT_VIBRATE
-                            ) != 0
-
-        val hasChannelVibration =
-            hasRanking &&
-                    ranking.channel?.shouldVibrate() ==
-                    true
-
-        return hasExplicitSound ||
-                hasChannelSound ||
-                hasExplicitVibration ||
-                hasChannelVibration
-    }
-
     override fun onNotificationRemoved(
-
         sbn: StatusBarNotification
     ) {
-        notificationEventClassifier.onNotificationRemoved(sbn)
+        notificationEventClassifier.onNotificationRemoved(
+            sbn
+        )
 
         super.onNotificationRemoved(
             sbn
