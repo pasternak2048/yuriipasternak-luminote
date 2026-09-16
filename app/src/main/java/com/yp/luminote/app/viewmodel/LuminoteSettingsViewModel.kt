@@ -57,6 +57,7 @@ class LuminoteSettingsViewModel(
                 if (!hasPendingSave) {
                     _settings.value = persistedSettings
                 }
+
                 _settingsLoaded.value = true
             }
         }
@@ -70,8 +71,12 @@ class LuminoteSettingsViewModel(
         }
     }
 
-    fun setHaloMode(mode: HaloMode) {
-        updateSettings { copy(haloMode = mode) }
+    fun setHaloMode(
+        mode: HaloMode
+    ) {
+        updateSettings {
+            copy(haloMode = mode)
+        }
     }
 
     fun setHaloIntensity(
@@ -98,39 +103,74 @@ class LuminoteSettingsViewModel(
         }
     }
 
-    fun setHaloColorMode(mode: HaloColorMode) {
+    fun setHaloColorMode(
+        mode: HaloColorMode
+    ) {
         updateSettings {
             copy(
-                colorSource = if (mode == HaloColorMode.GRADIENT) HaloColorSource.GRADIENT else HaloColorSource.CUSTOM,
+                colorSource =
+                    if (mode == HaloColorMode.GRADIENT) {
+                        HaloColorSource.GRADIENT
+                    } else {
+                        HaloColorSource.CUSTOM
+                    }
             )
         }
     }
 
-    fun setHaloMotion(motion: HaloMotion) {
-        updateSettings { copy(haloMotion = motion) }
-    }
-
-    fun setGradientFlowSpeed(speed: Float) {
-        updateSettings(debounce = true) {
-            copy(gradientFlowSpeed = speed.coerceIn(0.5f, 2.5f))
+    fun setHaloMotion(
+        motion: HaloMotion
+    ) {
+        updateSettings {
+            copy(haloMotion = motion)
         }
     }
 
-    fun setHaloEffectSpeed(speed: Float) {
+    fun setGradientFlowSpeed(
+        speed: Float
+    ) {
         updateSettings(debounce = true) {
-            copy(haloEffectSpeed = speed.coerceIn(0.25f, 2f))
+            copy(
+                gradientFlowSpeed =
+                    speed.coerceIn(
+                        0.5f,
+                        2.5f
+                    )
+            )
         }
     }
 
-    fun setGradientPalette(palette: GradientPalette) {
-        updateSettings { copy(gradientPalette = palette) }
+    fun setHaloEffectSpeed(
+        speed: Float
+    ) {
+        updateSettings(debounce = true) {
+            copy(
+                haloEffectSpeed =
+                    speed.coerceIn(
+                        0.25f,
+                        2f
+                    )
+            )
+        }
+    }
+
+    fun setGradientPalette(
+        palette: GradientPalette
+    ) {
+        updateSettings {
+            copy(
+                gradientPalette = palette
+            )
+        }
     }
 
     fun setNotificationSource(
         source: NotificationSource
     ) {
         updateSettings {
-            copy(notificationSource = source)
+            copy(
+                notificationSource = source
+            )
         }
     }
 
@@ -138,7 +178,9 @@ class LuminoteSettingsViewModel(
         apps: Set<String>
     ) {
         updateSettings {
-            copy(selectedApps = apps)
+            copy(
+                selectedApps = apps
+            )
         }
     }
 
@@ -165,63 +207,145 @@ class LuminoteSettingsViewModel(
         )
     }
 
-    fun setAppIconBasedColor(enabled: Boolean) {
+    fun setAppIconBasedColor(
+        enabled: Boolean
+    ) {
         updateSettings {
             copy(
-                colorSource = if (enabled) HaloColorSource.APP_ICON else HaloColorSource.CUSTOM,
+                colorSource =
+                    if (enabled) {
+                        HaloColorSource.APP_ICON
+                    } else {
+                        HaloColorSource.CUSTOM
+                    }
             )
         }
     }
 
-    fun setHaloRepeatCount(count: Int) {
+    fun setHaloRepeatCount(
+        count: Int
+    ) {
         updateSettings {
-            copy(haloRepeatCount = count.coerceIn(2, 5))
+            copy(
+                haloRepeatCount =
+                    count.coerceIn(
+                        2,
+                        5
+                    )
+            )
         }
     }
 
-    fun setIncludeSilentUpdates(enabled: Boolean) {
-        updateSettings {
-            copy(includeSilentUpdates = enabled)
-        }
-    }
-
-    fun setNotificationPlayback(playback: NotificationPlayback) {
+    fun setNotificationPlayback(
+        playback: NotificationPlayback
+    ) {
         updateSettings {
             copy(
                 notificationPlayback = playback,
-                haloRepeatCount = if (playback == NotificationPlayback.REPEAT && haloRepeatCount < 2) 2 else haloRepeatCount
+                haloRepeatCount =
+                    if (
+                        playback ==
+                        NotificationPlayback.REPEAT &&
+                        haloRepeatCount < 2
+                    ) {
+                        2
+                    } else {
+                        haloRepeatCount
+                    }
             )
         }
     }
 
-    fun setAmbientColor(color: Int) {
-        updateSettings { copy(ambientColor = color, ambientColorMode = HaloColorMode.SOLID) }
-    }
-
-    fun setAmbientColorMode(mode: HaloColorMode) {
-        updateSettings { copy(ambientColorMode = mode) }
-    }
-
-    fun setAmbientIntensity(intensity: Float) {
-        updateSettings(debounce = true) { copy(ambientIntensity = intensity.coerceIn(0f, 1f)) }
-    }
-
-    fun setAmbientThickness(thickness: Float) {
-        updateSettings(debounce = true) { copy(ambientThickness = thickness.coerceIn(0f, 1f)) }
-    }
-
-    fun setAmbientMotion(motion: HaloMotion) {
+    fun setAmbientColor(
+        color: Int
+    ) {
         updateSettings {
-            copy(ambientMotion = motion.takeIf { it == HaloMotion.PULSE || it == HaloMotion.SNAKE } ?: HaloMotion.PULSE)
+            copy(
+                ambientColor = color,
+                ambientColorMode =
+                    HaloColorMode.SOLID
+            )
         }
     }
 
-    fun setAmbientEffectSpeed(speed: Float) {
-        updateSettings(debounce = true) { copy(ambientEffectSpeed = speed.coerceIn(0.25f, 2f)) }
+    fun setAmbientColorMode(
+        mode: HaloColorMode
+    ) {
+        updateSettings {
+            copy(
+                ambientColorMode = mode
+            )
+        }
     }
 
-    fun setAmbientGradientFlowSpeed(speed: Float) {
-        updateSettings(debounce = true) { copy(ambientGradientFlowSpeed = speed.coerceIn(0.5f, 2.5f)) }
+    fun setAmbientIntensity(
+        intensity: Float
+    ) {
+        updateSettings(debounce = true) {
+            copy(
+                ambientIntensity =
+                    intensity.coerceIn(
+                        0f,
+                        1f
+                    )
+            )
+        }
+    }
+
+    fun setAmbientThickness(
+        thickness: Float
+    ) {
+        updateSettings(debounce = true) {
+            copy(
+                ambientThickness =
+                    thickness.coerceIn(
+                        0f,
+                        1f
+                    )
+            )
+        }
+    }
+
+    fun setAmbientMotion(
+        motion: HaloMotion
+    ) {
+        updateSettings {
+            copy(
+                ambientMotion =
+                    motion.takeIf {
+                        it == HaloMotion.PULSE ||
+                                it == HaloMotion.SNAKE
+                    } ?: HaloMotion.PULSE
+            )
+        }
+    }
+
+    fun setAmbientEffectSpeed(
+        speed: Float
+    ) {
+        updateSettings(debounce = true) {
+            copy(
+                ambientEffectSpeed =
+                    speed.coerceIn(
+                        0.25f,
+                        2f
+                    )
+            )
+        }
+    }
+
+    fun setAmbientGradientFlowSpeed(
+        speed: Float
+    ) {
+        updateSettings(debounce = true) {
+            copy(
+                ambientGradientFlowSpeed =
+                    speed.coerceIn(
+                        0.5f,
+                        2.5f
+                    )
+            )
+        }
     }
 
     fun flushPendingSettings() {
@@ -230,6 +354,7 @@ class LuminoteSettingsViewModel(
         }
 
         pendingSaveJob?.cancel()
+
         persistSettings(
             settings = _settings.value,
             revision = settingsRevision
@@ -240,10 +365,17 @@ class LuminoteSettingsViewModel(
         debounce: Boolean = false,
         transform: LuminoteSettings.() -> LuminoteSettings
     ) {
-        _settings.value = _settings.value.transform()
-        val updatedSettings = _settings.value
-        val revision = ++settingsRevision
+        _settings.value =
+            _settings.value.transform()
+
+        val updatedSettings =
+            _settings.value
+
+        val revision =
+            ++settingsRevision
+
         hasPendingSave = true
+
         pendingSaveJob?.cancel()
 
         if (!debounce) {
@@ -251,16 +383,21 @@ class LuminoteSettingsViewModel(
                 settings = updatedSettings,
                 revision = revision
             )
+
             return
         }
 
-        pendingSaveJob = viewModelScope.launch {
-            delay(SETTINGS_WRITE_DEBOUNCE_MS)
-            persistSettings(
-                settings = updatedSettings,
-                revision = revision
-            )
-        }
+        pendingSaveJob =
+            viewModelScope.launch {
+                delay(
+                    SETTINGS_WRITE_DEBOUNCE_MS
+                )
+
+                persistSettings(
+                    settings = updatedSettings,
+                    revision = revision
+                )
+            }
     }
 
     private fun persistSettings(
@@ -269,9 +406,14 @@ class LuminoteSettingsViewModel(
     ) {
         viewModelScope.launch {
             try {
-                repository.saveSettings(settings)
+                repository.saveSettings(
+                    settings
+                )
             } finally {
-                if (revision == settingsRevision) {
+                if (
+                    revision ==
+                    settingsRevision
+                ) {
                     hasPendingSave = false
                 }
             }
@@ -279,7 +421,8 @@ class LuminoteSettingsViewModel(
     }
 
     companion object {
-        private const val SETTINGS_WRITE_DEBOUNCE_MS = 250L
+        private const val SETTINGS_WRITE_DEBOUNCE_MS =
+            250L
     }
 }
 
