@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "com.yp.luminote.app"
-        minSdk = 36
+        minSdk = 34
         targetSdk = 37
 
         versionCode = ciVersionCode ?: 1
