@@ -1,24 +1,21 @@
 package com.yp.luminote.app.notification
 
-import android.app.Notification
-import android.app.NotificationManager
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.yp.luminote.app.data.settings.GradientPalette
+import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
-import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.data.settings.NotificationPlayback
-import com.yp.luminote.app.data.settings.GradientPalette
-import com.yp.luminote.app.data.settings.HaloColorMode
-import com.yp.luminote.app.data.settings.HaloColorSource
-import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.effects.HaloConfig
+import com.yp.luminote.app.effects.HaloOverlayService
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.util.ArrayDeque
@@ -39,18 +36,20 @@ class LuminoteNotificationListener :
     private lateinit var settingsRepository:
             LuminoteSettingsRepository
 
-    private lateinit var appIconColorResolver: AppIconColorResolver
+    private lateinit var appIconColorResolver:
+            AppIconColorResolver
+
+    private val notificationEventClassifier =
+        NotificationEventClassifier()
 
     private val cachedSettings =
         AtomicReference<LuminoteSettings?>(null)
 
-    private var previousSettings: LuminoteSettings? = null
+    private var previousSettings:
+            LuminoteSettings? = null
 
     private val settingsReady =
         CompletableDeferred<LuminoteSettings>()
-
-    private val rankingByThread =
-        ThreadLocal<NotificationListenerService.Ranking>()
 
     /*
      * Recently processed notification keys.
@@ -67,14 +66,33 @@ class LuminoteNotificationListener :
     private val dedupLock =
         Any()
 
-    /* Keeps one entry per notification for the active app-color palette. */
-    private val activeNotificationPackages = linkedMapOf<String, String>()
-    /* All active notifications from apps allowed to contribute palette colors. */
-    private val activePaletteNotificationPackages = linkedMapOf<String, String>()
-    private val activeNotificationsLock = Any()
+    /*
+     * Keeps one entry per semantically relevant active notification.
+     */
+    private val activeNotificationPackages =
+        linkedMapOf<String, String>()
+
+    /*
+     * Semantically relevant active notifications allowed to contribute
+     * app colors to the notification-app gradient palette.
+     */
+    private val activePaletteNotificationPackages =
+        linkedMapOf<String, String>()
+
+    private val activeNotificationsLock =
+        Any()
+
+    /*
+     * Last persistent KEEP_VISIBLE state actually sent to the renderer.
+     *
+     * Notification-heavy apps such as Spotify can update the same
+     * notification many times per second. Re-dispatching an identical
+     * persistent Halo for every update is unnecessary.
+     */
+    private var lastPersistentHaloState:
+            PersistentHaloState? = null
 
     override fun onCreate() {
-
         super.onCreate()
 
         settingsRepository =
@@ -82,50 +100,79 @@ class LuminoteNotificationListener :
                 this
             )
 
-        appIconColorResolver = AppIconColorResolver(this)
+        appIconColorResolver =
+            AppIconColorResolver(this)
 
         serviceScope.launch {
             settingsRepository.settings.collect { settings ->
-                val previous = previousSettings
+                val previous =
+                    previousSettings
+
                 if (settings.ambientEnabled) {
+                    clearPersistentHaloState()
+
                     HaloOverlayService.start(
                         this@LuminoteNotificationListener,
-                        HaloOverlayService.createAmbientIntent(this@LuminoteNotificationListener, settings)
+                        HaloOverlayService.createAmbientIntent(
+                            this@LuminoteNotificationListener,
+                            settings
+                        )
                     )
+
                     previousSettings = settings
                     cachedSettings.set(settings)
                     settingsReady.complete(settings)
+
                     return@collect
                 }
+
                 if (!settings.haloEnabled) {
                     if (
                         previous?.ambientEnabled == true ||
-                            previous?.haloEnabled == true ||
-                            previous?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE
+                        previous?.haloEnabled == true ||
+                        previous?.notificationPlayback ==
+                        NotificationPlayback.KEEP_VISIBLE
                     ) {
+                        clearPersistentHaloState()
+
                         HaloOverlayService.start(
                             this@LuminoteNotificationListener,
-                            HaloOverlayService.createStopRepeatingIntent(this@LuminoteNotificationListener)
+                            HaloOverlayService.createStopRepeatingIntent(
+                                this@LuminoteNotificationListener
+                            )
                         )
                     }
+
                     previousSettings = settings
                     cachedSettings.set(settings)
                     settingsReady.complete(settings)
+
                     return@collect
                 }
+
                 if (
                     previous?.ambientEnabled == true ||
-                        (previous?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE &&
-                            settings.notificationPlayback != NotificationPlayback.KEEP_VISIBLE)
+                    (
+                            previous?.notificationPlayback ==
+                                    NotificationPlayback.KEEP_VISIBLE &&
+                                    settings.notificationPlayback !=
+                                    NotificationPlayback.KEEP_VISIBLE
+                            )
                 ) {
+                    clearPersistentHaloState()
+
                     HaloOverlayService.start(
                         this@LuminoteNotificationListener,
-                        HaloOverlayService.createStopRepeatingIntent(this@LuminoteNotificationListener)
+                        HaloOverlayService.createStopRepeatingIntent(
+                            this@LuminoteNotificationListener
+                        )
                     )
                 }
+
                 previousSettings = settings
                 cachedSettings.set(settings)
                 settingsReady.complete(settings)
+
                 if (isPersistentReminder(settings)) {
                     refreshActiveNotifications(settings)
                 }
@@ -139,14 +186,24 @@ class LuminoteNotificationListener :
     }
 
     override fun onListenerConnected() {
-
         super.onListenerConnected()
 
-        val activeNotificationsSnapshot = activeNotifications
-        val rankingMap = currentRanking
+        val activeNotificationsSnapshot =
+            activeNotifications
+
+        val rankingMap =
+            currentRanking
+
         serviceScope.launch {
-            val settings = cachedSettings.get() ?: settingsReady.await()
-            restoreActiveNotifications(activeNotificationsSnapshot, rankingMap, settings)
+            val settings =
+                cachedSettings.get()
+                    ?: settingsReady.await()
+
+            restoreActiveNotifications(
+                activeNotificationsSnapshot,
+                rankingMap,
+                settings
+            )
         }
 
         Log.d(
@@ -156,7 +213,6 @@ class LuminoteNotificationListener :
     }
 
     override fun onListenerDisconnected() {
-
         super.onListenerDisconnected()
 
         Log.d(
@@ -169,58 +225,210 @@ class LuminoteNotificationListener :
         sbn: StatusBarNotification,
         rankingMap: NotificationListenerService.RankingMap
     ) {
+        super.onNotificationPosted(
+            sbn,
+            rankingMap
+        )
 
-        super.onNotificationPosted(sbn, rankingMap)
+        Log.d(
+            TAG,
+            "Posted: key=${sbn.key}, " +
+                    "package=${sbn.packageName}, " +
+                    "postTime=${sbn.postTime}"
+        )
 
-        Log.d(TAG, "Posted: key=${sbn.key}, package=${sbn.packageName}, postTime=${sbn.postTime}")
+        if (
+            cachedSettings.get()?.ambientEnabled ==
+            true
+        ) {
+            Log.d(
+                TAG,
+                "Skipped: ambient halo is enabled"
+            )
 
-        if (cachedSettings.get()?.ambientEnabled == true) {
-            Log.d(TAG, "Skipped: ambient halo is enabled")
             return
         }
 
-        if (cachedSettings.get()?.haloEnabled == false) {
-            Log.d(TAG, "Skipped: Luminote Halo is disabled")
+        if (
+            cachedSettings.get()?.haloEnabled ==
+            false
+        ) {
+            Log.d(
+                TAG,
+                "Skipped: Luminote Halo is disabled"
+            )
+
             return
         }
 
-        cachedSettings.get()?.let { settings ->
-            if (shouldTrackPaletteNotification(sbn, settings)) {
-                synchronized(activeNotificationsLock) {
-                    activePaletteNotificationPackages[sbn.key] = sbn.packageName
-                }
+        val ranking =
+            NotificationListenerService.Ranking()
+
+        val hasRanking =
+            rankingMap.getRanking(
+                sbn.key,
+                ranking
+            )
+
+        val event =
+            notificationEventClassifier.classify(
+                sbn = sbn,
+                ranking =
+                    ranking.takeIf {
+                        hasRanking
+                    }
+            )
+
+        /*
+         * Do not log notification title/text here.
+         *
+         * NotificationEvent.MediaChanged can contain user-visible media
+         * metadata, so only log the event type and technical reason.
+         */
+        Log.d(
+            TAG,
+            "Notification audit: " +
+                    "package=${sbn.packageName}, " +
+                    "key=${sbn.key}, " +
+                    "category=${sbn.notification.category}, " +
+                    "flags=0x${sbn.notification.flags.toString(16)}, " +
+                    "importance=${ranking.takeIf { hasRanking }?.importance}, " +
+                    "event=${event::class.simpleName}"
+        )
+
+        when (event) {
+            is NotificationEvent.UserVisible,
+            is NotificationEvent.MediaChanged ->
+                Unit
+
+            /*
+             * Media is a snapshot-only representation.
+             *
+             * classify() converts it to either MediaChanged or
+             * TechnicalUpdate before returning. Seeing it here would mean
+             * the classifier contract was broken.
+             */
+            is NotificationEvent.Media -> {
+                Log.w(
+                    TAG,
+                    "Unexpected snapshot media event in live flow"
+                )
+
+                return
+            }
+
+            is NotificationEvent.TechnicalUpdate -> {
+                Log.d(
+                    TAG,
+                    "Skipped technical notification: " +
+                            "package=${sbn.packageName}, " +
+                            "key=${sbn.key}, " +
+                            "reason=${event.reason}"
+                )
+
+                return
+            }
+
+            is NotificationEvent.SystemEvent -> {
+                Log.d(
+                    TAG,
+                    "Skipped system notification: " +
+                            "package=${sbn.packageName}, " +
+                            "key=${sbn.key}, " +
+                            "reason=${event.reason}"
+                )
+
+                return
             }
         }
 
-        if (!shouldShowEffect(sbn, rankingMap)) {
-            Log.d(TAG, "Skipped: notification is silent")
-            cachedSettings.get()?.let(::startPersistentReminderIfNeeded)
-            return
+        val settings =
+            cachedSettings.get()
+
+        if (settings != null) {
+            trackRelevantNotification(
+                sbn = sbn,
+                settings = settings
+            )
         }
 
         /*
-         * Ignore repeated callbacks for the same
-         * notification inside the deduplication window.
+         * Ignore repeated callbacks for the same notification inside the
+         * deduplication window.
          */
         if (
             isDuplicateNotification(
                 sbn
             )
         ) {
-            Log.d(TAG, "Skipped: duplicate callback")
+            Log.d(
+                TAG,
+                "Skipped: duplicate callback"
+            )
 
             return
         }
 
-        val settings = cachedSettings.get()
         if (settings != null) {
-            handleEligibleNotification(sbn, settings)
+            handleEligibleNotification(
+                sbn,
+                settings
+            )
+
             return
         }
 
-        /* Only the first callback after listener startup can take this path. */
+        /*
+         * Only the first callback after listener startup can take this path.
+         */
         serviceScope.launch {
-            handleEligibleNotification(sbn, settingsReady.await())
+            val readySettings =
+                settingsReady.await()
+
+            trackRelevantNotification(
+                sbn = sbn,
+                settings = readySettings
+            )
+
+            handleEligibleNotification(
+                sbn,
+                readySettings
+            )
+        }
+    }
+
+    /*
+     * Tracks only notifications that have already passed semantic live-event
+     * classification.
+     *
+     * Technical updates return before reaching this method.
+     */
+    private fun trackRelevantNotification(
+        sbn: StatusBarNotification,
+        settings: LuminoteSettings
+    ) {
+        if (
+            !shouldHandleSource(
+                sbn,
+                settings
+            )
+        ) {
+            return
+        }
+
+        synchronized(activeNotificationsLock) {
+            activeNotificationPackages[sbn.key] =
+                sbn.packageName
+
+            if (
+                shouldTrackPaletteNotification(
+                    sbn,
+                    settings
+                )
+            ) {
+                activePaletteNotificationPackages[sbn.key] =
+                    sbn.packageName
+            }
         }
     }
 
@@ -228,121 +436,289 @@ class LuminoteNotificationListener :
         sbn: StatusBarNotification,
         settings: LuminoteSettings
     ) {
-        if (!settings.haloEnabled || settings.ambientEnabled) return
+        if (
+            sbn.packageName == "android" &&
+            sbn.key.contains(
+                "AlertWindowNotification - $packageName"
+            )
+        ) {
+            Log.d(
+                TAG,
+                "Ignoring own alert-window notification: " +
+                        "key=${sbn.key}"
+            )
+
+            return
+        }
+
+        if (
+            !settings.haloEnabled ||
+            settings.ambientEnabled
+        ) {
+            return
+        }
 
         if (settings.haloIntensity <= 0f) {
-            Log.d(TAG, "Skipped: halo intensity is zero")
-            return
-        }
-
-        val shouldHandle = shouldHandleSource(sbn, settings)
-
-        if (!shouldHandle) {
-            Log.d(TAG, "Skipped: package is not selected")
-            return
-        }
-
-        synchronized(activeNotificationsLock) {
-            activeNotificationPackages[sbn.key] = sbn.packageName
-            if (shouldTrackPaletteNotification(sbn, settings)) {
-                activePaletteNotificationPackages[sbn.key] = sbn.packageName
-            }
-        }
-
-        val effectSettings = settings.copy(
-            haloColor = if (settings.colorSource == HaloColorSource.APP_ICON) {
-                appIconColorResolver.colorFor(sbn.packageName, settings.haloColor)
-            } else {
-                settings.haloColor
-            },
-            haloRepeatCount = when (settings.notificationPlayback) {
-                NotificationPlayback.ONCE -> 1
-                NotificationPlayback.REPEAT -> settings.haloRepeatCount
-                NotificationPlayback.KEEP_VISIBLE -> -1
-            }
-        )
-        val isGradient = settings.colorSource == HaloColorSource.GRADIENT
-        val palette = when {
-            isGradient && settings.gradientPalette == GradientPalette.NOTIFICATION_APPS -> activePaletteColors(
-                settings = settings,
-                useAppColors = true
+            Log.d(
+                TAG,
+                "Skipped: halo intensity is zero"
             )
-            isGradient -> HaloConfig.defaultGradientPalette()
-            settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE -> activePaletteColors(settings)
-            else -> null
+
+            return
         }
-        Log.d(TAG, "Effect started: key=${sbn.key}, postTime=${sbn.postTime}")
+
+        if (
+            !shouldHandleSource(
+                sbn,
+                settings
+            )
+        ) {
+            Log.d(
+                TAG,
+                "Skipped: package is not selected"
+            )
+
+            return
+        }
+
+        /*
+         * KEEP_VISIBLE is persistent state, not a finite notification effect.
+         *
+         * It must never enter HaloEffectCoordinator because a persistent
+         * request has no natural finite completion and would otherwise block
+         * the FIFO queue.
+         */
+        if (
+            settings.notificationPlayback ==
+            NotificationPlayback.KEEP_VISIBLE
+        ) {
+            startPersistentReminderIfNeeded(
+                settings
+            )
+
+            return
+        }
+
+        /*
+         * From this point on we only handle finite notification playback:
+         * ONCE or REPEAT.
+         */
+        val effectSettings =
+            settings.copy(
+                haloColor =
+                    if (
+                        settings.colorSource ==
+                        HaloColorSource.APP_ICON
+                    ) {
+                        appIconColorResolver.colorFor(
+                            sbn.packageName,
+                            settings.haloColor
+                        )
+                    } else {
+                        settings.haloColor
+                    },
+                haloRepeatCount =
+                    when (
+                        settings.notificationPlayback
+                    ) {
+                        NotificationPlayback.ONCE ->
+                            1
+
+                        NotificationPlayback.REPEAT ->
+                            settings.haloRepeatCount
+
+                        NotificationPlayback.KEEP_VISIBLE ->
+                            error(
+                                "KEEP_VISIBLE must use " +
+                                        "persistent Halo playback"
+                            )
+                    }
+            )
+
+        val isGradient =
+            settings.colorSource ==
+                    HaloColorSource.GRADIENT
+
+        val palette =
+            when {
+                isGradient &&
+                        settings.gradientPalette ==
+                        GradientPalette.NOTIFICATION_APPS ->
+                    activePaletteColors(
+                        settings = settings,
+                        useAppColors = true
+                    )
+
+                isGradient ->
+                    HaloConfig.defaultGradientPalette()
+
+                else ->
+                    null
+            }
+
+        Log.d(
+            TAG,
+            "Effect started: " +
+                    "key=${sbn.key}, " +
+                    "postTime=${sbn.postTime}"
+        )
+
         startTransientEffect(
             settings = effectSettings,
             paletteColors = palette,
-            restart = true
+            restart = true,
+            packageName = sbn.packageName,
+            notificationKey = sbn.key
         )
     }
 
     private fun startTransientEffect(
         settings: LuminoteSettings,
         paletteColors: IntArray? = null,
-        restart: Boolean = false
+        restart: Boolean = false,
+        packageName: String? = null,
+        notificationKey: String? = null
     ) {
         HaloOverlayService.start(
             context = this,
-            intent = HaloOverlayService.createIntent(
-                context = this,
-                settings = settings,
-                paletteColors = paletteColors,
-                restart = restart
-            )
+            intent =
+                HaloOverlayService.createIntent(
+                    context = this,
+                    settings = settings,
+                    paletteColors = paletteColors,
+                    restart = restart,
+                    packageName = packageName,
+                    notificationKey = notificationKey
+                )
         )
     }
 
     private fun activePaletteColors(
         settings: LuminoteSettings,
-        useAppColors: Boolean = settings.colorSource == HaloColorSource.APP_ICON
-    ): IntArray = synchronized(activeNotificationsLock) {
-        activePaletteNotificationPackages.values
-            .distinct()
-            .map { packageName ->
-                if (useAppColors) {
-                    appIconColorResolver.colorFor(packageName, settings.haloColor)
-                } else {
-                    settings.haloColor
+        useAppColors: Boolean =
+            settings.colorSource ==
+                    HaloColorSource.APP_ICON
+    ): IntArray =
+        synchronized(activeNotificationsLock) {
+            activePaletteNotificationPackages.values
+                .distinct()
+                .map { packageName ->
+                    if (useAppColors) {
+                        appIconColorResolver.colorFor(
+                            packageName,
+                            settings.haloColor
+                        )
+                    } else {
+                        settings.haloColor
+                    }
                 }
-            }
-            .toIntArray()
-    }
+                .toIntArray()
+        }
 
+    /*
+     * Rebuilds persistent notification state without mutating the live media
+     * fingerprint cache.
+     *
+     * classifySnapshot() is intentionally stateless. Existing media
+     * notifications are relevant to KEEP_VISIBLE, but inspecting them here
+     * must not consume the next MediaChanged live event.
+     */
     private fun restoreActiveNotifications(
         notifications: Array<StatusBarNotification>,
         rankingMap: NotificationListenerService.RankingMap,
         settings: LuminoteSettings
     ) {
-        if (!settings.haloEnabled || settings.ambientEnabled) return
+        if (
+            !settings.haloEnabled ||
+            settings.ambientEnabled
+        ) {
+            return
+        }
 
         synchronized(activeNotificationsLock) {
             activeNotificationPackages.clear()
             activePaletteNotificationPackages.clear()
+
             notifications.forEach { notification ->
-                if (shouldTrackPaletteNotification(notification, settings)) {
-                    activePaletteNotificationPackages[notification.key] = notification.packageName
-                }
                 if (
-                    shouldShowEffect(notification, rankingMap) &&
-                    shouldHandleSource(notification, settings)
+                    !shouldHandleSource(
+                        notification,
+                        settings
+                    )
                 ) {
-                    activeNotificationPackages[notification.key] = notification.packageName
+                    return@forEach
+                }
+
+                val ranking =
+                    NotificationListenerService.Ranking()
+
+                val hasRanking =
+                    rankingMap.getRanking(
+                        notification.key,
+                        ranking
+                    )
+
+                val snapshotEvent =
+                    notificationEventClassifier.classifySnapshot(
+                        sbn = notification,
+                        ranking =
+                            ranking.takeIf {
+                                hasRanking
+                            }
+                    )
+
+                if (
+                    !isRelevantActiveNotification(
+                        snapshotEvent
+                    )
+                ) {
+                    return@forEach
+                }
+
+                activeNotificationPackages[
+                    notification.key
+                ] = notification.packageName
+
+                if (
+                    shouldTrackPaletteNotification(
+                        notification,
+                        settings
+                    )
+                ) {
+                    activePaletteNotificationPackages[
+                        notification.key
+                    ] = notification.packageName
                 }
             }
         }
 
-        startPersistentReminderIfNeeded(settings)
+        startPersistentReminderIfNeeded(
+            settings
+        )
     }
 
+    private fun isRelevantActiveNotification(
+        event: NotificationEvent
+    ): Boolean =
+        when (event) {
+            is NotificationEvent.UserVisible,
+            is NotificationEvent.Media,
+            is NotificationEvent.MediaChanged ->
+                true
+
+            is NotificationEvent.TechnicalUpdate,
+            is NotificationEvent.SystemEvent ->
+                false
+        }
+
     /**
-     * Keep Visible must also reflect alerts that existed before a mode or app
-     * filter changed. Notification callbacks alone cannot provide that
-     * guarantee, so rebuild the small in-memory snapshot from the system list.
+     * KEEP_VISIBLE must also reflect notifications that existed before a mode
+     * or app filter changed. Notification callbacks alone cannot provide that
+     * guarantee, so rebuild the in-memory snapshot from the system list.
      */
-    private fun refreshActiveNotifications(settings: LuminoteSettings) {
+    private fun refreshActiveNotifications(
+        settings: LuminoteSettings
+    ) {
         restoreActiveNotifications(
             notifications = activeNotifications,
             rankingMap = currentRanking,
@@ -350,42 +726,109 @@ class LuminoteNotificationListener :
         )
     }
 
-    private fun isPersistentReminder(settings: LuminoteSettings): Boolean =
-        settings.haloEnabled && settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE
+    private fun isPersistentReminder(
+        settings: LuminoteSettings
+    ): Boolean =
+        settings.haloEnabled &&
+                settings.notificationPlayback ==
+                NotificationPlayback.KEEP_VISIBLE
 
-    private fun startPersistentReminderIfNeeded(settings: LuminoteSettings) {
-        if (!isPersistentReminder(settings)) return
-        if (!hasActiveNotifications()) return
-        val paletteColors = when {
-            settings.colorSource != HaloColorSource.GRADIENT -> activePaletteColors(settings)
-            settings.gradientPalette == GradientPalette.NOTIFICATION_APPS -> activePaletteColors(settings, useAppColors = true)
-            else -> HaloConfig.defaultGradientPalette()
+    private fun startPersistentReminderIfNeeded(
+        settings: LuminoteSettings
+    ) {
+        if (!isPersistentReminder(settings)) {
+            return
         }
+
+        if (!hasActiveNotifications()) {
+            return
+        }
+
+        val paletteColors =
+            when {
+                settings.colorSource !=
+                        HaloColorSource.GRADIENT ->
+                    activePaletteColors(
+                        settings
+                    )
+
+                settings.gradientPalette ==
+                        GradientPalette.NOTIFICATION_APPS ->
+                    activePaletteColors(
+                        settings,
+                        useAppColors = true
+                    )
+
+                else ->
+                    HaloConfig.defaultGradientPalette()
+            }
+
+        /*
+         * IntArray uses reference equality when stored directly inside a
+         * data class. Convert it to an immutable List<Int> so the snapshot
+         * gets structural equality.
+         */
+        val persistentState =
+            PersistentHaloState(
+                settings = settings,
+                paletteColors = paletteColors.toList()
+            )
+
+        if (
+            lastPersistentHaloState ==
+            persistentState
+        ) {
+            Log.d(
+                TAG,
+                "Persistent Halo unchanged; skipping dispatch"
+            )
+
+            return
+        }
+
+        lastPersistentHaloState =
+            persistentState
+
+        Log.d(
+            TAG,
+            "Persistent Halo changed; dispatching update"
+        )
+
+        /*
+         * Intentionally omit packageName and notificationKey.
+         *
+         * KEEP_VISIBLE remains a persistent overlay command instead of a
+         * finite HaloEffectRequest handled by HaloEffectCoordinator.
+         */
         startTransientEffect(
             settings = settings,
             paletteColors = paletteColors
         )
     }
 
-    private fun hasActiveNotifications(): Boolean = synchronized(activeNotificationsLock) {
-        activeNotificationPackages.isNotEmpty()
+    private fun clearPersistentHaloState() {
+        lastPersistentHaloState =
+            null
     }
+
+    private fun hasActiveNotifications(): Boolean =
+        synchronized(activeNotificationsLock) {
+            activeNotificationPackages.isNotEmpty()
+        }
 
     private fun isDuplicateNotification(
         sbn: StatusBarNotification
     ): Boolean {
-
         val key =
             sbn.key
 
         val now =
             SystemClock.elapsedRealtime()
 
-        synchronized(
-            dedupLock
-        ) {
-
-            cleanupRecentNotifications(now)
+        synchronized(dedupLock) {
+            cleanupRecentNotifications(
+                now
+            )
 
             val previous =
                 recentNotifications[key]
@@ -396,17 +839,22 @@ class LuminoteNotificationListener :
                 now - previous.timestamp <
                 DEDUP_WINDOW_MS
             ) {
-
                 return true
             }
 
-            val entry = RecentNotification(
-                key = key,
-                timestamp = now,
-                postTime = sbn.postTime
+            val entry =
+                RecentNotification(
+                    key = key,
+                    timestamp = now,
+                    postTime = sbn.postTime
+                )
+
+            recentNotifications[key] =
+                entry
+
+            recentNotificationOrder.addLast(
+                entry
             )
-            recentNotifications[key] = entry
-            recentNotificationOrder.addLast(entry)
 
             return false
         }
@@ -415,87 +863,93 @@ class LuminoteNotificationListener :
     private fun cleanupRecentNotifications(
         now: Long
     ) {
-
         val expiration =
             now -
                     RECENT_NOTIFICATION_RETENTION_MS
 
-        while (recentNotificationOrder.isNotEmpty()) {
-            val entry = recentNotificationOrder.peekFirst()
-            if (entry.timestamp >= expiration) {
+        while (
+            recentNotificationOrder.isNotEmpty()
+        ) {
+            val entry =
+                recentNotificationOrder.peekFirst()
+
+            if (
+                entry.timestamp >=
+                expiration
+            ) {
                 return
             }
 
             recentNotificationOrder.removeFirst()
-            if (recentNotifications[entry.key]?.timestamp == entry.timestamp) {
-                recentNotifications.remove(entry.key)
+
+            if (
+                recentNotifications[
+                    entry.key
+                ]?.timestamp ==
+                entry.timestamp
+            ) {
+                recentNotifications.remove(
+                    entry.key
+                )
             }
         }
-    }
-
-    /*
-     * NotificationListenerService does not expose a reliable "heads-up is
-     * currently visible" flag. Channel importance is the system signal used
-     * to make a notification eligible for a heads-up card, while the sound
-     * fields cover audible notifications at lower importance.
-     */
-    private fun shouldShowEffect(
-        sbn: StatusBarNotification,
-        rankingMap: NotificationListenerService.RankingMap
-    ): Boolean {
-        if (cachedSettings.get()?.includeSilentUpdates == true) {
-            return true
-        }
-
-        val ranking = rankingByThread.get() ?: NotificationListenerService.Ranking().also {
-            rankingByThread.set(it)
-        }
-        val hasRanking = rankingMap.getRanking(sbn.key, ranking)
-        val isHeadsUpEligible =
-            hasRanking &&
-                    ranking.importance >= NotificationManager.IMPORTANCE_HIGH
-
-        if (isHeadsUpEligible) {
-            return true
-        }
-
-        val notification = sbn.notification
-        val hasExplicitSound =
-            notification.sound != null ||
-                    (notification.defaults and Notification.DEFAULT_SOUND) != 0
-        val hasChannelSound =
-            hasRanking &&
-                    ranking.channel?.sound != null
-        val hasExplicitVibration =
-            notification.vibrate != null ||
-                    (notification.defaults and Notification.DEFAULT_VIBRATE) != 0
-        val hasChannelVibration =
-            hasRanking && ranking.channel?.shouldVibrate() == true
-
-        return hasExplicitSound ||
-                hasChannelSound ||
-                hasExplicitVibration ||
-                hasChannelVibration
     }
 
     override fun onNotificationRemoved(
         sbn: StatusBarNotification
     ) {
+        notificationEventClassifier.onNotificationRemoved(
+            sbn
+        )
 
-        super.onNotificationRemoved(sbn)
+        super.onNotificationRemoved(
+            sbn
+        )
 
-        val noRelevantNotifications = synchronized(activeNotificationsLock) {
-            activeNotificationPackages.remove(sbn.key)
-            activePaletteNotificationPackages.remove(sbn.key)
-            activeNotificationPackages.isEmpty()
+        val noRelevantNotifications =
+            synchronized(activeNotificationsLock) {
+                activeNotificationPackages.remove(
+                    sbn.key
+                )
+
+                activePaletteNotificationPackages.remove(
+                    sbn.key
+                )
+
+                activeNotificationPackages.isEmpty()
+            }
+
+        val settings =
+            cachedSettings.get()
+
+        if (
+            settings?.ambientEnabled == true ||
+            settings?.haloEnabled == false
+        ) {
+            return
         }
-        val settings = cachedSettings.get()
-        if (settings?.ambientEnabled == true || settings?.haloEnabled == false) return
-        if (settings?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
+
+        if (
+            settings?.notificationPlayback ==
+            NotificationPlayback.KEEP_VISIBLE
+        ) {
             if (noRelevantNotifications) {
-                HaloOverlayService.start(this, HaloOverlayService.createStopRepeatingIntent(this))
+                /*
+                 * The persistent overlay is gone, so forget its rendered
+                 * state. A future notification must always dispatch again.
+                 */
+                clearPersistentHaloState()
+
+                HaloOverlayService.start(
+                    this,
+                    HaloOverlayService.createStopRepeatingIntent(
+                        this
+                    )
+                )
             } else {
-                startPersistentReminderIfNeeded(settings)
+                startPersistentReminderIfNeeded(
+                    settings
+                )
             }
         }
     }
@@ -503,23 +957,30 @@ class LuminoteNotificationListener :
     private fun shouldHandleSource(
         sbn: StatusBarNotification,
         settings: LuminoteSettings
-    ): Boolean = when (settings.notificationSource) {
-        NotificationSource.ALL_APPS -> true
-        NotificationSource.SELECTED_APPS -> sbn.packageName in settings.selectedApps
-    }
+    ): Boolean =
+        when (
+            settings.notificationSource
+        ) {
+            NotificationSource.ALL_APPS ->
+                true
+
+            NotificationSource.SELECTED_APPS ->
+                sbn.packageName in
+                        settings.selectedApps
+        }
 
     private fun shouldTrackPaletteNotification(
         sbn: StatusBarNotification,
         settings: LuminoteSettings
     ): Boolean =
         sbn.packageName != packageName &&
-            shouldHandleSource(sbn, settings)
+                shouldHandleSource(
+                    sbn,
+                    settings
+                )
 
     override fun onDestroy() {
-
-        synchronized(
-            dedupLock
-        ) {
+        synchronized(dedupLock) {
             recentNotifications.clear()
             recentNotificationOrder.clear()
         }
@@ -528,6 +989,8 @@ class LuminoteNotificationListener :
             activeNotificationPackages.clear()
             activePaletteNotificationPackages.clear()
         }
+
+        clearPersistentHaloState()
 
         cachedSettings.set(null)
         settingsReady.cancel()
@@ -548,24 +1011,28 @@ class LuminoteNotificationListener :
             "LuminoteNotification"
 
         /*
-         * Callbacks for the same notification
-         * inside this window are treated as duplicates.
+         * Only suppress the same framework callback,
+         * never a second message.
          */
-        /* Only suppress the same framework callback, never a second message. */
         private const val DEDUP_WINDOW_MS =
             100L
 
         /*
-         * A key cannot be a duplicate after the deduplication window ends.
+         * A key cannot be a duplicate after
+         * the deduplication window ends.
          */
         private const val RECENT_NOTIFICATION_RETENTION_MS =
             DEDUP_WINDOW_MS
-
     }
 
     private data class RecentNotification(
         val key: String,
         val timestamp: Long,
         val postTime: Long
+    )
+
+    private data class PersistentHaloState(
+        val settings: LuminoteSettings,
+        val paletteColors: List<Int>
     )
 }

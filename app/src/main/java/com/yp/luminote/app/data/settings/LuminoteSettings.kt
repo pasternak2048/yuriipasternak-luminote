@@ -45,7 +45,7 @@ data class LuminoteSettings(
 
     val haloMotion: HaloMotion = HaloMotion.PULSE,
 
-    /** Tempo for the selected effect, independent from gradient color flow. */
+    /** Tempo for the selected effect, independent of gradient color flow. */
     val haloEffectSpeed: Float = 1f,
 
     /** Multiplier for movement inside gradient color treatments. */
@@ -55,9 +55,6 @@ data class LuminoteSettings(
 
     val notificationSource: NotificationSource =
         NotificationSource.ALL_APPS,
-
-    val includeSilentUpdates: Boolean =
-        false,
 
     val selectedApps: Set<String> =
         emptySet(),

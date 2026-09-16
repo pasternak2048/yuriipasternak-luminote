@@ -24,6 +24,7 @@ internal class HaloView(
     private var ambientPaused = false
     private var pendingFiniteAnimation: FiniteAnimation? = null
     private var animationStartToken = 0L
+    private var onFiniteAnimationCompleted: (() -> Unit)? = null
     private val ambientEffectAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
         duration = AMBIENT_ROTATION_DURATION_MS
         interpolator = LinearInterpolator()
@@ -51,6 +52,9 @@ internal class HaloView(
         onPhaseChanged = { phase ->
             animationPhase = phase
             gradientPhase = phase
+        },
+        onCompleted = {
+            onFiniteAnimationCompleted?.invoke()
         }
     )
 
@@ -60,6 +64,10 @@ internal class HaloView(
             ambientEffectSpeed = config.effectSpeed.coerceIn(MIN_EFFECT_SPEED, MAX_EFFECT_SPEED)
         }
         invalidate()
+    }
+
+    fun setOnFiniteAnimationCompletedListener(listener: (() -> Unit)?) {
+        onFiniteAnimationCompleted = listener
     }
 
     fun repeatAnimation(
