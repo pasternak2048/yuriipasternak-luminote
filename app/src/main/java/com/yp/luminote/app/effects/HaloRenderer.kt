@@ -785,19 +785,29 @@ internal class HaloRenderer(
         return nearestFraction
     }
 
+    /**
+     * Builds a single canonical centerline for every Halo motion.
+     *
+     * The complete rendered stroke must remain inside the display contour.
+     *
+     * Therefore:
+     *
+     * centerlineInset =
+     *     renderStrokeWidth / 2 + opticalSafetyGap
+     *
+     * opticalInsetPx is density based in DisplayOutline (2dp in the current
+     * geometry implementation), so this rule contains no device-specific
+     * dimensions.
+     */
     private fun buildStylePath(): Path {
-        val coreInset =
-            frameInsetFor(
-                coreStrokeWidth
-            )
+        val centerlineInset =
+            renderStrokeWidth /
+                    2f +
+                    outline.opticalInsetPx
 
         val strokePath =
             outline.strokePath(
-                coreInset -
-                        outerGapWidth(
-                            coreStrokeWidth
-                        ) /
-                        2f
+                centerlineInset
             )
 
         return when (config.frame) {
@@ -828,37 +838,16 @@ internal class HaloRenderer(
                 thickness *
                 STROKE_WIDTH_RANGE
 
+    /**
+     * Rendering width is now exactly the configured Halo width.
+     *
+     * Geometry containment is handled by centerline placement rather than
+     * artificially widening the stroke near the display edge.
+     */
     private fun calculateRenderStrokeWidth(
         strokeWidth: Float
     ): Float =
-        strokeWidth +
-                outerGapWidth(
-                    strokeWidth
-                )
-
-    private fun frameInsetFor(
-        strokeWidth: Float
-    ): Float =
-        maxOf(
-            strokeWidth /
-                    2f +
-                    FRAME_INSET_PADDING,
-            outline.opticalInsetPx
-        )
-
-    private fun outerGapWidth(
-        strokeWidth: Float
-    ): Float =
-        (
-                frameInsetFor(
-                    strokeWidth
-                ) -
-                        strokeWidth /
-                        2f
-                )
-            .coerceAtLeast(
-                0f
-            )
+        strokeWidth
 
     private fun clearStylePathCache() {
         cachedStyleStrokeWidth =
@@ -1198,9 +1187,6 @@ internal class HaloRenderer(
 
         private const val STROKE_WIDTH_RANGE =
             10f
-
-        private const val FRAME_INSET_PADDING =
-            1f
 
         private const val SNAKE_SEGMENT_FRACTION =
             0.18f
