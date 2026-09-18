@@ -26,77 +26,148 @@ import kotlin.math.max
  * in Accessibility settings. It never wakes the display or accepts touches.
  */
 class HaloAccessibilityService : AccessibilityService() {
-    private val handler = Handler(Looper.getMainLooper())
-    private lateinit var displayManager: DisplayManager
-    private lateinit var powerManager: PowerManager
-    private lateinit var windowManager: WindowManager
-    private var overlayView: HaloView? = null
-    private var layoutParams: WindowManager.LayoutParams? = null
-    private var activeConfig: HaloConfig? = null
-    private var previewMode = false
-    private var activeQueuedCompletion: (() -> Unit)? = null
-    private var queuedCompletionWatchdog: Runnable? = null
 
-    private val removeOverlayTask = Runnable { removeOverlay() }
+    private val handler =
+        Handler(
+            Looper.getMainLooper()
+        )
 
-    private val screenStateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
-                Intent.ACTION_SCREEN_OFF -> pausePersistentAmbientForScreenOff()
-                Intent.ACTION_SCREEN_ON ->
-                    handler.post { resumePersistentAmbientAfterScreenOn() }
+    private lateinit var displayManager:
+            DisplayManager
+
+    private lateinit var powerManager:
+            PowerManager
+
+    private lateinit var windowManager:
+            WindowManager
+
+    private var overlayView:
+            HaloView? = null
+
+    private var layoutParams:
+            WindowManager.LayoutParams? = null
+
+    private var activeConfig:
+            HaloConfig? = null
+
+    private var previewMode =
+        false
+
+    private var activeQueuedCompletion:
+            (() -> Unit)? = null
+
+    private var queuedCompletionWatchdog:
+            Runnable? = null
+
+    private var queuedRequestToken =
+        0L
+
+    private val removeOverlayTask =
+        Runnable {
+            removeOverlay()
+        }
+
+    private val screenStateReceiver =
+        object : BroadcastReceiver() {
+
+            override fun onReceive(
+                context: Context,
+                intent: Intent
+            ) {
+                when (intent.action) {
+                    Intent.ACTION_SCREEN_OFF ->
+                        pausePersistentAmbientForScreenOff()
+
+                    Intent.ACTION_SCREEN_ON ->
+                        handler.post {
+                            resumePersistentAmbientAfterScreenOn()
+                        }
+                }
             }
         }
-    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
 
         displayManager =
-            getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+            getSystemService(
+                Context.DISPLAY_SERVICE
+            ) as DisplayManager
+
         powerManager =
-            getSystemService(Context.POWER_SERVICE) as PowerManager
+            getSystemService(
+                Context.POWER_SERVICE
+            ) as PowerManager
 
         registerReceiver(
             screenStateReceiver,
             IntentFilter().apply {
-                addAction(Intent.ACTION_SCREEN_OFF)
-                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(
+                    Intent.ACTION_SCREEN_OFF
+                )
+
+                addAction(
+                    Intent.ACTION_SCREEN_ON
+                )
             },
             Context.RECEIVER_NOT_EXPORTED
         )
 
-        activeService = this
+        activeService =
+            this
 
-        HaloOverlayService.takePendingApplicationAmbientIntent()
+        HaloOverlayService
+            .takePendingApplicationAmbientIntent()
             ?.let { ambientIntent ->
-                handleCommand(ambientIntent)
-                HaloOverlayService.stopApplicationAmbientOverlay(this)
+                handleCommand(
+                    ambientIntent
+                )
+
+                HaloOverlayService
+                    .stopApplicationAmbientOverlay(
+                        this
+                    )
             }
     }
 
     override fun onAccessibilityEvent(
-        event: android.view.accessibility.AccessibilityEvent?
+        event:
+        android.view.accessibility.AccessibilityEvent?
     ) = Unit
 
     override fun onInterrupt() = Unit
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
+    override fun onConfigurationChanged(
+        newConfig: Configuration
+    ) {
+        super.onConfigurationChanged(
+            newConfig
+        )
+
         updateBounds()
     }
 
     override fun onDestroy() {
-        if (activeService === this) {
-            activeService = null
+        if (
+            activeService ===
+            this
+        ) {
+            activeService =
+                null
         }
 
-        handler.removeCallbacks(removeOverlayTask)
+        handler.removeCallbacks(
+            removeOverlayTask
+        )
 
-        queuedCompletionWatchdog?.let(handler::removeCallbacks)
-        queuedCompletionWatchdog = null
+        cancelQueuedWatchdog()
 
-        unregisterReceiver(screenStateReceiver)
+        queuedRequestToken++
+
+        unregisterReceiver(
+            screenStateReceiver
+        )
+
         removeOverlay()
 
         super.onDestroy()
@@ -104,7 +175,8 @@ class HaloAccessibilityService : AccessibilityService() {
 
     private fun handleCommand(
         intent: Intent?,
-        onFiniteAnimationCompleted: (() -> Unit)? = null
+        onFiniteAnimationCompleted:
+        (() -> Unit)? = null
     ) {
         if (
             intent?.getBooleanExtra(
@@ -112,9 +184,13 @@ class HaloAccessibilityService : AccessibilityService() {
                 false
             ) == true
         ) {
-            if (activeQueuedCompletion == null) {
+            if (
+                activeQueuedCompletion ==
+                null
+            ) {
                 removeOverlay()
             }
+
             return
         }
 
@@ -125,7 +201,8 @@ class HaloAccessibilityService : AccessibilityService() {
             ) == true
         ) {
             if (
-                activeQueuedCompletion == null &&
+                activeQueuedCompletion ==
+                null &&
                 (
                         activeConfig?.notificationPlayback ==
                                 NotificationPlayback.KEEP_VISIBLE ||
@@ -134,6 +211,7 @@ class HaloAccessibilityService : AccessibilityService() {
             ) {
                 removeOverlay()
             }
+
             return
         }
 
@@ -144,38 +222,63 @@ class HaloAccessibilityService : AccessibilityService() {
             ) == true
         ) {
             if (
-                activeQueuedCompletion == null &&
-                (previewMode || overlayView == null)
+                activeQueuedCompletion ==
+                null &&
+                (
+                        previewMode ||
+                                overlayView == null
+                        )
             ) {
                 removeOverlay()
             }
+
             return
         }
 
-        // Queued notification playback has exclusive ownership of the overlay.
-        if (activeQueuedCompletion != null) {
+        /*
+         * Queued notification playback owns the overlay exclusively.
+         * Normal commands must not interfere with the active queued request.
+         */
+        if (
+            activeQueuedCompletion !=
+            null
+        ) {
             return
         }
 
-        val config = readConfig(intent)
+        val config =
+            readConfig(
+                intent
+            )
 
         val palette =
             intent?.getIntArrayExtra(
                 HaloOverlayService.EXTRA_PALETTE_COLORS
             )
                 ?.distinct()
-                ?.takeIf { it.isNotEmpty() }
+                ?.takeIf {
+                    it.isNotEmpty()
+                }
                 ?.toIntArray()
-                ?: if (config.colorMode == HaloColorMode.GRADIENT) {
-                    HaloConfig.defaultGradientPalette()
+                ?: if (
+                    config.colorMode ==
+                    HaloColorMode.GRADIENT
+                ) {
+                    HaloConfig
+                        .defaultGradientPalette()
                 } else {
-                    intArrayOf(config.color)
+                    intArrayOf(
+                        config.color
+                    )
                 }
 
-        val resolvedConfig = config.copy(
-            color = palette.first(),
-            palette = palette
-        )
+        val resolvedConfig =
+            config.copy(
+                color =
+                    palette.first(),
+                palette =
+                    palette
+            )
 
         val restart =
             intent?.getBooleanExtra(
@@ -189,93 +292,156 @@ class HaloAccessibilityService : AccessibilityService() {
                 false
             ) == true
 
-        overlayView?.let { view ->
-            if (restart) {
-                previewMode = preview
+        overlayView
+            ?.let { view ->
+
+                if (restart) {
+                    previewMode =
+                        preview
+                }
+
+                activeConfig =
+                    resolvedConfig
+
+                view.update(
+                    resolvedConfig
+                )
+
+                view.setOnFiniteAnimationCompletedListener(
+                    onFiniteAnimationCompleted
+                )
+
+                if (
+                    restart ||
+                    resolvedConfig.notificationPlayback ==
+                    NotificationPlayback.KEEP_VISIBLE
+                ) {
+                    startAnimation(
+                        view,
+                        resolvedConfig
+                    )
+
+                    scheduleRemoval(
+                        resolvedConfig
+                    )
+                }
+
+                return
             }
 
-            activeConfig = resolvedConfig
-            view.update(resolvedConfig)
-            view.setOnFiniteAnimationCompletedListener(
-                onFiniteAnimationCompleted
-            )
-
-            if (
-                restart ||
-                resolvedConfig.notificationPlayback ==
-                NotificationPlayback.KEEP_VISIBLE
-            ) {
-                startAnimation(view, resolvedConfig)
-                scheduleRemoval(resolvedConfig)
-            }
-
-            return
-        }
-
-        if (resolvedConfig.intensity <= 0f) {
+        if (
+            resolvedConfig.intensity <=
+            0f
+        ) {
             return
         }
 
         val display =
-            displayManager.getDisplay(Display.DEFAULT_DISPLAY)
+            displayManager.getDisplay(
+                Display.DEFAULT_DISPLAY
+            )
                 ?: return
 
-        val metrics = OverlayDisplayMetrics.realMetrics(display)
-
-        val windowContext =
-            createDisplayContext(display).createWindowContext(
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                null
+        val metrics =
+            OverlayDisplayMetrics.realMetrics(
+                display
             )
 
-        windowManager =
-            windowContext.getSystemService(WindowManager::class.java)
+        val windowContext =
+            createDisplayContext(
+                display
+            )
+                .createWindowContext(
+                    WindowManager.LayoutParams
+                        .TYPE_ACCESSIBILITY_OVERLAY,
+                    null
+                )
 
-        val view = HaloView(
-            windowContext,
-            resolvedConfig
-        )
+        windowManager =
+            windowContext.getSystemService(
+                WindowManager::class.java
+            )
+
+        val view =
+            HaloView(
+                windowContext,
+                resolvedConfig
+            )
 
         view.setOnFiniteAnimationCompletedListener(
             onFiniteAnimationCompleted
         )
 
-        val params = WindowManager.LayoutParams(
-            metrics.widthPixels,
-            metrics.heightPixels,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-
-            layoutInDisplayCutoutMode =
+        val params =
+            WindowManager.LayoutParams(
+                metrics.widthPixels,
+                metrics.heightPixels,
                 WindowManager.LayoutParams
-                    .LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    .TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams
+                    .FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams
+                            .FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams
+                            .FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams
+                            .FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity =
+                    Gravity.TOP or
+                            Gravity.START
 
-            setFitInsetsTypes(0)
-            setFitInsetsSides(0)
-            setFitInsetsIgnoringVisibility(true)
-        }
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams
+                        .LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
 
-        overlayView = view
-        layoutParams = params
-        activeConfig = resolvedConfig
-        previewMode = preview
+                setFitInsetsTypes(
+                    0
+                )
+
+                setFitInsetsSides(
+                    0
+                )
+
+                setFitInsetsIgnoringVisibility(
+                    true
+                )
+            }
+
+        overlayView =
+            view
+
+        layoutParams =
+            params
+
+        activeConfig =
+            resolvedConfig
+
+        previewMode =
+            preview
 
         runCatching {
-            windowManager.addView(view, params)
-            startAnimation(view, resolvedConfig)
-            scheduleRemoval(resolvedConfig)
+            windowManager.addView(
+                view,
+                params
+            )
+
+            startAnimation(
+                view,
+                resolvedConfig
+            )
+
+            scheduleRemoval(
+                resolvedConfig
+            )
         }.onFailure {
             Log.e(
                 TAG,
                 "Unable to attach accessibility halo overlay",
                 it
             )
+
             removeOverlay()
         }
     }
@@ -288,24 +454,34 @@ class HaloAccessibilityService : AccessibilityService() {
             config.notificationPlayback ==
             NotificationPlayback.KEEP_VISIBLE
         ) {
-            handler.removeCallbacks(removeOverlayTask)
+            handler.removeCallbacks(
+                removeOverlayTask
+            )
 
-            view.startAmbientEffect(config.effectSpeed)
+            view.startAmbientEffect(
+                config.effectSpeed
+            )
 
-            if (!powerManager.isInteractive) {
+            if (
+                !powerManager.isInteractive
+            ) {
                 view.pauseAmbientEffect()
             }
-        } else {
-            view.repeatAnimation(
-                config.durationSeconds,
-                config.intervalSeconds,
-                config.repeatCount,
-                config.motion
-            )
+
+            return
         }
+
+        view.repeatAnimation(
+            config.durationSeconds,
+            config.intervalSeconds,
+            config.repeatCount,
+            config.motion
+        )
     }
 
-    private fun scheduleRemoval(config: HaloConfig) {
+    private fun scheduleRemoval(
+        config: HaloConfig
+    ) {
         if (
             config.notificationPlayback ==
             NotificationPlayback.KEEP_VISIBLE
@@ -313,47 +489,80 @@ class HaloAccessibilityService : AccessibilityService() {
             return
         }
 
-        handler.removeCallbacks(removeOverlayTask)
-
-        val duration = max(
-            HaloAnimation.MIN_DURATION_MS,
-            (config.durationSeconds * 1000f).toLong()
+        handler.removeCallbacks(
+            removeOverlayTask
         )
 
+        val duration =
+            max(
+                HaloAnimation.MIN_DURATION_MS,
+                (
+                        config.durationSeconds *
+                                1000f
+                        ).toLong()
+            )
+
         val interval =
-            (config.intervalSeconds * 1000f)
+            (
+                    config.intervalSeconds *
+                            1000f
+                    )
                 .toLong()
-                .coerceAtLeast(0L)
+                .coerceAtLeast(
+                    0L
+                )
 
         handler.postDelayed(
             removeOverlayTask,
-            duration * config.repeatCount +
-                    interval * (config.repeatCount - 1) +
+            duration *
+                    config.repeatCount +
+                    interval *
+                    (
+                            config.repeatCount -
+                                    1
+                            ) +
                     50L
         )
     }
 
     private fun updateBounds() {
-        val view = overlayView ?: return
-        val params = layoutParams ?: return
+        val view =
+            overlayView
+                ?: return
+
+        val params =
+            layoutParams
+                ?: return
 
         val display =
-            displayManager.getDisplay(Display.DEFAULT_DISPLAY)
+            displayManager.getDisplay(
+                Display.DEFAULT_DISPLAY
+            )
                 ?: return
 
         val metrics =
-            OverlayDisplayMetrics.realMetrics(display)
+            OverlayDisplayMetrics.realMetrics(
+                display
+            )
 
-        params.width = metrics.widthPixels
-        params.height = metrics.heightPixels
+        params.width =
+            metrics.widthPixels
+
+        params.height =
+            metrics.heightPixels
 
         runCatching {
-            windowManager.updateViewLayout(view, params)
+            windowManager.updateViewLayout(
+                view,
+                params
+            )
         }
     }
 
     private fun pausePersistentAmbientForScreenOff() {
-        val config = activeConfig ?: return
+        val config =
+            activeConfig
+                ?: return
 
         if (
             config.notificationPlayback !=
@@ -362,11 +571,14 @@ class HaloAccessibilityService : AccessibilityService() {
             return
         }
 
-        overlayView?.pauseAmbientEffect()
+        overlayView
+            ?.pauseAmbientEffect()
     }
 
     private fun resumePersistentAmbientAfterScreenOn() {
-        val config = activeConfig ?: return
+        val config =
+            activeConfig
+                ?: return
 
         if (
             config.notificationPlayback !=
@@ -375,109 +587,157 @@ class HaloAccessibilityService : AccessibilityService() {
             return
         }
 
-        overlayView?.resumeAmbientEffect()
+        overlayView
+            ?.resumeAmbientEffect()
     }
 
     private fun removeOverlay() {
-        val queuedCompletion = activeQueuedCompletion
-        activeQueuedCompletion = null
+        queuedRequestToken++
 
-        overlayView?.let { view ->
-            view.cancelAnimation()
+        cancelQueuedWatchdog()
 
-            runCatching {
-                if (view.isAttachedToWindow) {
-                    windowManager.removeView(view)
+        val queuedCompletion =
+            activeQueuedCompletion
+
+        activeQueuedCompletion =
+            null
+
+        overlayView
+            ?.let { view ->
+
+                view.setOnFiniteAnimationCompletedListener(
+                    null
+                )
+
+                view.cancelAnimation()
+
+                runCatching {
+                    if (
+                        view.isAttachedToWindow
+                    ) {
+                        windowManager.removeView(
+                            view
+                        )
+                    }
                 }
             }
-        }
 
-        overlayView = null
-        layoutParams = null
-        activeConfig = null
-        previewMode = false
+        overlayView =
+            null
 
-        queuedCompletion?.invoke()
+        layoutParams =
+            null
+
+        activeConfig =
+            null
+
+        previewMode =
+            false
+
+        queuedCompletion
+            ?.invoke()
     }
 
-    private fun readConfig(intent: Intent?): HaloConfig {
-        val defaults = HaloConfig()
+    private fun readConfig(
+        intent: Intent?
+    ): HaloConfig {
+        val defaults =
+            HaloConfig()
 
         return HaloConfig(
-            color = intent?.getIntExtra(
-                HaloOverlayService.EXTRA_COLOR,
-                defaults.color
-            ) ?: defaults.color,
+            color =
+                intent?.getIntExtra(
+                    HaloOverlayService.EXTRA_COLOR,
+                    defaults.color
+                ) ?: defaults.color,
 
-            intervalSeconds = intent?.getFloatExtra(
-                HaloOverlayService.EXTRA_INTERVAL,
-                defaults.intervalSeconds
-            ) ?: defaults.intervalSeconds,
+            intervalSeconds =
+                intent?.getFloatExtra(
+                    HaloOverlayService.EXTRA_INTERVAL,
+                    defaults.intervalSeconds
+                ) ?: defaults.intervalSeconds,
 
-            repeatCount = intent?.getIntExtra(
-                HaloOverlayService.EXTRA_REPEAT_COUNT,
-                defaults.repeatCount
-            ) ?: defaults.repeatCount,
+            repeatCount =
+                intent?.getIntExtra(
+                    HaloOverlayService.EXTRA_REPEAT_COUNT,
+                    defaults.repeatCount
+                ) ?: defaults.repeatCount,
 
-            intensity = intent?.getFloatExtra(
-                HaloOverlayService.EXTRA_INTENSITY,
-                defaults.intensity
-            ) ?: defaults.intensity,
+            intensity =
+                intent?.getFloatExtra(
+                    HaloOverlayService.EXTRA_INTENSITY,
+                    defaults.intensity
+                ) ?: defaults.intensity,
 
-            thickness = intent?.getFloatExtra(
-                HaloOverlayService.EXTRA_THICKNESS,
-                defaults.thickness
-            ) ?: defaults.thickness,
+            thickness =
+                intent?.getFloatExtra(
+                    HaloOverlayService.EXTRA_THICKNESS,
+                    defaults.thickness
+                ) ?: defaults.thickness,
 
-            frame = intent?.getStringExtra(
-                HaloOverlayService.EXTRA_FRAME
-            )
-                ?.let {
-                    runCatching {
-                        HaloFrame.valueOf(it)
-                    }.getOrNull()
-                }
-                ?: defaults.frame,
+            frame =
+                intent?.getStringExtra(
+                    HaloOverlayService.EXTRA_FRAME
+                )
+                    ?.let {
+                        runCatching {
+                            HaloFrame.valueOf(
+                                it
+                            )
+                        }.getOrNull()
+                    }
+                    ?: defaults.frame,
 
-            motion = intent?.getStringExtra(
-                HaloOverlayService.EXTRA_MOTION
-            )
-                ?.let {
-                    runCatching {
-                        HaloMotion.valueOf(it)
-                    }.getOrNull()
-                }
-                ?: defaults.motion,
+            motion =
+                intent?.getStringExtra(
+                    HaloOverlayService.EXTRA_MOTION
+                )
+                    ?.let {
+                        runCatching {
+                            HaloMotion.valueOf(
+                                it
+                            )
+                        }.getOrNull()
+                    }
+                    ?: defaults.motion,
 
-            effectSpeed = intent?.getFloatExtra(
-                HaloOverlayService.EXTRA_EFFECT_SPEED,
-                defaults.effectSpeed
-            ) ?: defaults.effectSpeed,
+            effectSpeed =
+                intent?.getFloatExtra(
+                    HaloOverlayService.EXTRA_EFFECT_SPEED,
+                    defaults.effectSpeed
+                ) ?: defaults.effectSpeed,
 
-            gradientFlowSpeed = intent?.getFloatExtra(
-                HaloOverlayService.EXTRA_GRADIENT_FLOW_SPEED,
-                defaults.gradientFlowSpeed
-            ) ?: defaults.gradientFlowSpeed,
+            gradientFlowSpeed =
+                intent?.getFloatExtra(
+                    HaloOverlayService.EXTRA_GRADIENT_FLOW_SPEED,
+                    defaults.gradientFlowSpeed
+                ) ?: defaults.gradientFlowSpeed,
 
-            colorMode = intent?.getStringExtra(
-                HaloOverlayService.EXTRA_COLOR_MODE
-            )
-                ?.let {
-                    runCatching {
-                        HaloColorMode.valueOf(it)
-                    }.getOrNull()
-                }
-                ?: defaults.colorMode,
+            colorMode =
+                intent?.getStringExtra(
+                    HaloOverlayService.EXTRA_COLOR_MODE
+                )
+                    ?.let {
+                        runCatching {
+                            HaloColorMode.valueOf(
+                                it
+                            )
+                        }.getOrNull()
+                    }
+                    ?: defaults.colorMode,
 
-            notificationPlayback = intent?.getStringExtra(
-                HaloOverlayService.EXTRA_NOTIFICATION_PLAYBACK
-            )
-                ?.let {
-                    runCatching {
-                        NotificationPlayback.valueOf(it)
-                    }.getOrNull()
-                }
-                ?: defaults.notificationPlayback
+            notificationPlayback =
+                intent?.getStringExtra(
+                    HaloOverlayService.EXTRA_NOTIFICATION_PLAYBACK
+                )
+                    ?.let {
+                        runCatching {
+                            NotificationPlayback.valueOf(
+                                it
+                            )
+                        }.getOrNull()
+                    }
+                    ?: defaults.notificationPlayback
         ).sanitized()
     }
 
@@ -485,159 +745,332 @@ class HaloAccessibilityService : AccessibilityService() {
         request: HaloEffectRequest,
         onFiniteAnimationCompleted: () -> Unit
     ) {
-        /*
-         * A queued notification effect owns the accessibility overlay until it
-         * completes. A removal timer left by preview/legacy playback must not
-         * terminate the queued effect.
-         */
-        handler.removeCallbacks(removeOverlayTask)
-
-        activeQueuedCompletion = onFiniteAnimationCompleted
+        handler.removeCallbacks(
+            removeOverlayTask
+        )
 
         /*
-         * Completion can come from either the ValueAnimator or the watchdog.
-         * Only the first completion is allowed to finish the queued request.
+         * Every queued playback owns a unique token.
+         *
+         * A completion callback created by an older request is ignored once
+         * another request takes ownership.
          */
-        var completed = false
+        val requestToken =
+            ++queuedRequestToken
 
-        val complete: () -> Unit = complete@{
-            if (completed) {
-                return@complete
+        cancelQueuedWatchdog()
+
+        /*
+         * Detach the previous listener before cancelling. This guarantees that
+         * cancelAnimation() cannot complete the next queued request through a
+         * listener that has already been replaced.
+         */
+        overlayView
+            ?.setOnFiniteAnimationCompletedListener(
+                null
+            )
+
+        overlayView
+            ?.cancelAnimation()
+
+        activeQueuedCompletion =
+            onFiniteAnimationCompleted
+
+        var completed =
+            false
+
+        val complete:
+                    () -> Unit =
+            complete@{
+
+                if (completed) {
+                    return@complete
+                }
+
+                if (
+                    requestToken !=
+                    queuedRequestToken
+                ) {
+                    Log.d(
+                        TAG,
+                        "Ignoring stale queued completion " +
+                                "token=$requestToken, " +
+                                "activeToken=$queuedRequestToken, " +
+                                "key=${request.notificationKey}"
+                    )
+
+                    return@complete
+                }
+
+                completed =
+                    true
+
+                cancelQueuedWatchdog()
+
+                val completion =
+                    activeQueuedCompletion
+
+                activeQueuedCompletion =
+                    null
+
+                /*
+                 * Invalidate this request token before touching the View.
+                 * Any callback produced while cancelling/removing the overlay
+                 * is therefore stale by definition.
+                 */
+                queuedRequestToken++
+
+                overlayView
+                    ?.setOnFiniteAnimationCompletedListener(
+                        null
+                    )
+
+                overlayView
+                    ?.cancelAnimation()
+
+                overlayView
+                    ?.let { view ->
+                        runCatching {
+                            if (
+                                view.isAttachedToWindow
+                            ) {
+                                windowManager.removeView(
+                                    view
+                                )
+                            }
+                        }
+                    }
+
+                overlayView =
+                    null
+
+                layoutParams =
+                    null
+
+                activeConfig =
+                    null
+
+                previewMode =
+                    false
+
+                completion
+                    ?.invoke()
             }
-
-            completed = true
-
-            queuedCompletionWatchdog?.let(handler::removeCallbacks)
-            queuedCompletionWatchdog = null
-
-            val completion = activeQueuedCompletion
-            activeQueuedCompletion = null
-
-            removeOverlay()
-            completion?.invoke()
-        }
 
         val palette =
             request.paletteColors
                 ?.distinct()
-                ?.takeIf { it.isNotEmpty() }
+                ?.takeIf {
+                    it.isNotEmpty()
+                }
                 ?.toIntArray()
                 ?: if (
                     request.config.colorMode ==
                     HaloColorMode.GRADIENT
                 ) {
-                    HaloConfig.defaultGradientPalette()
+                    HaloConfig
+                        .defaultGradientPalette()
                 } else {
-                    intArrayOf(request.config.color)
+                    intArrayOf(
+                        request.config.color
+                    )
                 }
 
-        val resolvedConfig = request.config.copy(
-            color = palette.first(),
-            palette = palette
-        )
+        val resolvedConfig =
+            request.config.copy(
+                color =
+                    palette.first(),
+                palette =
+                    palette
+            )
 
         overlayView
-            ?.takeIf { it.isAttachedToWindow }
+            ?.takeIf {
+                it.isAttachedToWindow
+            }
             ?.let { view ->
-                activeConfig = resolvedConfig
-                previewMode = false
 
-                view.update(resolvedConfig)
+                activeConfig =
+                    resolvedConfig
+
+                previewMode =
+                    false
+
+                view.update(
+                    resolvedConfig
+                )
+
                 view.setOnFiniteAnimationCompletedListener(
                     complete
                 )
 
-                startAnimation(view, resolvedConfig)
+                startAnimation(
+                    view,
+                    resolvedConfig
+                )
 
                 scheduleQueuedCompletionFallback(
-                    config = resolvedConfig,
-                    onCompleted = complete
+                    requestToken =
+                        requestToken,
+                    config =
+                        resolvedConfig,
+                    request =
+                        request,
+                    onCompleted =
+                        complete
                 )
 
                 return
             }
 
         /*
-         * A stale HaloView reference must never consume a queued request.
-         * HaloView intentionally refuses to start a finite animation while
-         * detached, which would otherwise leave the coordinator waiting
-         * forever.
+         * Any detached View is stale. It must not own callbacks for the new
+         * queued request.
          */
-        overlayView?.let { staleView ->
-            staleView.setOnFiniteAnimationCompletedListener(null)
-            staleView.cancelAnimation()
-        }
+        overlayView
+            ?.let { staleView ->
 
-        overlayView = null
-        layoutParams = null
-        activeConfig = null
-        previewMode = false
+                staleView.setOnFiniteAnimationCompletedListener(
+                    null
+                )
 
-        if (resolvedConfig.intensity <= 0f) {
+                staleView.cancelAnimation()
+            }
+
+        overlayView =
+            null
+
+        layoutParams =
+            null
+
+        activeConfig =
+            null
+
+        previewMode =
+            false
+
+        if (
+            resolvedConfig.intensity <=
+            0f
+        ) {
             complete()
+
             return
         }
 
         val display =
-            displayManager.getDisplay(Display.DEFAULT_DISPLAY)
+            displayManager.getDisplay(
+                Display.DEFAULT_DISPLAY
+            )
 
-        if (display == null) {
+        if (
+            display ==
+            null
+        ) {
             complete()
+
             return
         }
 
         val metrics =
-            OverlayDisplayMetrics.realMetrics(display)
-
-        val windowContext =
-            createDisplayContext(display).createWindowContext(
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                null
+            OverlayDisplayMetrics.realMetrics(
+                display
             )
 
+        val windowContext =
+            createDisplayContext(
+                display
+            )
+                .createWindowContext(
+                    WindowManager.LayoutParams
+                        .TYPE_ACCESSIBILITY_OVERLAY,
+                    null
+                )
+
         windowManager =
-            windowContext.getSystemService(WindowManager::class.java)
+            windowContext.getSystemService(
+                WindowManager::class.java
+            )
 
-        val view = HaloView(
-            windowContext,
-            resolvedConfig
-        ).apply {
-            setOnFiniteAnimationCompletedListener(complete)
-        }
+        val view =
+            HaloView(
+                windowContext,
+                resolvedConfig
+            ).apply {
+                setOnFiniteAnimationCompletedListener(
+                    complete
+                )
+            }
 
-        val params = WindowManager.LayoutParams(
-            metrics.widthPixels,
-            metrics.heightPixels,
-            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.TOP or Gravity.START
-
-            layoutInDisplayCutoutMode =
+        val params =
+            WindowManager.LayoutParams(
+                metrics.widthPixels,
+                metrics.heightPixels,
                 WindowManager.LayoutParams
-                    .LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+                    .TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams
+                    .FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams
+                            .FLAG_NOT_TOUCHABLE or
+                        WindowManager.LayoutParams
+                            .FLAG_LAYOUT_IN_SCREEN or
+                        WindowManager.LayoutParams
+                            .FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity =
+                    Gravity.TOP or
+                            Gravity.START
 
-            setFitInsetsTypes(0)
-            setFitInsetsSides(0)
-            setFitInsetsIgnoringVisibility(true)
-        }
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams
+                        .LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
 
-        overlayView = view
-        layoutParams = params
-        activeConfig = resolvedConfig
-        previewMode = false
+                setFitInsetsTypes(
+                    0
+                )
+
+                setFitInsetsSides(
+                    0
+                )
+
+                setFitInsetsIgnoringVisibility(
+                    true
+                )
+            }
+
+        overlayView =
+            view
+
+        layoutParams =
+            params
+
+        activeConfig =
+            resolvedConfig
+
+        previewMode =
+            false
 
         runCatching {
-            windowManager.addView(view, params)
-            startAnimation(view, resolvedConfig)
+            windowManager.addView(
+                view,
+                params
+            )
+
+            startAnimation(
+                view,
+                resolvedConfig
+            )
 
             scheduleQueuedCompletionFallback(
-                config = resolvedConfig,
-                onCompleted = complete
+                requestToken =
+                    requestToken,
+                config =
+                    resolvedConfig,
+                request =
+                    request,
+                onCompleted =
+                    complete
             )
         }.onFailure {
             Log.e(
@@ -645,18 +1078,17 @@ class HaloAccessibilityService : AccessibilityService() {
                 "Unable to attach queued accessibility halo overlay",
                 it
             )
+
             complete()
         }
     }
 
     private fun scheduleQueuedCompletionFallback(
+        requestToken: Long,
         config: HaloConfig,
+        request: HaloEffectRequest,
         onCompleted: () -> Unit
     ) {
-        /*
-         * KEEP_VISIBLE intentionally has no finite lifetime and therefore
-         * cannot use the transient completion watchdog.
-         */
         if (
             config.notificationPlayback ==
             NotificationPlayback.KEEP_VISIBLE
@@ -664,76 +1096,134 @@ class HaloAccessibilityService : AccessibilityService() {
             return
         }
 
-        /*
-         * The watchdog belongs to exactly one queued effect. Remove the
-         * previous runnable before scheduling a new one so a stale timeout
-         * cannot complete the next request.
-         */
-        queuedCompletionWatchdog?.let(handler::removeCallbacks)
-        queuedCompletionWatchdog = null
+        cancelQueuedWatchdog()
 
-        val duration = max(
-            HaloAnimation.MIN_DURATION_MS,
-            (config.durationSeconds * 1000f).toLong()
-        )
-
-        val interval =
-            (config.intervalSeconds * 1000f)
-                .toLong()
-                .coerceAtLeast(0L)
-
-        val cycles =
-            config.repeatCount.coerceAtLeast(1)
-
-        val totalDuration =
-            duration * cycles +
-                    interval * (cycles - 1)
-
-        val watchdogDelay =
-            totalDuration + QUEUED_COMPLETION_GRACE_MS
-
-        lateinit var watchdog: Runnable
-
-        watchdog = Runnable {
-            /*
-             * Ignore a runnable that no longer owns the active queued effect.
-             */
-            if (queuedCompletionWatchdog !== watchdog) {
-                return@Runnable
-            }
-
-            queuedCompletionWatchdog = null
-
-            Log.w(
-                TAG,
-                "Queued animation completion watchdog fired " +
-                        "after ${watchdogDelay}ms " +
-                        "(expected animation duration=${totalDuration}ms)"
+        val duration =
+            max(
+                HaloAnimation.MIN_DURATION_MS,
+                (
+                        config.durationSeconds *
+                                1000f
+                        ).toLong()
             )
 
-            onCompleted()
-        }
+        val interval =
+            (
+                    config.intervalSeconds *
+                            1000f
+                    )
+                .toLong()
+                .coerceAtLeast(
+                    0L
+                )
 
-        queuedCompletionWatchdog = watchdog
+        val cycles =
+            config.repeatCount
+                .coerceAtLeast(
+                    1
+                )
+
+        val totalDuration =
+            duration *
+                    cycles +
+                    interval *
+                    (
+                            cycles -
+                                    1
+                            )
+
+        /*
+         * This watchdog is recovery-only.
+         *
+         * It has a generous grace window and is bound to the same request
+         * token as the natural animation completion.
+         */
+        val watchdogDelay =
+            totalDuration +
+                    QUEUED_COMPLETION_GRACE_MS
+
+        lateinit var watchdog:
+                Runnable
+
+        watchdog =
+            Runnable {
+
+                if (
+                    queuedCompletionWatchdog !==
+                    watchdog
+                ) {
+                    return@Runnable
+                }
+
+                if (
+                    requestToken !=
+                    queuedRequestToken
+                ) {
+                    Log.d(
+                        TAG,
+                        "Ignoring stale queued watchdog " +
+                                "token=$requestToken, " +
+                                "activeToken=$queuedRequestToken, " +
+                                "key=${request.notificationKey}"
+                    )
+
+                    return@Runnable
+                }
+
+                queuedCompletionWatchdog =
+                    null
+
+                Log.w(
+                    TAG,
+                    "Queued animation completion watchdog fired " +
+                            "token=$requestToken, " +
+                            "key=${request.notificationKey}, " +
+                            "after=${watchdogDelay}ms, " +
+                            "expected=${totalDuration}ms"
+                )
+
+                onCompleted()
+            }
+
+        queuedCompletionWatchdog =
+            watchdog
+
         handler.postDelayed(
             watchdog,
             watchdogDelay
         )
     }
 
-    companion object {
-        @Volatile
-        private var activeService: HaloAccessibilityService? = null
+    private fun cancelQueuedWatchdog() {
+        queuedCompletionWatchdog
+            ?.let(
+                handler::removeCallbacks
+            )
 
-        fun dispatch(intent: Intent?): Boolean {
-            val service = activeService ?: run {
-                Log.w(
-                    TAG,
-                    "Accessibility halo unavailable; " +
-                            "falling back to application overlay"
-                )
-                return false
-            }
+        queuedCompletionWatchdog =
+            null
+    }
+
+    companion object {
+
+        @Volatile
+        private var activeService:
+                HaloAccessibilityService? = null
+
+        fun dispatch(
+            intent: Intent?
+        ): Boolean {
+            val service =
+                activeService
+                    ?: run {
+                        Log.w(
+                            TAG,
+                            "Accessibility halo unavailable; " +
+                                    "falling back to application overlay"
+                        )
+
+                        return false
+                    }
 
             Log.d(
                 TAG,
@@ -742,17 +1232,22 @@ class HaloAccessibilityService : AccessibilityService() {
                         "service=${System.identityHashCode(service)}"
             )
 
-            /*
-             * onStartCommand() and normal notification callbacks are already
-             * on the main thread. Handle them immediately so a lock-screen
-             * effect is not deferred behind a paused/frozen app queue.
-             */
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                service.handleCommand(intent)
+            if (
+                Looper.myLooper() ==
+                Looper.getMainLooper()
+            ) {
+                service.handleCommand(
+                    intent
+                )
             } else {
                 service.handler.post {
-                    if (activeService === service) {
-                        service.handleCommand(intent)
+                    if (
+                        activeService ===
+                        service
+                    ) {
+                        service.handleCommand(
+                            intent
+                        )
                     }
                 }
             }
@@ -765,12 +1260,17 @@ class HaloAccessibilityService : AccessibilityService() {
             onFiniteAnimationCompleted: () -> Unit
         ): Boolean {
             val service =
-                activeService ?: return false
+                activeService
+                    ?: return false
 
             val command = {
-                if (activeService === service) {
+                if (
+                    activeService ===
+                    service
+                ) {
                     service.showQueuedEffect(
-                        request = request,
+                        request =
+                            request,
                         onFiniteAnimationCompleted =
                             onFiniteAnimationCompleted
                     )
@@ -779,20 +1279,31 @@ class HaloAccessibilityService : AccessibilityService() {
                 }
             }
 
-            if (Looper.myLooper() == Looper.getMainLooper()) {
+            if (
+                Looper.myLooper() ==
+                Looper.getMainLooper()
+            ) {
                 command()
             } else {
-                service.handler.post(command)
+                service.handler.post(
+                    command
+                )
             }
 
             return true
         }
 
-        private const val TAG = "HaloAccessibility"
+        private const val TAG =
+            "HaloAccessibility"
 
-        // The watchdog is a recovery path, not the normal animation timer.
-        // Give ValueAnimator enough time to finish naturally even if a frame
-        // or the main thread is briefly delayed.
-        private const val QUEUED_COMPLETION_GRACE_MS = 1_000L
+        /*
+         * Recovery timeout only.
+         *
+         * Natural HaloAnimation completion is the normal path. A larger grace
+         * period keeps transient frame/main-thread delays from being mistaken
+         * for a dead animation.
+         */
+        private const val QUEUED_COMPLETION_GRACE_MS =
+            3_000L
     }
 }
