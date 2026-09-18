@@ -1,7 +1,6 @@
 package com.yp.luminote.app.data.apps
 
 import android.content.Context
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 
 data class InstalledApp(
@@ -12,7 +11,8 @@ data class InstalledApp(
 class InstalledAppsRepository(
     context: Context
 ) {
-    private val appContext = context.applicationContext
+    private val appContext =
+        context.applicationContext
 
     private val packageManager: PackageManager =
         appContext.packageManager
@@ -31,30 +31,52 @@ class InstalledAppsRepository(
             )
             .asSequence()
             .filter { applicationInfo ->
-                applicationInfo.packageName != appContext.packageName
+                applicationInfo.packageName !=
+                        appContext.packageName
             }
             .filter { applicationInfo ->
                 applicationInfo.enabled
             }
             .filter { applicationInfo ->
-                applicationInfo.flags and ApplicationInfo.FLAG_SYSTEM == 0
+                packageManager.getLaunchIntentForPackage(
+                    applicationInfo.packageName
+                ) != null
             }
-            .map { applicationInfo ->
-                InstalledApp(
-                    name = applicationInfo
+            .mapNotNull { applicationInfo ->
+                val label =
+                    applicationInfo
                         .loadLabel(packageManager)
-                        .toString(),
-                    packageName = applicationInfo.packageName
-                )
+                        .toString()
+                        .trim()
+
+                if (label.isBlank()) {
+                    null
+                } else {
+                    InstalledApp(
+                        name = label,
+                        packageName =
+                            applicationInfo.packageName
+                    )
+                }
             }
-            .distinctBy { it.packageName }
-            .sortedBy {
-                it.name.lowercase()
+            .distinctBy {
+                it.packageName
             }
+            .sortedWith(
+                compareBy(
+                    String.CASE_INSENSITIVE_ORDER
+                ) {
+                    it.name
+                }
+            )
             .toList()
 
     private companion object {
-        private val cacheLock = Any()
-        private var cachedApps: List<InstalledApp>? = null
+        private val cacheLock =
+            Any()
+
+        private var cachedApps:
+                List<InstalledApp>? =
+            null
     }
 }
