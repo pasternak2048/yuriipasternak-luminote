@@ -16,6 +16,7 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
+        android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -53,9 +54,11 @@
             android:name=".effects.HaloOverlayService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
+
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Renders the user-configured notification halo overlay." />
+
         </service>
 
         <service
@@ -71,6 +74,7 @@
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/luminote_halo_accessibility" />
+
         </service>
 
     </application>
