@@ -9,6 +9,10 @@ import java.util.ArrayDeque
  * Exactly one request can be active at a time. Additional requests wait in
  * FIFO order until the active animation reports natural completion.
  *
+ * Requests are coalesced only when they represent the same concrete
+ * notification key. Different notifications from the same application must
+ * remain independent animation requests.
+ *
  * The coordinator itself does not own a renderer. The latest available
  * renderer is supplied by a HaloOverlayService instance.
  *
@@ -36,8 +40,10 @@ internal class HaloEffectCoordinator {
     ) {
         Log.d(
             TAG,
-            "enqueue package=${request.packageName}, " +
-                    "active=${activeRequest?.packageName}, " +
+            "enqueue " +
+                    "package=${request.packageName}, " +
+                    "key=${request.notificationKey}, " +
+                    "activeKey=${activeRequest?.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
 
@@ -45,13 +51,14 @@ internal class HaloEffectCoordinator {
             activeRequest
 
         if (
-            active?.packageName ==
-            request.packageName
+            active?.notificationKey ==
+            request.notificationKey
         ) {
             Log.d(
                 TAG,
-                "coalesced active package=${request.packageName}, " +
-                        "notificationKey=${request.notificationKey}"
+                "coalesced active " +
+                        "package=${request.packageName}, " +
+                        "key=${request.notificationKey}"
             )
 
             return
@@ -59,14 +66,15 @@ internal class HaloEffectCoordinator {
 
         if (
             pendingRequests.any {
-                it.packageName ==
-                        request.packageName
+                it.notificationKey ==
+                        request.notificationKey
             }
         ) {
             Log.d(
                 TAG,
-                "coalesced pending package=${request.packageName}, " +
-                        "notificationKey=${request.notificationKey}"
+                "coalesced pending " +
+                        "package=${request.packageName}, " +
+                        "key=${request.notificationKey}"
             )
 
             return
@@ -86,7 +94,9 @@ internal class HaloEffectCoordinator {
 
         Log.d(
             TAG,
-            "queued package=${request.packageName}, " +
+            "queued " +
+                    "package=${request.packageName}, " +
+                    "key=${request.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
     }
@@ -102,7 +112,9 @@ internal class HaloEffectCoordinator {
                 TAG,
                 "Ignoring stale completion: " +
                         "package=${request.packageName}, " +
-                        "active=${activeRequest?.packageName}"
+                        "key=${request.notificationKey}, " +
+                        "activePackage=${activeRequest?.packageName}, " +
+                        "activeKey=${activeRequest?.notificationKey}"
             )
 
             return
@@ -110,11 +122,14 @@ internal class HaloEffectCoordinator {
 
         Log.d(
             TAG,
-            "completed active=${request.packageName}, " +
+            "completed " +
+                    "package=${request.packageName}, " +
+                    "key=${request.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
 
-        activeRequest = null
+        activeRequest =
+            null
 
         startNext()
     }
@@ -122,29 +137,44 @@ internal class HaloEffectCoordinator {
     fun clear() {
         pendingRequests.clear()
 
-        activeRequest = null
-        rendererOwner = null
-        onRequestStarted = null
+        activeRequest =
+            null
+
+        rendererOwner =
+            null
+
+        onRequestStarted =
+            null
     }
 
     fun attachRenderer(
         owner: Any,
         onRequestStarted: (HaloEffectRequest) -> Unit
     ) {
-        rendererOwner = owner
+        rendererOwner =
+            owner
+
         this.onRequestStarted =
             onRequestStarted
 
         Log.d(
             TAG,
-            "renderer attached: owner=${System.identityHashCode(owner)}"
+            "renderer attached: " +
+                    "owner=${System.identityHashCode(owner)}, " +
+                    "activeKey=${activeRequest?.notificationKey}, " +
+                    "pending=${pendingRequests.size}"
         )
+
+        startPendingIfIdle()
     }
 
     fun detachRenderer(
         owner: Any
     ) {
-        if (rendererOwner !== owner) {
+        if (
+            rendererOwner !==
+            owner
+        ) {
             Log.d(
                 TAG,
                 "Ignoring renderer detach from stale owner=" +
@@ -156,14 +186,26 @@ internal class HaloEffectCoordinator {
 
         Log.d(
             TAG,
-            "renderer detached: owner=${System.identityHashCode(owner)}"
+            "renderer detached: " +
+                    "owner=${System.identityHashCode(owner)}, " +
+                    "activeKey=${activeRequest?.notificationKey}, " +
+                    "pending=${pendingRequests.size}"
         )
 
-        rendererOwner = null
-        onRequestStarted = null
+        rendererOwner =
+            null
+
+        onRequestStarted =
+            null
     }
 
     private fun startNext() {
+        if (
+            activeRequest != null
+        ) {
+            return
+        }
+
         val next =
             pendingRequests.pollFirst()
                 ?: return
@@ -176,17 +218,29 @@ internal class HaloEffectCoordinator {
     private fun start(
         request: HaloEffectRequest
     ) {
+        if (
+            activeRequest != null
+        ) {
+            pendingRequests.addLast(
+                request
+            )
+
+            Log.d(
+                TAG,
+                "deferred start because another request is active: " +
+                        "package=${request.packageName}, " +
+                        "key=${request.notificationKey}, " +
+                        "activeKey=${activeRequest?.notificationKey}, " +
+                        "pending=${pendingRequests.size}"
+            )
+
+            return
+        }
+
         val renderer =
             onRequestStarted
 
         if (renderer == null) {
-            /*
-             * Do not discard the request.
-             *
-             * The application overlay service may currently be between
-             * instances. Put the request back at the front and wait for a
-             * renderer to attach.
-             */
             pendingRequests.addFirst(
                 request
             )
@@ -195,6 +249,7 @@ internal class HaloEffectCoordinator {
                 TAG,
                 "No renderer available; waiting: " +
                         "package=${request.packageName}, " +
+                        "key=${request.notificationKey}, " +
                         "pending=${pendingRequests.size}"
             )
 
@@ -206,7 +261,9 @@ internal class HaloEffectCoordinator {
 
         Log.d(
             TAG,
-            "start package=${request.packageName}, " +
+            "start " +
+                    "package=${request.packageName}, " +
+                    "key=${request.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
 
@@ -222,6 +279,12 @@ internal class HaloEffectCoordinator {
         ) {
             return
         }
+
+        Log.d(
+            TAG,
+            "renderer available; resuming queued playback " +
+                    "pending=${pendingRequests.size}"
+        )
 
         startNext()
     }

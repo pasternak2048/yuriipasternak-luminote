@@ -3,112 +3,291 @@ package com.yp.luminote.app.effects
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.view.Choreographer
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import com.yp.luminote.app.data.settings.HaloMotion
 import kotlin.math.max
 import kotlin.math.min
 
-class HaloAnimation(
-    private val onProgressChanged: (Float) -> Unit,
-    private val onPhaseChanged: (Float) -> Unit = {},
+/**
+ * Finite animations use the proven QA scheduler:
+ * Handler + SystemClock.elapsedRealtime().
+ *
+ * Ambient animation stays VSYNC-driven through Choreographer.
+ */
+internal class HaloAnimation(
+    private val onFrame: (HaloAnimationState) -> Unit,
     private val shouldContinueRepeating: (() -> Boolean)? = null,
     private val onCompleted: () -> Unit = {}
-) {
-    private val handler = Handler(Looper.getMainLooper())
+) : HaloAnimationEngine {
 
-    private val fadeInInterpolator = DecelerateInterpolator()
-    private val fadeOutInterpolator = AccelerateInterpolator()
+    private val handler =
+        Handler(
+            Looper.getMainLooper()
+        )
 
-    private var running = false
-    private var repeat = false
+    private val choreographer =
+        Choreographer.getInstance()
 
-    private var intervalMs = 0L
-    private var remainingCycles: Int? = null
+    private val fadeInInterpolator =
+        DecelerateInterpolator()
 
-    private var phaseOffset = 0f
-    private var lastPhaseFraction = 0f
+    private val fadeOutInterpolator =
+        AccelerateInterpolator()
 
-    private var currentDuration = DEFAULT_DURATION
-    private var currentDurationMs = DEFAULT_DURATION_MS
+    private var running =
+        false
 
-    private var fadeInFraction = 0f
-    private var fadeOutStartFraction = 1f
+    private var ambient =
+        false
 
-    private var cycleStartedAt = 0L
+    private var repeat =
+        false
 
-    /*
-     * Incremented whenever the current animation is cancelled/replaced.
-     *
-     * Every scheduled frame/restart captures the current generation so a
-     * callback belonging to an older animation cannot affect a newer one.
-     */
-    private var generation = 0L
+    private var intervalMs =
+        0L
 
-    private var strategy: HaloAnimationStrategy =
-        HaloAnimationStrategies.forMotion(HaloMotion.PULSE)
+    private var remainingCycles:
+            Int? = null
 
-    fun start(
-        duration: Float,
-        interval: Float = 0f,
-        repeat: Boolean = false,
-        maxCycles: Int? = null,
-        preservePhase: Boolean = false,
-        motion: HaloMotion = HaloMotion.PULSE
+    private var phaseOffset =
+        0f
+
+    private var currentDurationMs =
+        DEFAULT_DURATION_MS
+
+    private var fadeInFraction =
+        0f
+
+    private var fadeOutStartFraction =
+        1f
+
+    private var finiteCycleStartedAtMs =
+        0L
+
+    private var ambientStartedAtNanos =
+        0L
+
+    private var ambientEffectSpeed =
+        DEFAULT_EFFECT_SPEED
+
+    private var ambientPhaseStart =
+        0f
+
+    private var ambientGradientPhaseStart =
+        0f
+
+    private var currentPhase =
+        0f
+
+    private var currentGradientPhase =
+        0f
+
+    private var generation =
+        0L
+
+    private var ambientFrameCallbackPosted =
+        false
+
+    private var strategy:
+            HaloAnimationStrategy =
+        HaloAnimationStrategies.forMotion(
+            HaloMotion.PULSE
+        )
+
+    private val ambientFrameCallback =
+        Choreographer.FrameCallback {
+            ambientFrameCallbackPosted =
+                false
+
+            val frameGeneration =
+                generation
+
+            if (
+                !running ||
+                !ambient ||
+                generation != frameGeneration
+            ) {
+                return@FrameCallback
+            }
+
+            runAmbientFrame(
+                frameGeneration
+            )
+        }
+
+    override fun start(
+        request: HaloAnimationRequest
     ) {
-        val previousPhase = phaseOffset
-
-        cancel()
-
-        phaseOffset =
-            if (preservePhase) {
-                previousPhase
+        val preservedPhase =
+            if (
+                request.preservePhase
+            ) {
+                currentPhase
             } else {
                 0f
             }
 
-        currentDuration =
-            duration.takeIf {
-                it.isFinite() && it > 0f
+        cancelInternal(
+            dispatchFrame = false
+        )
+
+        ambient =
+            false
+
+        running =
+            true
+
+        phaseOffset =
+            preservedPhase
+
+        currentPhase =
+            preservedPhase
+
+        currentGradientPhase =
+            preservedPhase
+
+        val safeDuration =
+            request.duration.takeIf {
+                it.isFinite() &&
+                        it > 0f
             } ?: DEFAULT_DURATION
 
         currentDurationMs =
             max(
                 MIN_DURATION_MS,
-                (currentDuration * 1000f).toLong()
+                (
+                        safeDuration *
+                                MILLIS_PER_SECOND
+                        ).toLong()
             )
 
         intervalMs =
             if (
-                repeat &&
-                interval.isFinite() &&
-                interval > 0f
+                request.repeat &&
+                request.interval.isFinite() &&
+                request.interval > 0f
             ) {
-                (interval * 1000f)
+                (
+                        request.interval *
+                                MILLIS_PER_SECOND
+                        )
                     .toLong()
-                    .coerceAtLeast(0L)
+                    .coerceAtLeast(
+                        0L
+                    )
             } else {
                 0L
             }
 
-        this.repeat = repeat
-        remainingCycles = maxCycles
+        repeat =
+            request.repeat
+
+        remainingCycles =
+            request.maxCycles
 
         strategy =
-            HaloAnimationStrategies.forMotion(motion)
+            HaloAnimationStrategies.forMotion(
+                request.motion
+            )
 
-        running = true
-
-        startGlow()
+        startFiniteCycle()
     }
 
-    private fun startGlow() {
-        if (!running) {
+    override fun startAmbient(
+        request: HaloAmbientAnimationRequest
+    ) {
+        cancelInternal(
+            dispatchFrame = false
+        )
+
+        ambient =
+            true
+
+        running =
+            true
+
+        ambientEffectSpeed =
+            sanitizeEffectSpeed(
+                request.effectSpeed
+            )
+
+        ambientPhaseStart =
+            request.phaseStart
+
+        ambientGradientPhaseStart =
+            request.gradientPhaseStart
+
+        currentPhase =
+            ambientPhaseStart
+
+        currentGradientPhase =
+            ambientGradientPhaseStart
+
+        ambientStartedAtNanos =
+            0L
+
+        dispatchState(
+            progress = 1f
+        )
+
+        postAmbientFrame()
+    }
+
+    override fun updateAmbientEffectSpeed(
+        effectSpeed: Float
+    ) {
+        if (
+            !running ||
+            !ambient
+        ) {
+            return
+        }
+
+        val nextSpeed =
+            sanitizeEffectSpeed(
+                effectSpeed
+            )
+
+        if (
+            nextSpeed ==
+            ambientEffectSpeed
+        ) {
+            return
+        }
+
+        ambientPhaseStart =
+            currentPhase
+
+        ambientGradientPhaseStart =
+            currentGradientPhase
+
+        ambientStartedAtNanos =
+            0L
+
+        ambientEffectSpeed =
+            nextSpeed
+    }
+
+    override fun cancel() {
+        cancelInternal(
+            dispatchFrame = true
+        )
+    }
+
+    private fun startFiniteCycle() {
+        if (
+            !running ||
+            ambient
+        ) {
             return
         }
 
         val envelope =
-            strategy.envelope(currentDurationMs)
+            strategy.envelope(
+                currentDurationMs
+            )
 
         val fadeInDuration =
             min(
@@ -135,45 +314,57 @@ class HaloAnimation(
                     currentDurationMs.toFloat()
 
         fadeOutStartFraction =
-            (fadeInDuration + holdDuration)
-                .toFloat() /
+            (
+                    fadeInDuration +
+                            holdDuration
+                    ).toFloat() /
                     currentDurationMs.toFloat()
 
-        lastPhaseFraction = 0f
+        currentPhase =
+            phaseOffset
 
-        onProgressChanged(0f)
-        onPhaseChanged(phaseOffset)
+        currentGradientPhase =
+            phaseOffset
 
-        cycleStartedAt =
+        dispatchState(
+            progress = 0f
+        )
+
+        finiteCycleStartedAtMs =
             SystemClock.elapsedRealtime()
 
-        val frameGeneration = generation
+        val frameGeneration =
+            generation
 
-        scheduleFrame(
-            frameGeneration = frameGeneration,
-            delayMs = 0L
+        scheduleFiniteFrame(
+            frameGeneration =
+                frameGeneration,
+            delayMs =
+                0L
         )
     }
 
-    private fun scheduleFrame(
+    private fun scheduleFiniteFrame(
         frameGeneration: Long,
-        delayMs: Long = FRAME_DELAY_MS
+        delayMs: Long =
+            FINITE_FRAME_DELAY_MS
     ) {
         handler.postDelayed(
             {
-                runFrame(frameGeneration)
+                runFiniteFrame(
+                    frameGeneration
+                )
             },
             delayMs
         )
     }
 
-    private fun runFrame(frameGeneration: Long) {
-        /*
-         * Ignore callbacks belonging to an animation that has already been
-         * cancelled or replaced.
-         */
+    private fun runFiniteFrame(
+        frameGeneration: Long
+    ) {
         if (
             !running ||
+            ambient ||
             generation != frameGeneration
         ) {
             return
@@ -182,134 +373,326 @@ class HaloAnimation(
         val now =
             SystemClock.elapsedRealtime()
 
-        val elapsed =
-            (now - cycleStartedAt)
-                .coerceAtLeast(0L)
+        val elapsedMs =
+            (
+                    now -
+                            finiteCycleStartedAtMs
+                    )
+                .coerceAtLeast(
+                    0L
+                )
 
         val fraction =
             (
-                    elapsed.toFloat() /
+                    elapsedMs.toFloat() /
                             currentDurationMs.toFloat()
                     )
-                .coerceIn(0f, 1f)
+                .coerceIn(
+                    0f,
+                    1f
+                )
 
-        lastPhaseFraction = fraction
+        currentPhase =
+            phaseOffset +
+                    fraction
 
-        onPhaseChanged(
-            phaseOffset + fraction
+        currentGradientPhase =
+            currentPhase
+
+        dispatchState(
+            progress =
+                alphaFor(
+                    fraction
+                )
         )
 
-        onProgressChanged(
-            alphaFor(fraction)
-        )
+        if (
+            fraction >=
+            1f
+        ) {
+            finishFiniteCycle()
 
-        if (fraction >= 1f) {
-            finishCycle()
             return
         }
 
-        scheduleFrame(
-            frameGeneration = frameGeneration
+        scheduleFiniteFrame(
+            frameGeneration
         )
     }
 
-    private fun finishCycle() {
-        if (!running) {
+    private fun finishFiniteCycle() {
+        if (
+            !running ||
+            ambient
+        ) {
             return
         }
 
-        /*
-         * Force the final visual state before completing the cycle.
-         */
-        lastPhaseFraction = 1f
+        currentPhase =
+            phaseOffset +
+                    1f
 
-        onPhaseChanged(
-            phaseOffset + 1f
+        currentGradientPhase =
+            currentPhase
+
+        dispatchState(
+            progress = 0f
         )
 
-        onProgressChanged(0f)
+        phaseOffset +=
+            1f
 
-        phaseOffset += 1f
-        lastPhaseFraction = 0f
+        finiteCycleStartedAtMs =
+            0L
 
-        if (!repeat) {
+        if (
+            !repeat
+        ) {
             finishAnimation()
+
             return
         }
 
-        remainingCycles?.let { cycles ->
-            remainingCycles = cycles - 1
+        remainingCycles
+            ?.let { cycles ->
 
-            if (cycles <= 1) {
-                repeat = false
-                finishAnimation()
-                return
+                remainingCycles =
+                    cycles - 1
+
+                if (
+                    cycles <=
+                    1
+                ) {
+                    repeat =
+                        false
+
+                    finishAnimation()
+
+                    return
+                }
             }
-        }
 
-        if (shouldContinueRepeating?.invoke() == false) {
-            repeat = false
+        if (
+            shouldContinueRepeating
+                ?.invoke() ==
+            false
+        ) {
+            repeat =
+                false
+
             finishAnimation()
+
             return
         }
 
-        if (intervalMs <= 0L) {
-            startGlow()
+        if (
+            intervalMs <=
+            0L
+        ) {
+            startFiniteCycle()
+
             return
         }
 
-        val restartGeneration = generation
+        val restartGeneration =
+            generation
 
         handler.postDelayed(
             {
                 if (
                     running &&
-                    generation == restartGeneration
+                    !ambient &&
+                    generation ==
+                    restartGeneration
                 ) {
-                    startGlow()
+                    startFiniteCycle()
                 }
             },
             intervalMs
         )
     }
 
-    private fun finishAnimation() {
-        if (!running) {
+    private fun runAmbientFrame(
+        frameGeneration: Long
+    ) {
+        if (
+            !running ||
+            !ambient ||
+            generation != frameGeneration
+        ) {
             return
         }
 
-        running = false
-        repeat = false
-        remainingCycles = null
+        val frameTimeNanos =
+            System.nanoTime()
 
-        /*
-         * All frame callbacks for this animation are no longer needed.
-         */
-        handler.removeCallbacksAndMessages(null)
+        if (
+            ambientStartedAtNanos ==
+            0L
+        ) {
+            ambientStartedAtNanos =
+                frameTimeNanos
+        }
 
-        onProgressChanged(0f)
+        val elapsedNanos =
+            (
+                    frameTimeNanos -
+                            ambientStartedAtNanos
+                    )
+                .coerceAtLeast(
+                    0L
+                )
+
+        val elapsedSeconds =
+            elapsedNanos.toDouble() /
+                    NANOS_PER_SECOND.toDouble()
+
+        val ambientProgress =
+            elapsedSeconds /
+                    AMBIENT_ROTATION_DURATION_SECONDS
+
+        currentPhase =
+            ambientPhaseStart +
+                    (
+                            ambientProgress *
+                                    AMBIENT_PHASE_SPAN *
+                                    ambientEffectSpeed
+                            )
+                        .toFloat()
+
+        currentGradientPhase =
+            ambientGradientPhaseStart +
+                    (
+                            ambientProgress *
+                                    AMBIENT_PHASE_SPAN
+                            )
+                        .toFloat()
+
+        dispatchState(
+            progress = 1f
+        )
+
+        postAmbientFrame()
+    }
+
+    private fun finishAnimation() {
+        if (
+            !running
+        ) {
+            return
+        }
+
+        running =
+            false
+
+        ambient =
+            false
+
+        repeat =
+            false
+
+        remainingCycles =
+            null
+
+        handler.removeCallbacksAndMessages(
+            null
+        )
+
+        removeAmbientFrameCallback()
+
+        dispatchState(
+            progress = 0f
+        )
 
         onCompleted()
     }
 
-    private fun alphaFor(fraction: Float): Float {
+    private fun dispatchState(
+        progress: Float
+    ) {
+        onFrame(
+            HaloAnimationState(
+                progress =
+                    progress.coerceIn(
+                        0f,
+                        1f
+                    ),
+                phase =
+                    currentPhase,
+                gradientPhase =
+                    currentGradientPhase,
+                running =
+                    running,
+                ambient =
+                    ambient
+            )
+        )
+    }
+
+    private fun postAmbientFrame() {
+        if (
+            !running ||
+            !ambient ||
+            ambientFrameCallbackPosted
+        ) {
+            return
+        }
+
+        ambientFrameCallbackPosted =
+            true
+
+        choreographer.postFrameCallback(
+            ambientFrameCallback
+        )
+    }
+
+    private fun removeAmbientFrameCallback() {
+        if (
+            !ambientFrameCallbackPosted
+        ) {
+            return
+        }
+
+        choreographer.removeFrameCallback(
+            ambientFrameCallback
+        )
+
+        ambientFrameCallbackPosted =
+            false
+    }
+
+    private fun alphaFor(
+        fraction: Float
+    ): Float {
         val safeFraction =
-            fraction.coerceIn(0f, 1f)
+            fraction.coerceIn(
+                0f,
+                1f
+            )
 
         val progress =
             when {
-                safeFraction < fadeInFraction &&
-                        fadeInFraction > 0f -> {
-                    fadeInInterpolator.getInterpolation(
-                        safeFraction / fadeInFraction
-                    )
+                safeFraction <
+                        fadeInFraction &&
+                        fadeInFraction >
+                        0f -> {
+
+                    fadeInInterpolator
+                        .getInterpolation(
+                            safeFraction /
+                                    fadeInFraction
+                        )
                 }
 
-                safeFraction < fadeOutStartFraction -> {
+                safeFraction <
+                        fadeOutStartFraction -> {
+
                     1f
                 }
 
-                fadeOutStartFraction < 1f -> {
+                fadeOutStartFraction <
+                        1f -> {
+
                     val fadeOutProgress =
                         (
                                 safeFraction -
@@ -321,9 +704,10 @@ class HaloAnimation(
                                         )
 
                     1f -
-                            fadeOutInterpolator.getInterpolation(
-                                fadeOutProgress
-                            )
+                            fadeOutInterpolator
+                                .getInterpolation(
+                                    fadeOutProgress
+                                )
                 }
 
                 else -> {
@@ -331,39 +715,103 @@ class HaloAnimation(
                 }
             }
 
-        return if (progress.isFinite()) {
-            progress.coerceIn(0f, 1f)
+        return if (
+            progress.isFinite()
+        ) {
+            progress.coerceIn(
+                0f,
+                1f
+            )
         } else {
             0f
         }
     }
 
-    fun cancel() {
+    private fun cancelInternal(
+        dispatchFrame: Boolean
+    ) {
         generation++
 
-        running = false
-        repeat = false
-        remainingCycles = null
+        running =
+            false
 
-        handler.removeCallbacksAndMessages(null)
+        ambient =
+            false
 
-        lastPhaseFraction = 0f
+        repeat =
+            false
 
-        onProgressChanged(0f)
+        remainingCycles =
+            null
+
+        handler.removeCallbacksAndMessages(
+            null
+        )
+
+        removeAmbientFrameCallback()
+
+        finiteCycleStartedAtMs =
+            0L
+
+        ambientStartedAtNanos =
+            0L
+
+        if (
+            dispatchFrame
+        ) {
+            dispatchState(
+                progress = 0f
+            )
+        }
     }
 
+    private fun sanitizeEffectSpeed(
+        effectSpeed: Float
+    ): Float =
+        effectSpeed
+            .takeIf {
+                it.isFinite()
+            }
+            ?.coerceIn(
+                MIN_EFFECT_SPEED,
+                MAX_EFFECT_SPEED
+            )
+            ?: DEFAULT_EFFECT_SPEED
+
     companion object {
-        const val MIN_DURATION_MS = 600L
 
-        private const val DEFAULT_DURATION = 2.5f
-        private const val DEFAULT_DURATION_MS = 2_500L
+        const val MIN_DURATION_MS =
+            600L
 
-        /*
-         * ~60 updates/sec when the main looper is running normally.
-         *
-         * elapsedRealtime() remains the source of truth, so a delayed frame
-         * does not make the animation itself longer.
-         */
-        private const val FRAME_DELAY_MS = 16L
+        private const val DEFAULT_DURATION =
+            2.5f
+
+        private const val DEFAULT_DURATION_MS =
+            2_500L
+
+        private const val DEFAULT_EFFECT_SPEED =
+            1f
+
+        private const val MILLIS_PER_SECOND =
+            1_000f
+
+        private const val NANOS_PER_SECOND =
+            1_000_000_000L
+
+        private const val FINITE_FRAME_DELAY_MS =
+            16L
+
+        private const val AMBIENT_ROTATION_DURATION_SECONDS =
+            16.0
+
+        private const val AMBIENT_PHASE_SPAN =
+            360.0 /
+                    220.0
+
+        private const val MIN_EFFECT_SPEED =
+            0.25f
+
+        private const val MAX_EFFECT_SPEED =
+            2f
     }
 }
