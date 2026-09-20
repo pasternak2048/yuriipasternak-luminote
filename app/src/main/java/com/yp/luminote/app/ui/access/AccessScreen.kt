@@ -35,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -43,6 +42,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.effects.HaloAccessibilityService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.ui.theme.LuminoteDarkBackground
+import com.yp.luminote.app.ui.theme.LuminoteDarkOnSurface
+import com.yp.luminote.app.ui.theme.LuminoteDarkOutline
+import com.yp.luminote.app.ui.theme.LuminoteDarkSecondaryText
+import com.yp.luminote.app.ui.theme.LuminoteDarkSurface
 import com.yp.luminote.app.ui.theme.LuminoteSuccess
 import com.yp.luminote.app.ui.theme.LuminoteWarning
 
@@ -70,7 +74,7 @@ fun AccessScreen(onBackClick: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(LuminoteDarkBackground)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -91,13 +95,13 @@ fun AccessScreen(onBackClick: () -> Unit) {
                         .size(48.dp)
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
+                    color = LuminoteDarkOnSurface
                 )
                 Text(
                     text = "Access",
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = LuminoteDarkOnSurface
                 )
             }
 
@@ -105,7 +109,7 @@ fun AccessScreen(onBackClick: () -> Unit) {
             Text(
                 text = "Manage the permissions Luminote needs for alerts and edge personalization.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color = LuminoteDarkSecondaryText
             )
         }
 
@@ -166,8 +170,8 @@ private fun AccessItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF101010))
-            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(24.dp))
+            .background(LuminoteDarkSurface)
+            .border(1.dp, LuminoteDarkOutline, RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -177,13 +181,13 @@ private fun AccessItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = LuminoteDarkOnSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFBDBDBD)
+                color = LuminoteDarkSecondaryText
             )
         }
 

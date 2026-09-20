@@ -24,6 +24,14 @@ class InstalledAppsRepository(
             }
         }
 
+    /** Rebuilds the list after the app returns to the foreground. */
+    fun refreshInstalledApps(): List<InstalledApp> =
+        synchronized(cacheLock) {
+            scanInstalledApps().also { apps ->
+                cachedApps = apps
+            }
+        }
+
     private fun scanInstalledApps(): List<InstalledApp> =
         packageManager
             .getInstalledApplications(

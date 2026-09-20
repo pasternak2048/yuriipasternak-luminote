@@ -1,5 +1,10 @@
 package com.yp.luminote.app.data.settings
 
+const val MIN_HALO_VALUE = 0f
+const val MAX_HALO_VALUE = 1f
+const val MIN_HALO_INTERVAL_SECONDS = 0f
+const val MAX_HALO_INTERVAL_SECONDS = 10f
+
 enum class NotificationSource {
     ALL_APPS,
     SELECTED_APPS

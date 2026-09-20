@@ -1,8 +1,11 @@
 package com.yp.luminote.app.ui.apps
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.util.LruCache
+import androidx.activity.ComponentActivity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -33,8 +36,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -49,6 +54,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.data.apps.InstalledApp
 import com.yp.luminote.app.data.apps.InstalledAppsRepository
 import com.yp.luminote.app.data.settings.LuminoteSettings
@@ -72,16 +79,44 @@ fun AppsScreen(
             InstalledAppsRepository(context)
         }
 
+    val activity =
+        remember(context) {
+            context.findActivity()
+        }
+
+    var refreshKey by
+    remember {
+        mutableIntStateOf(0)
+    }
+
+    activity?.let { currentActivity ->
+        DisposableEffect(currentActivity) {
+            val observer =
+                LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        refreshKey++
+                    }
+                }
+
+            currentActivity.lifecycle.addObserver(observer)
+
+            onDispose {
+                currentActivity.lifecycle.removeObserver(observer)
+            }
+        }
+    }
+
     val settings by
     viewModel.settings.collectAsState()
 
     val installedApps by produceState<List<InstalledApp>>(
         initialValue = emptyList(),
-        key1 = appsRepository
+        key1 = appsRepository,
+        key2 = refreshKey
     ) {
         value =
             withContext(Dispatchers.IO) {
-                appsRepository.getInstalledApps()
+                appsRepository.refreshInstalledApps()
             }
     }
 
@@ -365,6 +400,20 @@ private fun CompactAppsContent(
                         .onBackground
             )
 
+            Text(
+                text =
+                    "${settings.selectedApps.size} selected",
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyMedium,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onBackground
+                        .copy(alpha = 0.65f)
+            )
+
             Spacer(
                 modifier =
                     Modifier.height(12.dp)
@@ -487,6 +536,20 @@ private fun WideAppsContent(
                         MaterialTheme
                             .colorScheme
                             .onBackground
+                )
+
+                Text(
+                    text =
+                        "${settings.selectedApps.size} selected",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodyMedium,
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .onBackground
+                            .copy(alpha = 0.65f)
                 )
 
                 Spacer(
@@ -1242,3 +1305,15 @@ private fun drawableToBitmap(
 
     return bitmap
 }
+
+private tailrec fun Context.findActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity ->
+            this
+
+        is ContextWrapper ->
+            baseContext.findActivity()
+
+        else ->
+            null
+    }

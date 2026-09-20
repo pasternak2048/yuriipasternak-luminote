@@ -10,6 +10,10 @@ import com.yp.luminote.app.data.settings.HaloMode
 import com.yp.luminote.app.data.settings.GradientPalette
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
+import com.yp.luminote.app.data.settings.MAX_HALO_INTERVAL_SECONDS
+import com.yp.luminote.app.data.settings.MAX_HALO_VALUE
+import com.yp.luminote.app.data.settings.MIN_HALO_INTERVAL_SECONDS
+import com.yp.luminote.app.data.settings.MIN_HALO_VALUE
 import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.data.settings.NotificationPlayback
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,7 +87,18 @@ class LuminoteSettingsViewModel(
         intensity: Float
     ) {
         updateSettings(debounce = true) {
-            copy(haloIntensity = intensity)
+            copy(
+                haloIntensity =
+                    intensity
+                        .takeIf {
+                            it.isFinite()
+                        }
+                        ?.coerceIn(
+                            MIN_HALO_VALUE,
+                            MAX_HALO_VALUE
+                        )
+                        ?: haloIntensity
+            )
         }
     }
 
@@ -91,7 +106,18 @@ class LuminoteSettingsViewModel(
         thickness: Float
     ) {
         updateSettings(debounce = true) {
-            copy(haloThickness = thickness)
+            copy(
+                haloThickness =
+                    thickness
+                        .takeIf {
+                            it.isFinite()
+                        }
+                        ?.coerceIn(
+                            MIN_HALO_VALUE,
+                            MAX_HALO_VALUE
+                        )
+                        ?: haloThickness
+            )
         }
     }
 
@@ -99,7 +125,18 @@ class LuminoteSettingsViewModel(
         interval: Float
     ) {
         updateSettings(debounce = true) {
-            copy(haloInterval = interval)
+            copy(
+                haloInterval =
+                    interval
+                        .takeIf {
+                            it.isFinite()
+                        }
+                        ?.coerceIn(
+                            MIN_HALO_INTERVAL_SECONDS,
+                            MAX_HALO_INTERVAL_SECONDS
+                        )
+                        ?: haloInterval
+            )
         }
     }
 
