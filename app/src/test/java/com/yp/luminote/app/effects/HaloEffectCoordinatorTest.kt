@@ -79,6 +79,39 @@ class HaloEffectCoordinatorTest {
         )
     }
 
+    @Test
+    fun `limits the number of queued effects from different applications`() {
+        val coordinator =
+            HaloEffectCoordinator()
+
+        val started =
+            mutableListOf<HaloEffectRequest>()
+
+        coordinator.attachRenderer(Any()) { request ->
+            started += request
+        }
+
+        repeat(11) { index ->
+            coordinator.enqueue(
+                request(
+                    packageName = "com.example.app$index",
+                    notificationKey = "notification$index"
+                )
+            )
+        }
+
+        repeat(8) {
+            coordinator.onRequestCompleted(
+                started.last()
+            )
+        }
+
+        assertEquals(
+            9,
+            started.size
+        )
+    }
+
     private fun request(
         packageName: String,
         notificationKey: String
