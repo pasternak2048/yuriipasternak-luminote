@@ -872,6 +872,7 @@ class LuminoteNotificationListener :
         ) {
             val entry =
                 recentNotificationOrder.peekFirst()
+                    ?: return
 
             if (
                 entry.timestamp >=
