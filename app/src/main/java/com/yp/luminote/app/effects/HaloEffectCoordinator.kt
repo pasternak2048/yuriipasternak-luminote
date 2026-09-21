@@ -9,9 +9,9 @@ import java.util.ArrayDeque
  * Exactly one request can be active at a time. Additional requests wait in
  * FIFO order until the active animation reports natural completion.
  *
- * Requests are coalesced only when they represent the same concrete
- * notification key. Different notifications from the same application must
- * remain independent animation requests.
+ * While an effect from an application is active or waiting, further events
+ * from that application are coalesced. This prevents group chats from
+ * replaying a long burst of already-seen effects.
  *
  * The coordinator itself does not own a renderer. The latest available
  * renderer is supplied by a HaloOverlayService instance.
@@ -38,6 +38,8 @@ internal class HaloEffectCoordinator {
     fun enqueue(
         request: HaloEffectRequest
     ) {
+        discardExpiredRequests()
+
         Log.d(
             TAG,
             "enqueue " +
@@ -51,12 +53,12 @@ internal class HaloEffectCoordinator {
             activeRequest
 
         if (
-            active?.notificationKey ==
-            request.notificationKey
+            active?.packageName ==
+            request.packageName
         ) {
             Log.d(
                 TAG,
-                "coalesced active " +
+                "coalesced active application " +
                         "package=${request.packageName}, " +
                         "key=${request.notificationKey}"
             )
@@ -66,13 +68,13 @@ internal class HaloEffectCoordinator {
 
         if (
             pendingRequests.any {
-                it.notificationKey ==
-                        request.notificationKey
+                it.packageName ==
+                        request.packageName
             }
         ) {
             Log.d(
                 TAG,
-                "coalesced pending " +
+                "coalesced pending application " +
                         "package=${request.packageName}, " +
                         "key=${request.notificationKey}"
             )
@@ -83,6 +85,20 @@ internal class HaloEffectCoordinator {
         if (active == null) {
             start(
                 request
+            )
+
+            return
+        }
+
+        if (
+            pendingRequests.size >=
+            MAX_PENDING_REQUESTS
+        ) {
+            Log.w(
+                TAG,
+                "Dropped effect because the queue is full: " +
+                        "package=${request.packageName}, " +
+                        "key=${request.notificationKey}"
             )
 
             return
@@ -197,9 +213,36 @@ internal class HaloEffectCoordinator {
 
         onRequestStarted =
             null
+
+        activeRequest?.let { request ->
+            activeRequest =
+                null
+
+            if (isExpired(request)) {
+                Log.d(
+                    TAG,
+                    "Dropped expired active effect after renderer detach: " +
+                            "package=${request.packageName}, " +
+                            "key=${request.notificationKey}"
+                )
+            } else {
+                pendingRequests.addFirst(
+                    request
+                )
+
+                Log.d(
+                    TAG,
+                    "Requeued active effect after renderer detach: " +
+                            "package=${request.packageName}, " +
+                            "key=${request.notificationKey}"
+                )
+            }
+        }
     }
 
     private fun startNext() {
+        discardExpiredRequests()
+
         if (
             activeRequest != null
         ) {
@@ -289,8 +332,38 @@ internal class HaloEffectCoordinator {
         startNext()
     }
 
+    private fun discardExpiredRequests() {
+        while (
+            pendingRequests.firstOrNull()?.let(::isExpired) ==
+            true
+        ) {
+            val expired =
+                pendingRequests.removeFirst()
+
+            Log.d(
+                TAG,
+                "Dropped expired queued effect: " +
+                        "package=${expired.packageName}, " +
+                        "key=${expired.notificationKey}"
+            )
+        }
+    }
+
+    private fun isExpired(
+        request: HaloEffectRequest
+    ): Boolean =
+        android.os.SystemClock.elapsedRealtime() -
+                request.enqueuedAt >=
+                MAX_REQUEST_AGE_MS
+
     private companion object {
         const val TAG =
             "HaloCoordinator"
+
+        const val MAX_PENDING_REQUESTS =
+            8
+
+        const val MAX_REQUEST_AGE_MS =
+            15_000L
     }
 }

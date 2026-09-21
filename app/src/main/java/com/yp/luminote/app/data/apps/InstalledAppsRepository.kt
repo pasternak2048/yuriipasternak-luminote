@@ -1,6 +1,7 @@
 package com.yp.luminote.app.data.apps
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 
 data class InstalledApp(
@@ -24,23 +25,31 @@ class InstalledAppsRepository(
             }
         }
 
+    /** Rebuilds the list after the app returns to the foreground. */
+    fun refreshInstalledApps(): List<InstalledApp> =
+        synchronized(cacheLock) {
+            scanInstalledApps().also { apps ->
+                cachedApps = apps
+            }
+        }
+
     private fun scanInstalledApps(): List<InstalledApp> =
         packageManager
-            .getInstalledApplications(
-                PackageManager.GET_META_DATA
+            .queryIntentActivities(
+                Intent(Intent.ACTION_MAIN)
+                    .addCategory(Intent.CATEGORY_LAUNCHER),
+                PackageManager.ResolveInfoFlags.of(0)
             )
             .asSequence()
+            .map { resolveInfo ->
+                resolveInfo.activityInfo.applicationInfo
+            }
             .filter { applicationInfo ->
                 applicationInfo.packageName !=
                         appContext.packageName
             }
             .filter { applicationInfo ->
                 applicationInfo.enabled
-            }
-            .filter { applicationInfo ->
-                packageManager.getLaunchIntentForPackage(
-                    applicationInfo.packageName
-                ) != null
             }
             .mapNotNull { applicationInfo ->
                 val label =

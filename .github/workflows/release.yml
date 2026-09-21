@@ -51,8 +51,27 @@ jobs:
           mv app/build/outputs/apk/release/app-release.apk \
              "Luminote-${GITHUB_REF_NAME}.apk"
 
+      - name: Build update manifest
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == *.qa.* ]]; then
+            channel="qa"
+          elif [[ "${GITHUB_REF_NAME}" == *.dev.* ]]; then
+            channel="dev"
+          else
+            channel="stable"
+          fi
+
+          apk_name="Luminote-${GITHUB_REF_NAME}.apk"
+          apk_sha256=$(sha256sum "$apk_name" | awk '{print $1}')
+          cat > luminote-update.json <<EOF
+          {"schema":1,"tag":"${GITHUB_REF_NAME}","channel":"${channel}","versionName":"${GITHUB_REF_NAME#v}","versionCode":${GITHUB_RUN_NUMBER},"apkName":"${apk_name}","sha256":"${apk_sha256}"}
+          EOF
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: Luminote-${{ github.ref_name }}.apk
+          files: |
+            Luminote-${{ github.ref_name }}.apk
+            luminote-update.json
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '.qa.') || contains(github.ref_name, '.dev.') }}

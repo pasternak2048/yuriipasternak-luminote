@@ -189,17 +189,41 @@ class LuminoteSettingsRepository(
                     haloIntensity =
                         preferences[
                             Keys.haloIntensity
-                        ] ?: defaultSettings.haloIntensity,
+                        ]
+                            ?.takeIf {
+                                it.isFinite()
+                            }
+                            ?.coerceIn(
+                                MIN_HALO_VALUE,
+                                MAX_HALO_VALUE
+                            )
+                            ?: defaultSettings.haloIntensity,
 
                     haloThickness =
                         preferences[
                             Keys.haloThickness
-                        ] ?: defaultSettings.haloThickness,
+                        ]
+                            ?.takeIf {
+                                it.isFinite()
+                            }
+                            ?.coerceIn(
+                                MIN_HALO_VALUE,
+                                MAX_HALO_VALUE
+                            )
+                            ?: defaultSettings.haloThickness,
 
                     haloInterval =
                         preferences[
                             Keys.haloInterval
-                        ] ?: defaultSettings.haloInterval,
+                        ]
+                            ?.takeIf {
+                                it.isFinite()
+                            }
+                            ?.coerceIn(
+                                MIN_HALO_INTERVAL_SECONDS,
+                                MAX_HALO_INTERVAL_SECONDS
+                            )
+                            ?: defaultSettings.haloInterval,
 
                     haloRepeatCount =
                         preferences[
@@ -433,12 +457,36 @@ class LuminoteSettingsRepository(
 
             preferences[Keys.haloIntensity] =
                 settings.haloIntensity
+                    .takeIf {
+                        it.isFinite()
+                    }
+                    ?.coerceIn(
+                        MIN_HALO_VALUE,
+                        MAX_HALO_VALUE
+                    )
+                    ?: defaultSettings.haloIntensity
 
             preferences[Keys.haloThickness] =
                 settings.haloThickness
+                    .takeIf {
+                        it.isFinite()
+                    }
+                    ?.coerceIn(
+                        MIN_HALO_VALUE,
+                        MAX_HALO_VALUE
+                    )
+                    ?: defaultSettings.haloThickness
 
             preferences[Keys.haloInterval] =
                 settings.haloInterval
+                    .takeIf {
+                        it.isFinite()
+                    }
+                    ?.coerceIn(
+                        MIN_HALO_INTERVAL_SECONDS,
+                        MAX_HALO_INTERVAL_SECONDS
+                    )
+                    ?: defaultSettings.haloInterval
 
             preferences[Keys.haloRepeatCount] =
                 settings.haloRepeatCount

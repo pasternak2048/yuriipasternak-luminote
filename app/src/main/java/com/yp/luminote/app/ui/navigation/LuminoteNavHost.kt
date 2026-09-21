@@ -222,7 +222,9 @@ fun LuminoteNavHost() {
             AccessScreen(
                 onBackClick = {
                     navController.popBackStack()
-                }
+                },
+                viewModel =
+                    settingsViewModel
             )
         }
     }

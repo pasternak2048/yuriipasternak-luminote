@@ -1,6 +1,10 @@
 package com.yp.luminote.app.ui.about
 
+import android.Manifest
 import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,8 +23,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -33,12 +40,19 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.update.UpdateChannel
+import com.yp.luminote.app.update.UpdateInstaller
+import com.yp.luminote.app.update.UpdateUiState
+import com.yp.luminote.app.update.UpdateViewModel
 
 @Composable
 fun AboutScreen(
     onBackClick: () -> Unit,
-    onEasterEggClick: () -> Unit
+    onEasterEggClick: () -> Unit,
+    updateViewModel: UpdateViewModel = viewModel()
 ) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
@@ -50,6 +64,20 @@ fun AboutScreen(
         "Version ${packageInfo.versionName ?: "Unknown"} (${packageInfo.longVersionCode})"
     }
     var versionTapCount by remember { mutableIntStateOf(0) }
+    val updateChannel by updateViewModel.channel.collectAsState()
+    val updateState by updateViewModel.state.collectAsState()
+    val updateNotificationsEnabled by
+        updateViewModel.notificationsEnabled.collectAsState()
+    val notificationPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { }
+    val notificationsAllowed =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
 
     Column(
         modifier = Modifier
@@ -163,6 +191,34 @@ fun AboutScreen(
                     color = Color(0xFFBDBDBD)
                 )
             }
+
+            UpdateBlock(
+                channel = updateChannel,
+                state = updateState,
+                notificationsEnabled = updateNotificationsEnabled,
+                notificationsAllowed = notificationsAllowed,
+                onChannelSelected = updateViewModel::selectChannel,
+                onCheckClick = updateViewModel::checkForUpdate,
+                onDownloadClick = updateViewModel::download,
+                onEnableNotificationsClick = {
+                    updateViewModel.setNotificationsEnabled(true)
+                    if (!notificationsAllowed) {
+                        notificationPermissionLauncher.launch(
+                            Manifest.permission.POST_NOTIFICATIONS
+                        )
+                    }
+                },
+                onDisableNotificationsClick = {
+                    updateViewModel.setNotificationsEnabled(false)
+                },
+                onInstallClick = { apk ->
+                    if (UpdateInstaller.canInstallPackages(context)) {
+                        UpdateInstaller.install(context, apk)
+                    } else {
+                        UpdateInstaller.openInstallPermission(context)
+                    }
+                }
+            )
         }
     }
 }
@@ -226,4 +282,119 @@ private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
             color = Color.White
         )
     }
+}
+
+@Composable
+private fun UpdateBlock(
+    channel: UpdateChannel,
+    state: UpdateUiState,
+    notificationsEnabled: Boolean,
+    notificationsAllowed: Boolean,
+    onChannelSelected: (UpdateChannel) -> Unit,
+    onCheckClick: () -> Unit,
+    onDownloadClick: (com.yp.luminote.app.update.UpdateInfo) -> Unit,
+    onEnableNotificationsClick: () -> Unit,
+    onDisableNotificationsClick: () -> Unit,
+    onInstallClick: (java.io.File) -> Unit
+) {
+    AboutBlock(title = "Updates") {
+        Text(
+            text = "Channel",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFFBDBDBD)
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            UpdateChannel.entries.forEach { option ->
+                FilterChip(
+                    selected = channel == option,
+                    onClick = {
+                        onChannelSelected(option)
+                    },
+                    label = {
+                        Text(option.label)
+                    }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        when (state) {
+            UpdateUiState.Checking ->
+                UpdateStatus("Checking GitHub Releases…")
+
+            UpdateUiState.UpToDate ->
+                UpdateStatus("No newer ${channel.label} update is available.")
+
+            is UpdateUiState.Available -> {
+                UpdateStatus(
+                    "${state.update.versionName} is available."
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        onDownloadClick(state.update)
+                    }
+                ) {
+                    Text("Download update")
+                }
+            }
+
+            is UpdateUiState.Downloading ->
+                UpdateStatus("Downloading ${state.update.versionName}…")
+
+            is UpdateUiState.ReadyToInstall -> {
+                UpdateStatus("${state.update.versionName} is ready to install.")
+                Spacer(modifier = Modifier.height(12.dp))
+                Button(
+                    onClick = {
+                        onInstallClick(state.apk)
+                    }
+                ) {
+                    Text("Install update")
+                }
+            }
+
+            is UpdateUiState.Error ->
+                UpdateStatus(state.message)
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Button(onClick = onCheckClick) {
+            Text("Check now")
+        }
+
+        if (notificationsEnabled && notificationsAllowed) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(onClick = onDisableNotificationsClick) {
+                Text("Disable update notifications")
+            }
+        } else {
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(onClick = onEnableNotificationsClick) {
+                Text(
+                    if (notificationsAllowed) {
+                        "Enable update notifications"
+                    } else {
+                        "Allow update notifications"
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpdateStatus(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodyMedium,
+        color = Color(0xFFBDBDBD)
+    )
 }

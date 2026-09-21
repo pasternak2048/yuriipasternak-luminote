@@ -1,6 +1,5 @@
 package com.yp.luminote.app.ui.theme
 
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -52,7 +51,7 @@ fun LuminoteTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+        dynamicColor -> {
             if (darkTheme) {
                 androidx.compose.material3.dynamicDarkColorScheme(
                     androidx.compose.ui.platform.LocalContext.current

@@ -11,10 +11,8 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Finite animations use the proven QA scheduler:
- * Handler + SystemClock.elapsedRealtime().
- *
- * Ambient animation stays VSYNC-driven through Choreographer.
+ * Both finite and ambient animations are VSYNC-driven through Choreographer.
+ * The Handler is used only for an intentional pause between finite cycles.
  */
 internal class HaloAnimation(
     private val onFrame: (HaloAnimationState) -> Unit,
@@ -89,6 +87,22 @@ internal class HaloAnimation(
 
     private var ambientFrameCallbackPosted =
         false
+
+    private var finiteFrameCallbackPosted =
+        false
+
+    private var finiteFrameGeneration =
+        0L
+
+    private val finiteFrameCallback =
+        Choreographer.FrameCallback {
+            finiteFrameCallbackPosted =
+                false
+
+            runFiniteFrame(
+                finiteFrameGeneration
+            )
+        }
 
     private var strategy:
             HaloAnimationStrategy =
@@ -336,26 +350,31 @@ internal class HaloAnimation(
         val frameGeneration =
             generation
 
-        scheduleFiniteFrame(
-            frameGeneration =
-                frameGeneration,
-            delayMs =
-                0L
+        postFiniteFrame(
+            frameGeneration
         )
     }
 
-    private fun scheduleFiniteFrame(
-        frameGeneration: Long,
-        delayMs: Long =
-            FINITE_FRAME_DELAY_MS
+    private fun postFiniteFrame(
+        frameGeneration: Long
     ) {
-        handler.postDelayed(
-            {
-                runFiniteFrame(
-                    frameGeneration
-                )
-            },
-            delayMs
+        if (
+            !running ||
+            ambient ||
+            generation != frameGeneration ||
+            finiteFrameCallbackPosted
+        ) {
+            return
+        }
+
+        finiteFrameCallbackPosted =
+            true
+
+        finiteFrameGeneration =
+            frameGeneration
+
+        choreographer.postFrameCallback(
+            finiteFrameCallback
         )
     }
 
@@ -415,7 +434,7 @@ internal class HaloAnimation(
             return
         }
 
-        scheduleFiniteFrame(
+        postFiniteFrame(
             frameGeneration
         )
     }
@@ -598,6 +617,8 @@ internal class HaloAnimation(
             null
         )
 
+        removeFiniteFrameCallback()
+
         removeAmbientFrameCallback()
 
         dispatchState(
@@ -644,6 +665,24 @@ internal class HaloAnimation(
         choreographer.postFrameCallback(
             ambientFrameCallback
         )
+    }
+
+    private fun removeFiniteFrameCallback() {
+        if (
+            !finiteFrameCallbackPosted
+        ) {
+            return
+        }
+
+        choreographer.removeFrameCallback(
+            finiteFrameCallback
+        )
+
+        finiteFrameCallbackPosted =
+            false
+
+        finiteFrameGeneration =
+            0L
     }
 
     private fun removeAmbientFrameCallback() {
@@ -748,6 +787,8 @@ internal class HaloAnimation(
             null
         )
 
+        removeFiniteFrameCallback()
+
         removeAmbientFrameCallback()
 
         finiteCycleStartedAtMs =
@@ -797,9 +838,6 @@ internal class HaloAnimation(
 
         private const val NANOS_PER_SECOND =
             1_000_000_000L
-
-        private const val FINITE_FRAME_DELAY_MS =
-            16L
 
         private const val AMBIENT_ROTATION_DURATION_SECONDS =
             16.0

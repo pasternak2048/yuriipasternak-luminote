@@ -18,6 +18,8 @@ val LuminoteLightSecondaryText = Color(0xFF74747C)
 val LuminoteDarkBackground = Color(0xFF000000)
 val LuminoteDarkSurface = Color(0xFF101010)
 val LuminoteDarkSurfaceVariant = Color(0xFF202020)
+val LuminoteDarkOutline = Color(0xFF3D3D3D)
+val LuminoteDarkDisabled = Color(0xFF808080)
 
 val LuminoteDarkPrimary = Color.White
 val LuminoteDarkPrimaryDark = Color.White
