@@ -1,8 +1,11 @@
 package com.yp.luminote.app.ui.apps
 
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.util.LruCache
+import androidx.activity.ComponentActivity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -29,10 +32,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -47,6 +54,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.data.apps.InstalledApp
 import com.yp.luminote.app.data.apps.InstalledAppsRepository
 import com.yp.luminote.app.data.settings.LuminoteSettings
@@ -70,22 +79,80 @@ fun AppsScreen(
             InstalledAppsRepository(context)
         }
 
+    val activity =
+        remember(context) {
+            context.findActivity()
+        }
+
+    var refreshKey by
+    remember {
+        mutableIntStateOf(0)
+    }
+
+    activity?.let { currentActivity ->
+        DisposableEffect(currentActivity) {
+            val observer =
+                LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        refreshKey++
+                    }
+                }
+
+            currentActivity.lifecycle.addObserver(observer)
+
+            onDispose {
+                currentActivity.lifecycle.removeObserver(observer)
+            }
+        }
+    }
+
     val settings by
     viewModel.settings.collectAsState()
 
     val installedApps by produceState<List<InstalledApp>>(
         initialValue = emptyList(),
-        key1 = appsRepository
+        key1 = appsRepository,
+        key2 = refreshKey
     ) {
-        value = withContext(Dispatchers.IO) {
-            appsRepository.getInstalledApps()
-        }
+        value =
+            withContext(Dispatchers.IO) {
+                appsRepository.refreshInstalledApps()
+            }
     }
 
     var sourceExpanded by
     remember {
         mutableStateOf(false)
     }
+
+    var searchQuery by
+    remember {
+        mutableStateOf("")
+    }
+
+    val filteredApps =
+        remember(
+            installedApps,
+            searchQuery
+        ) {
+            val query =
+                searchQuery.trim()
+
+            if (query.isEmpty()) {
+                installedApps
+            } else {
+                installedApps.filter { app ->
+                    app.name.contains(
+                        query,
+                        ignoreCase = true
+                    ) ||
+                            app.packageName.contains(
+                                query,
+                                ignoreCase = true
+                            )
+                }
+            }
+        }
 
     Column(
         modifier =
@@ -135,8 +202,12 @@ fun AppsScreen(
                             .padding(
                                 bottom = 4.dp
                             ),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
+                    style =
+                        MaterialTheme
+                            .typography
+                            .headlineLarge,
+                    color =
+                        Color.White
                 )
 
                 Text(
@@ -145,10 +216,14 @@ fun AppsScreen(
                         Modifier.padding(
                             start = 4.dp
                         ),
-                    style = MaterialTheme.typography.displayLarge,
+                    style =
+                        MaterialTheme
+                            .typography
+                            .displayLarge,
                     fontWeight =
                         FontWeight.SemiBold,
-                    color = Color.White
+                    color =
+                        Color.White
                 )
             }
 
@@ -164,7 +239,8 @@ fun AppsScreen(
                     MaterialTheme
                         .typography
                         .bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color =
+                    Color(0xFFBDBDBD)
             )
         }
 
@@ -185,7 +261,9 @@ fun AppsScreen(
                     settings =
                         settings,
                     installedApps =
-                        installedApps,
+                        filteredApps,
+                    searchQuery =
+                        searchQuery,
                     sourceExpanded =
                         sourceExpanded,
                     onSourceToggle = {
@@ -199,6 +277,9 @@ fun AppsScreen(
                         )
 
                         sourceExpanded = false
+                    },
+                    onSearchQueryChange = {
+                        searchQuery = it
                     },
                     onAppClick = { app ->
 
@@ -224,7 +305,9 @@ fun AppsScreen(
                     settings =
                         settings,
                     installedApps =
-                        installedApps,
+                        filteredApps,
+                    searchQuery =
+                        searchQuery,
                     sourceExpanded =
                         sourceExpanded,
                     onSourceToggle = {
@@ -238,6 +321,9 @@ fun AppsScreen(
                         )
 
                         sourceExpanded = false
+                    },
+                    onSearchQueryChange = {
+                        searchQuery = it
                     },
                     onAppClick = { app ->
 
@@ -266,9 +352,11 @@ private fun CompactAppsContent(
     modifier: Modifier,
     settings: LuminoteSettings,
     installedApps: List<InstalledApp>,
+    searchQuery: String,
     sourceExpanded: Boolean,
     onSourceToggle: () -> Unit,
     onSourceSelected: (NotificationSource) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onAppClick: (InstalledApp) -> Unit
 ) {
     Column(
@@ -312,12 +400,38 @@ private fun CompactAppsContent(
                         .onBackground
             )
 
+            Text(
+                text =
+                    "${settings.selectedApps.size} selected",
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyMedium,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onBackground
+                        .copy(alpha = 0.65f)
+            )
+
             Spacer(
                 modifier =
                     Modifier.height(12.dp)
             )
 
-            AppsList(
+            AppSearchField(
+                query =
+                    searchQuery,
+                onQueryChange =
+                    onSearchQueryChange
+            )
+
+            Spacer(
+                modifier =
+                    Modifier.height(12.dp)
+            )
+
+            AppsListContent(
                 modifier =
                     Modifier.weight(1f),
                 installedApps =
@@ -347,9 +461,11 @@ private fun WideAppsContent(
     modifier: Modifier,
     settings: LuminoteSettings,
     installedApps: List<InstalledApp>,
+    searchQuery: String,
     sourceExpanded: Boolean,
     onSourceToggle: () -> Unit,
     onSourceSelected: (NotificationSource) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
     onAppClick: (InstalledApp) -> Unit
 ) {
     Row(
@@ -422,12 +538,38 @@ private fun WideAppsContent(
                             .onBackground
                 )
 
+                Text(
+                    text =
+                        "${settings.selectedApps.size} selected",
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodyMedium,
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .onBackground
+                            .copy(alpha = 0.65f)
+                )
+
                 Spacer(
                     modifier =
                         Modifier.height(12.dp)
                 )
 
-                AppsList(
+                AppSearchField(
+                    query =
+                        searchQuery,
+                    onQueryChange =
+                        onSearchQueryChange
+                )
+
+                Spacer(
+                    modifier =
+                        Modifier.height(12.dp)
+                )
+
+                AppsListContent(
                     modifier =
                         Modifier.weight(1f),
                     installedApps =
@@ -468,6 +610,63 @@ private fun WideAppsContent(
             }
         }
     }
+}
+
+/*
+ * ================================================================
+ * SEARCH
+ * ================================================================
+ */
+
+@Composable
+private fun AppSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value =
+            query,
+        onValueChange =
+            onQueryChange,
+        modifier =
+            Modifier.fillMaxWidth(),
+        singleLine =
+            true,
+        placeholder = {
+            Text(
+                text =
+                    "Search apps",
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurface
+                        .copy(
+                            alpha = 0.45f
+                        )
+            )
+        },
+        shape =
+            RoundedCornerShape(18.dp),
+        colors =
+            OutlinedTextFieldDefaults.colors(
+                focusedContainerColor =
+                    Color(0xFF101010),
+                unfocusedContainerColor =
+                    Color(0xFF101010),
+                disabledContainerColor =
+                    Color(0xFF101010),
+                focusedTextColor =
+                    Color.White,
+                unfocusedTextColor =
+                    Color.White,
+                focusedBorderColor =
+                    Color(0xFF5C5C5C),
+                unfocusedBorderColor =
+                    Color(0xFF3D3D3D),
+                cursorColor =
+                    Color.White
+            )
+    )
 }
 
 /*
@@ -743,6 +942,61 @@ private fun SourceOption(
 
 /*
  * ================================================================
+ * APPLICATIONS LIST CONTENT
+ * ================================================================
+ */
+
+@Composable
+private fun AppsListContent(
+    modifier: Modifier,
+    installedApps: List<InstalledApp>,
+    selectedApps: Set<String>,
+    onAppClick: (InstalledApp) -> Unit
+) {
+    if (installedApps.isEmpty()) {
+
+        Box(
+            modifier =
+                modifier
+                    .fillMaxWidth(),
+            contentAlignment =
+                Alignment.Center
+        ) {
+
+            Text(
+                text =
+                    "No apps found",
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyLarge,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onBackground
+                        .copy(
+                            alpha = 0.5f
+                        )
+            )
+        }
+
+    } else {
+
+        AppsList(
+            modifier =
+                modifier,
+            installedApps =
+                installedApps,
+            selectedApps =
+                selectedApps,
+            onAppClick =
+                onAppClick
+        )
+    }
+}
+
+/*
+ * ================================================================
  * APPLICATIONS LIST
  * ================================================================
  */
@@ -807,28 +1061,53 @@ private fun AppItemRow(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
+    val context =
+        LocalContext.current
+
     val iconSizePx =
         with(LocalDensity.current) {
             32.dp.roundToPx()
         }
 
     val bitmap =
-        remember(app.packageName, iconSizePx) {
+        remember(
+            app.packageName,
+            iconSizePx
+        ) {
             AppIconBitmapCache.get(
-                packageName = app.packageName,
-                sizePx = iconSizePx
+                packageName =
+                    app.packageName,
+                sizePx =
+                    iconSizePx
             ) ?: run {
-                val drawable = runCatching {
-                    context.packageManager.getApplicationIcon(app.packageName)
-                }.getOrElse {
-                    context.packageManager.defaultActivityIcon
-                }
-                drawableToBitmap(drawable, iconSizePx).also { generatedBitmap ->
+
+                val drawable =
+                    runCatching {
+                        context
+                            .packageManager
+                            .getApplicationIcon(
+                                app.packageName
+                            )
+                    }.getOrElse {
+                        context
+                            .packageManager
+                            .defaultActivityIcon
+                    }
+
+                drawableToBitmap(
+                    drawable =
+                        drawable,
+                    sizePx =
+                        iconSizePx
+                ).also { generatedBitmap ->
+
                     AppIconBitmapCache.put(
-                        packageName = app.packageName,
-                        sizePx = iconSizePx,
-                        bitmap = generatedBitmap
+                        packageName =
+                            app.packageName,
+                        sizePx =
+                            iconSizePx,
+                        bitmap =
+                            generatedBitmap
                     )
                 }
             }
@@ -905,34 +1184,101 @@ private fun AppItemRow(
 
 /*
  * ================================================================
- * DRAWABLE → BITMAP
+ * SELECTION INDICATOR
  * ================================================================
  */
 
-/** Holds recently visible, display-sized icons without retaining every app. */
-private object AppIconBitmapCache {
-    private val bitmaps = object : LruCache<String, Bitmap>(MAX_CACHE_BYTES) {
-        override fun sizeOf(key: String, bitmap: Bitmap): Int =
-            bitmap.allocationByteCount
+@Composable
+private fun SelectionIndicator(
+    selected: Boolean
+) {
+    Canvas(
+        modifier =
+            Modifier.size(22.dp)
+    ) {
+
+        drawCircle(
+            color =
+                if (selected) {
+                    Color.White
+                } else {
+                    Color(0xFF777777)
+                },
+            style =
+                Stroke(
+                    width = 2.dp.toPx()
+                )
+        )
+
+        if (selected) {
+
+            drawCircle(
+                color =
+                    Color.White,
+                radius =
+                    size.minDimension * 0.22f
+            )
+        }
     }
+}
+
+/*
+ * ================================================================
+ * ICON CACHE
+ * ================================================================
+ */
+
+private object AppIconBitmapCache {
+
+    private val cache =
+        object : LruCache<String, Bitmap>(
+            4 * 1024 * 1024
+        ) {
+
+            override fun sizeOf(
+                key: String,
+                value: Bitmap
+            ): Int =
+                value.byteCount
+        }
 
     fun get(
         packageName: String,
         sizePx: Int
-    ): Bitmap? = bitmaps.get(key(packageName, sizePx))
+    ): Bitmap? =
+        cache.get(
+            cacheKey(
+                packageName,
+                sizePx
+            )
+        )
 
     fun put(
         packageName: String,
         sizePx: Int,
         bitmap: Bitmap
     ) {
-        bitmaps.put(key(packageName, sizePx), bitmap)
+        cache.put(
+            cacheKey(
+                packageName,
+                sizePx
+            ),
+            bitmap
+        )
     }
 
-    private fun key(packageName: String, sizePx: Int): String = "$packageName@$sizePx"
-
-    private const val MAX_CACHE_BYTES = 2 * 1024 * 1024
+    private fun cacheKey(
+        packageName: String,
+        sizePx: Int
+    ): String =
+        "$packageName@$sizePx"
 }
+
+/*
+ * ================================================================
+ * DRAWABLE -> BITMAP
+ * ================================================================
+ */
 
 private fun drawableToBitmap(
     drawable: android.graphics.drawable.Drawable,
@@ -951,8 +1297,8 @@ private fun drawableToBitmap(
     drawable.setBounds(
         0,
         0,
-        canvas.width,
-        canvas.height
+        sizePx,
+        sizePx
     )
 
     drawable.draw(canvas)
@@ -960,104 +1306,14 @@ private fun drawableToBitmap(
     return bitmap
 }
 
-/*
- * ================================================================
- * SELECTION INDICATOR
- * ================================================================
- */
+private tailrec fun Context.findActivity(): ComponentActivity? =
+    when (this) {
+        is ComponentActivity ->
+            this
 
-@Composable
-private fun SelectionIndicator(
-    selected: Boolean
-) {
-    val primaryColor =
-        MaterialTheme
-            .colorScheme
-            .primary
+        is ContextWrapper ->
+            baseContext.findActivity()
 
-    val onPrimaryColor =
-        MaterialTheme
-            .colorScheme
-            .onPrimary
-
-    val outlineColor =
-        MaterialTheme
-            .colorScheme
-            .outline
-
-    Canvas(
-        modifier =
-            Modifier.size(24.dp)
-    ) {
-
-        if (selected) {
-
-            drawCircle(
-                color =
-                    primaryColor,
-                radius =
-                    size.minDimension / 2f
-            )
-
-            val strokeWidth =
-                2.dp.toPx()
-
-            drawLine(
-                color =
-                    onPrimaryColor,
-                start =
-                    androidx.compose.ui.geometry.Offset(
-                        x =
-                            size.width * 0.28f,
-                        y =
-                            size.height * 0.52f
-                    ),
-                end =
-                    androidx.compose.ui.geometry.Offset(
-                        x =
-                            size.width * 0.45f,
-                        y =
-                            size.height * 0.68f
-                    ),
-                strokeWidth =
-                    strokeWidth
-            )
-
-            drawLine(
-                color =
-                    onPrimaryColor,
-                start =
-                    androidx.compose.ui.geometry.Offset(
-                        x =
-                            size.width * 0.45f,
-                        y =
-                            size.height * 0.68f
-                    ),
-                end =
-                    androidx.compose.ui.geometry.Offset(
-                        x =
-                            size.width * 0.75f,
-                        y =
-                            size.height * 0.34f
-                    ),
-                strokeWidth =
-                    strokeWidth
-            )
-
-        } else {
-
-            drawCircle(
-                color =
-                    outlineColor,
-                radius =
-                    size.minDimension / 2f -
-                            1.dp.toPx(),
-                style =
-                    Stroke(
-                        width =
-                            1.dp.toPx()
-                    )
-            )
-        }
+        else ->
+            null
     }
-}

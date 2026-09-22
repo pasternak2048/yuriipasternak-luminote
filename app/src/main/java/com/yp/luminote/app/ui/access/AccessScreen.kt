@@ -24,10 +24,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -35,21 +38,33 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.effects.HaloAccessibilityService
+import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.ui.theme.LuminoteDarkBackground
+import com.yp.luminote.app.ui.theme.LuminoteDarkOnSurface
+import com.yp.luminote.app.ui.theme.LuminoteDarkOutline
+import com.yp.luminote.app.ui.theme.LuminoteDarkSecondaryText
+import com.yp.luminote.app.ui.theme.LuminoteDarkSurface
 import com.yp.luminote.app.ui.theme.LuminoteSuccess
 import com.yp.luminote.app.ui.theme.LuminoteWarning
+import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 @Composable
-fun AccessScreen(onBackClick: () -> Unit) {
+fun AccessScreen(
+    onBackClick: () -> Unit,
+    viewModel: LuminoteSettingsViewModel
+) {
     val context = LocalContext.current
     var refreshKey by remember { mutableIntStateOf(0) }
+
+    val settings by
+    viewModel.settings.collectAsState()
 
     val activity = remember(context) { context.findActivity() }
     activity?.let {
@@ -67,10 +82,14 @@ fun AccessScreen(onBackClick: () -> Unit) {
     val notificationAccessAllowed = remember(refreshKey) { hasNotificationAccess(context) }
     val lockScreenAccessAllowed = remember(refreshKey) { hasLockScreenAccess(context) }
 
+    val haloReady =
+        overlayAllowed &&
+                notificationAccessAllowed
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(LuminoteDarkBackground)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -91,13 +110,13 @@ fun AccessScreen(onBackClick: () -> Unit) {
                         .size(48.dp)
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
+                    color = LuminoteDarkOnSurface
                 )
                 Text(
                     text = "Access",
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = LuminoteDarkOnSurface
                 )
             }
 
@@ -105,7 +124,7 @@ fun AccessScreen(onBackClick: () -> Unit) {
             Text(
                 text = "Manage the permissions Luminote needs for alerts and edge personalization.",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color = LuminoteDarkSecondaryText
             )
         }
 
@@ -151,6 +170,78 @@ fun AccessScreen(onBackClick: () -> Unit) {
                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
                 }
             )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            AccessStatusCard(
+                haloReady = haloReady,
+                onTestHaloClick = {
+                    HaloOverlayService.start(
+                        context,
+                        HaloOverlayService.createPreviewIntent(
+                            context,
+                            settings
+                        )
+                    )
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AccessStatusCard(
+    haloReady: Boolean,
+    onTestHaloClick: () -> Unit
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(LuminoteDarkSurface)
+                .border(1.dp, LuminoteDarkOutline, RoundedCornerShape(24.dp))
+                .padding(20.dp)
+    ) {
+        Text(
+            text =
+                if (haloReady) {
+                    "Halo is ready"
+                } else {
+                    "Halo needs access"
+                },
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (haloReady) LuminoteSuccess else LuminoteWarning
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text =
+                if (haloReady) {
+                    "Send a preview to confirm the effect is visible on this device."
+                } else {
+                    "Allow display access and notification access to use notification effects."
+                },
+            style = MaterialTheme.typography.bodyMedium,
+            color = LuminoteDarkSecondaryText
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Button(
+            onClick = onTestHaloClick,
+            enabled = haloReady,
+            colors =
+                ButtonDefaults.buttonColors(
+                    containerColor = LuminoteDarkOnSurface,
+                    contentColor = LuminoteDarkBackground,
+                    disabledContainerColor = LuminoteDarkOutline,
+                    disabledContentColor = LuminoteDarkSecondaryText
+                )
+        ) {
+            Text("Test Halo")
         }
     }
 }
@@ -166,8 +257,8 @@ private fun AccessItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF101010))
-            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(24.dp))
+            .background(LuminoteDarkSurface)
+            .border(1.dp, LuminoteDarkOutline, RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -177,13 +268,13 @@ private fun AccessItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = LuminoteDarkOnSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFBDBDBD)
+                color = LuminoteDarkSecondaryText
             )
         }
 
