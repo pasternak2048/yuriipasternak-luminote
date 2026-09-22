@@ -36,6 +36,9 @@ internal class HaloView(
             MAX_EFFECT_SPEED
         )
 
+    private var ambientMotion =
+        config.motion
+
     private var pendingFiniteAnimation:
             FiniteAnimation? = null
 
@@ -117,11 +120,16 @@ internal class HaloView(
             )
 
         if (
+            !isAttachedToWindow ||
             width <= 0 ||
             height <= 0
         ) {
             pendingFiniteAnimation =
                 request
+
+            post(
+                ::startPendingFiniteAnimationIfReady
+            )
 
             return
         }
@@ -134,9 +142,6 @@ internal class HaloView(
     private fun startFiniteAnimation(
         request: FiniteAnimation
     ) {
-        pendingFiniteAnimation =
-            null
-
         ambientPaused =
             false
 
@@ -145,13 +150,24 @@ internal class HaloView(
 
         post {
             if (
-                startToken != animationStartToken ||
+                startToken != animationStartToken
+            ) {
+                return@post
+            }
+
+            if (
                 !isAttachedToWindow ||
                 width <= 0 ||
                 height <= 0
             ) {
+                pendingFiniteAnimation =
+                    request
+
                 return@post
             }
+
+            pendingFiniteAnimation =
+                null
 
             animationEngine.start(
                 HaloAnimationRequest(
@@ -175,6 +191,21 @@ internal class HaloView(
         }
     }
 
+    private fun startPendingFiniteAnimationIfReady() {
+        if (
+            !isAttachedToWindow ||
+            width <= 0 ||
+            height <= 0
+        ) {
+            return
+        }
+
+        pendingFiniteAnimation
+            ?.let(
+                ::startFiniteAnimation
+            )
+    }
+
     fun cancelAnimation() {
         animationStartToken++
 
@@ -185,6 +216,7 @@ internal class HaloView(
             false
 
         animationEngine.cancel()
+
     }
 
     override fun onSizeChanged(
@@ -207,15 +239,7 @@ internal class HaloView(
 
         requestApplyInsets()
 
-        if (
-            w > 0 &&
-            h > 0
-        ) {
-            pendingFiniteAnimation
-                ?.let(
-                    ::startFiniteAnimation
-                )
-        }
+        startPendingFiniteAnimationIfReady()
     }
 
     override fun onAttachedToWindow() {
@@ -223,15 +247,7 @@ internal class HaloView(
 
         requestApplyInsets()
 
-        if (
-            width > 0 &&
-            height > 0
-        ) {
-            pendingFiniteAnimation
-                ?.let(
-                    ::startFiniteAnimation
-                )
-        }
+        startPendingFiniteAnimationIfReady()
     }
 
     override fun onApplyWindowInsets(
@@ -278,7 +294,8 @@ internal class HaloView(
     }
 
     fun startAmbientEffect(
-        effectSpeed: Float
+        effectSpeed: Float,
+        motion: HaloMotion
     ) {
         animationStartToken++
 
@@ -294,6 +311,9 @@ internal class HaloView(
                 MAX_EFFECT_SPEED
             )
 
+        ambientMotion =
+            motion
+
         animationEngine.startAmbient(
             HaloAmbientAnimationRequest(
                 effectSpeed =
@@ -301,7 +321,8 @@ internal class HaloView(
                 phaseStart =
                     animationState.phase,
                 gradientPhaseStart =
-                    animationState.gradientPhase
+                    animationState.gradientPhase,
+                motion = ambientMotion
             )
         )
     }
@@ -350,7 +371,8 @@ internal class HaloView(
                 phaseStart =
                     animationState.phase,
                 gradientPhaseStart =
-                    animationState.gradientPhase
+                    animationState.gradientPhase,
+                motion = ambientMotion
             )
         )
     }

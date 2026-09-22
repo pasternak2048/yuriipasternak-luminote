@@ -459,7 +459,8 @@ class HaloAccessibilityService : AccessibilityService() {
             )
 
             view.startAmbientEffect(
-                config.effectSpeed
+                effectSpeed = config.effectSpeed,
+                motion = config.motion
             )
 
             if (
@@ -901,7 +902,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 )
 
                 view.setOnFiniteAnimationCompletedListener(
-                    complete
+                    {}
                 )
 
                 startAnimation(
@@ -998,7 +999,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 resolvedConfig
             ).apply {
                 setOnFiniteAnimationCompletedListener(
-                    complete
+                    {}
                 )
             }
 
@@ -1139,8 +1140,7 @@ class HaloAccessibilityService : AccessibilityService() {
          * token as the natural animation completion.
          */
         val watchdogDelay =
-            totalDuration +
-                    QUEUED_COMPLETION_GRACE_MS
+            totalDuration
 
         lateinit var watchdog:
                 Runnable
@@ -1172,15 +1172,6 @@ class HaloAccessibilityService : AccessibilityService() {
 
                 queuedCompletionWatchdog =
                     null
-
-                Log.w(
-                    TAG,
-                    "Queued animation completion watchdog fired " +
-                            "token=$requestToken, " +
-                            "key=${request.notificationKey}, " +
-                            "after=${watchdogDelay}ms, " +
-                            "expected=${totalDuration}ms"
-                )
 
                 onCompleted()
             }
@@ -1303,7 +1294,5 @@ class HaloAccessibilityService : AccessibilityService() {
          * period keeps transient frame/main-thread delays from being mistaken
          * for a dead animation.
          */
-        private const val QUEUED_COMPLETION_GRACE_MS =
-            3_000L
     }
 }

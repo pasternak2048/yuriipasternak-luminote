@@ -22,7 +22,8 @@ data class HaloAnimationRequest(
 data class HaloAmbientAnimationRequest(
     val effectSpeed: Float,
     val phaseStart: Float,
-    val gradientPhaseStart: Float
+    val gradientPhaseStart: Float,
+    val motion: HaloMotion
 )
 
 internal interface HaloAnimationEngine {
