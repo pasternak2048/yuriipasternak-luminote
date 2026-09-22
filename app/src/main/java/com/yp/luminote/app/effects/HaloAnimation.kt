@@ -7,12 +7,15 @@ import android.view.Choreographer
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
 import com.yp.luminote.app.data.settings.HaloMotion
+import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sin
 
 /**
- * Both finite and ambient animations are VSYNC-driven through Choreographer.
- * The Handler is used only for an intentional pause between finite cycles.
+ * Finite animations are driven by the main-thread clock, so an LTPO display
+ * lowering its VSYNC rate cannot delay the first visible frame. Ambient
+ * animation remains VSYNC-driven through Choreographer.
  */
 internal class HaloAnimation(
     private val onFrame: (HaloAnimationState) -> Unit,
@@ -76,6 +79,9 @@ internal class HaloAnimation(
     private var ambientGradientPhaseStart =
         0f
 
+    private var ambientMotion =
+        HaloMotion.PULSE
+
     private var currentPhase =
         0f
 
@@ -87,22 +93,6 @@ internal class HaloAnimation(
 
     private var ambientFrameCallbackPosted =
         false
-
-    private var finiteFrameCallbackPosted =
-        false
-
-    private var finiteFrameGeneration =
-        0L
-
-    private val finiteFrameCallback =
-        Choreographer.FrameCallback {
-            finiteFrameCallbackPosted =
-                false
-
-            runFiniteFrame(
-                finiteFrameGeneration
-            )
-        }
 
     private var strategy:
             HaloAnimationStrategy =
@@ -233,6 +223,9 @@ internal class HaloAnimation(
         ambientGradientPhaseStart =
             request.gradientPhaseStart
 
+        ambientMotion =
+            request.motion
+
         currentPhase =
             ambientPhaseStart
 
@@ -243,7 +236,7 @@ internal class HaloAnimation(
             0L
 
         dispatchState(
-            progress = 1f
+            progress = ambientProgressFor(0.0)
         )
 
         postAmbientFrame()
@@ -350,31 +343,23 @@ internal class HaloAnimation(
         val frameGeneration =
             generation
 
-        postFiniteFrame(
-            frameGeneration
+        scheduleFiniteFrame(
+            frameGeneration = frameGeneration,
+            delayMs = 0L
         )
     }
 
-    private fun postFiniteFrame(
-        frameGeneration: Long
+    private fun scheduleFiniteFrame(
+        frameGeneration: Long,
+        delayMs: Long = FINITE_FRAME_DELAY_MS
     ) {
-        if (
-            !running ||
-            ambient ||
-            generation != frameGeneration ||
-            finiteFrameCallbackPosted
-        ) {
-            return
-        }
-
-        finiteFrameCallbackPosted =
-            true
-
-        finiteFrameGeneration =
-            frameGeneration
-
-        choreographer.postFrameCallback(
-            finiteFrameCallback
+        handler.postDelayed(
+            {
+                runFiniteFrame(
+                    frameGeneration
+                )
+            },
+            delayMs
         )
     }
 
@@ -418,11 +403,13 @@ internal class HaloAnimation(
         currentGradientPhase =
             currentPhase
 
+        val progress =
+            alphaFor(
+                fraction
+            )
+
         dispatchState(
-            progress =
-                alphaFor(
-                    fraction
-                )
+            progress = progress
         )
 
         if (
@@ -434,7 +421,7 @@ internal class HaloAnimation(
             return
         }
 
-        postFiniteFrame(
+        scheduleFiniteFrame(
             frameGeneration
         )
     }
@@ -588,7 +575,9 @@ internal class HaloAnimation(
                         .toFloat()
 
         dispatchState(
-            progress = 1f
+            progress = ambientProgressFor(
+                elapsedSeconds
+            )
         )
 
         postAmbientFrame()
@@ -616,8 +605,6 @@ internal class HaloAnimation(
         handler.removeCallbacksAndMessages(
             null
         )
-
-        removeFiniteFrameCallback()
 
         removeAmbientFrameCallback()
 
@@ -665,24 +652,6 @@ internal class HaloAnimation(
         choreographer.postFrameCallback(
             ambientFrameCallback
         )
-    }
-
-    private fun removeFiniteFrameCallback() {
-        if (
-            !finiteFrameCallbackPosted
-        ) {
-            return
-        }
-
-        choreographer.removeFrameCallback(
-            finiteFrameCallback
-        )
-
-        finiteFrameCallbackPosted =
-            false
-
-        finiteFrameGeneration =
-            0L
     }
 
     private fun removeAmbientFrameCallback() {
@@ -787,8 +756,6 @@ internal class HaloAnimation(
             null
         )
 
-        removeFiniteFrameCallback()
-
         removeAmbientFrameCallback()
 
         finiteCycleStartedAtMs =
@@ -804,6 +771,36 @@ internal class HaloAnimation(
                 progress = 0f
             )
         }
+    }
+
+    private fun ambientProgressFor(
+        elapsedSeconds: Double
+    ): Float {
+        if (
+            ambientMotion != HaloMotion.PULSE
+        ) {
+            return 1f
+        }
+
+        val pulsePositionSeconds =
+            elapsedSeconds % PULSE_CYCLE_SECONDS
+
+        if (
+            pulsePositionSeconds < PULSE_SILENCE_SECONDS
+        ) {
+            return 0f
+        }
+
+        val pulseFraction =
+            (
+                    pulsePositionSeconds -
+                            PULSE_SILENCE_SECONDS
+                    ) /
+                    PULSE_DURATION_SECONDS
+
+        return sin(
+            PI * pulseFraction
+        ).toFloat()
     }
 
     private fun sanitizeEffectSpeed(
@@ -839,8 +836,21 @@ internal class HaloAnimation(
         private const val NANOS_PER_SECOND =
             1_000_000_000L
 
+        private const val FINITE_FRAME_DELAY_MS =
+            16L
+
         private const val AMBIENT_ROTATION_DURATION_SECONDS =
             16.0
+
+        private const val PULSE_SILENCE_SECONDS =
+            10.0
+
+        private const val PULSE_DURATION_SECONDS =
+            2.5
+
+        private const val PULSE_CYCLE_SECONDS =
+            PULSE_SILENCE_SECONDS +
+                    PULSE_DURATION_SECONDS
 
         private const val AMBIENT_PHASE_SPAN =
             360.0 /

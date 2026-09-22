@@ -57,6 +57,12 @@ class HaloOverlayService : Service() {
             stopSelf()
         }
 
+    private var queuedCompletionWatchdog:
+            Runnable? = null
+
+    private var queuedWatchdogRequest:
+            HaloEffectRequest? = null
+
     private val displayListener =
         object : DisplayManager.DisplayListener {
 
@@ -737,7 +743,8 @@ class HaloOverlayService : Service() {
             )
         ) {
             view.startAmbientEffect(
-                config.effectSpeed
+                effectSpeed = config.effectSpeed,
+                motion = config.motion
             )
 
             return
@@ -845,15 +852,23 @@ class HaloOverlayService : Service() {
         )
     }
 
-    private fun removeOverlay() {
+    private fun removeOverlay(
+        immediately: Boolean = false
+    ) {
         overlayView?.let { view ->
             try {
                 if (
                     view.isAttachedToWindow
                 ) {
-                    windowManager.removeView(
-                        view
-                    )
+                    if (immediately) {
+                        windowManager.removeViewImmediate(
+                            view
+                        )
+                    } else {
+                        windowManager.removeView(
+                            view
+                        )
+                    }
                 }
             } catch (
                 exception: Exception
@@ -880,6 +895,8 @@ class HaloOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        cancelQueuedCompletionWatchdog()
+
         /*
          * Detach only this concrete Service instance.
          *
@@ -1013,6 +1030,11 @@ class HaloOverlayService : Service() {
             "Queued effect rendered by application overlay"
         )
 
+        cancelQueuedCompletionWatchdog()
+
+        queuedWatchdogRequest =
+            request
+
         showOverlay(
             config = request.config,
             restart = true,
@@ -1020,17 +1042,31 @@ class HaloOverlayService : Service() {
             paletteColors =
                 request.paletteColors,
             scheduleRemoval = false,
-            onFiniteAnimationCompleted = {
-                onQueuedEffectCompleted(
-                    request
-                )
-            }
+            onFiniteAnimationCompleted = {}
+        )
+
+        scheduleQueuedCompletionWatchdog(
+            request
         )
     }
 
     private fun onQueuedEffectCompleted(
         request: HaloEffectRequest
     ) {
+        if (
+            queuedWatchdogRequest != null &&
+            queuedWatchdogRequest !== request
+        ) {
+            Log.d(
+                TAG,
+                "Ignoring stale queued completion: " +
+                        "package=${request.packageName}, " +
+                        "key=${request.notificationKey}"
+            )
+
+            return
+        }
+
         Log.d(
             TAG,
             "Queued effect completed: " +
@@ -1042,7 +1078,13 @@ class HaloOverlayService : Service() {
             removeOverlayTask
         )
 
-        removeOverlay()
+        cancelQueuedCompletionWatchdog()
+
+        overlayView?.cancelAnimation()
+
+        removeOverlay(
+            immediately = true
+        )
 
         effectCoordinator.onRequestCompleted(
             request
@@ -1053,6 +1095,85 @@ class HaloOverlayService : Service() {
         ) {
             stopSelf()
         }
+    }
+
+    private fun scheduleQueuedCompletionWatchdog(
+        request: HaloEffectRequest
+    ) {
+        val config =
+            request.config
+
+        if (
+            config.notificationPlayback ==
+            NotificationPlayback.KEEP_VISIBLE
+        ) {
+            return
+        }
+
+        val cycleDurationMs =
+            max(
+                HaloAnimation.MIN_DURATION_MS,
+                (
+                        config.durationSeconds *
+                                1000f
+                        ).toLong()
+            )
+
+        val intervalMs =
+            (
+                    config.intervalSeconds *
+                            1000f
+                    ).toLong()
+                .coerceAtLeast(0L)
+
+        val cycles =
+            config.repeatCount.coerceAtLeast(1)
+
+        val expectedDurationMs =
+            cycleDurationMs * cycles +
+                    intervalMs *
+                            (cycles - 1)
+
+        val watchdogDelayMs =
+            expectedDurationMs
+
+        lateinit var watchdog:
+                Runnable
+
+        watchdog =
+            Runnable {
+                if (
+                    queuedCompletionWatchdog !== watchdog ||
+                    queuedWatchdogRequest !== request
+                ) {
+                    return@Runnable
+                }
+
+                onQueuedEffectCompleted(
+                    request
+                )
+            }
+
+        queuedCompletionWatchdog =
+            watchdog
+
+        handler.postDelayed(
+            watchdog,
+            watchdogDelayMs
+        )
+    }
+
+    private fun cancelQueuedCompletionWatchdog() {
+        queuedCompletionWatchdog
+            ?.let(
+                handler::removeCallbacks
+            )
+
+        queuedCompletionWatchdog =
+            null
+
+        queuedWatchdogRequest =
+            null
     }
 
     override fun onBind(
