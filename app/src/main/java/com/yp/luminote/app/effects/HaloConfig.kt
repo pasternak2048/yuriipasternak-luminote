@@ -23,10 +23,13 @@ data class HaloConfig(
     /** Colors used by a gradient treatment. */
     val palette: IntArray = intArrayOf()
 ) {
-    fun sanitized(): HaloConfig =
-        copy(
-            effectSpeed = effectSpeed.takeIf { it.isFinite() }?.coerceIn(0.25f, 2f) ?: 1f,
-            durationSeconds = motion.durationFor(effectSpeed),
+    fun sanitized(): HaloConfig {
+        val sanitizedEffectSpeed =
+            effectSpeed.takeIf { it.isFinite() }?.coerceIn(0.25f, 2f) ?: 1f
+
+        return copy(
+            effectSpeed = sanitizedEffectSpeed,
+            durationSeconds = motion.durationFor(sanitizedEffectSpeed),
             gradientFlowSpeed = gradientFlowSpeed.takeIf { it.isFinite() }?.coerceIn(0.5f, 2.5f) ?: 1f,
             intervalSeconds = intervalSeconds.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 1f,
             repeatCount = repeatCount.takeIf { it == -1 || it in 1..5 } ?: 1,
@@ -34,6 +37,7 @@ data class HaloConfig(
             thickness = thickness.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0.5f,
             palette = palette.distinct().toIntArray()
         )
+    }
 
     companion object {
         fun defaultGradientPalette(): IntArray = DEFAULT_GRADIENT_COLORS.copyOf()
