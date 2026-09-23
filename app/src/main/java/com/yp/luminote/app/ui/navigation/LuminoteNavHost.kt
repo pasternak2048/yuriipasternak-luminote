@@ -21,6 +21,7 @@ import com.yp.luminote.app.ui.apps.AppsScreen
 import com.yp.luminote.app.ui.easteregg.EasterEggScreen
 import com.yp.luminote.app.ui.effects.HaloScreen
 import com.yp.luminote.app.ui.home.HomeScreen
+import com.yp.luminote.app.ui.language.LanguageScreen
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModelFactory
 
@@ -32,6 +33,7 @@ object LuminoteRoutes {
     const val ACCESS = "access"
     const val AMBIENT = "ambient"
     const val EASTER_EGG = "easter_egg"
+    const val LANGUAGE = "language"
 }
 
 @Composable
@@ -123,6 +125,11 @@ fun LuminoteNavHost() {
                         LuminoteRoutes.APPS
                     )
                 },
+                onLanguageClick = {
+                    navController.navigate(
+                        LuminoteRoutes.LANGUAGE
+                    )
+                },
                 onAmbientClick = {
                     navController.navigate(
                         LuminoteRoutes.AMBIENT
@@ -142,6 +149,16 @@ fun LuminoteNavHost() {
                     windowSizeClass,
                 viewModel =
                     settingsViewModel
+            )
+        }
+
+        composable(
+            LuminoteRoutes.LANGUAGE
+        ) {
+            LanguageScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                }
             )
         }
 
