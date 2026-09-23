@@ -48,6 +48,7 @@ fun HomeScreen(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
     windowSizeClass: LuminoteWindowSizeClass,
@@ -205,6 +206,8 @@ fun HomeScreen(
                         onAmbientClick,
                     onAppsClick =
                         onAppsClick,
+                    onLanguageClick =
+                        onLanguageClick,
                     onAboutClick =
                         onAboutClick,
                     onAccessClick =
@@ -224,6 +227,8 @@ fun HomeScreen(
                         onAmbientClick,
                     onAppsClick =
                         onAppsClick,
+                    onLanguageClick =
+                        onLanguageClick,
                     onAboutClick =
                         onAboutClick,
                     onAccessClick =
@@ -243,6 +248,8 @@ fun HomeScreen(
                         onAmbientClick,
                     onAppsClick =
                         onAppsClick,
+                    onLanguageClick =
+                        onLanguageClick,
                     onAboutClick =
                         onAboutClick,
                     onAccessClick =
@@ -262,6 +269,7 @@ private fun CompactHomeContent(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
     mode: HaloMode,
@@ -277,6 +285,8 @@ private fun CompactHomeContent(
             onAmbientClick,
         onAppsClick =
             onAppsClick,
+        onLanguageClick =
+            onLanguageClick,
         onAboutClick =
             onAboutClick,
         onAccessClick =
@@ -291,6 +301,7 @@ private fun MediumHomeContent(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
     mode: HaloMode,
@@ -326,6 +337,8 @@ private fun MediumHomeContent(
                     onAmbientClick,
                 onAppsClick =
                     onAppsClick,
+                onLanguageClick =
+                    onLanguageClick,
                 onAboutClick =
                     onAboutClick,
                 onAccessClick =
@@ -342,6 +355,7 @@ private fun ExpandedHomeContent(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
     mode: HaloMode,
@@ -377,6 +391,8 @@ private fun ExpandedHomeContent(
                     onAmbientClick,
                 onAppsClick =
                     onAppsClick,
+                onLanguageClick =
+                    onLanguageClick,
                 onAboutClick =
                     onAboutClick,
                 onAccessClick =
@@ -395,6 +411,7 @@ private fun HomeSettingsList(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
     spacing: Dp
@@ -452,6 +469,12 @@ private fun HomeSettingsList(
                 stringResource(R.string.home_access_description),
             onClick =
                 onAccessClick
+        )
+
+        HomeSettingItem(
+            title = stringResource(R.string.language),
+            subtitle = stringResource(R.string.home_language_description),
+            onClick = onLanguageClick
         )
 
         HomeSettingItem(

@@ -1,108 +1,67 @@
 # Luminote
 
-**Luminote** is an Android application for customizable notification lighting and ambient edge effects.
-
-## What is Luminote?
-
-Luminote renders its own notification lighting effect around the physical contour of the display.
-
-The core effect, **Luminote Halo**, provides a customizable visual indication for incoming notifications without relying on device-specific edge lighting implementations.
+Luminote is an Android app that adds a configurable light around the edge of your screen. It makes incoming notifications easier to notice without relying on a phone maker's built-in edge-lighting feature, and it can also keep a decorative edge effect visible while the screen is on.
 
 ## Features
 
-- Customizable **Luminote Halo**
-- Multiple animation modes:
-  - Pulse
-  - Snake
-  - Corner Pulse
-  - Rain
-  - Ripple Edge
-- Adjustable effect speed
-- Adjustable brightness and edge width
-- Solid colors and animated gradients
-- Notification app color matching
-- Luminote and notification-app gradient palettes
-- Per-app notification source selection
-- Optional silent notification updates
-- Repeatable notification effects
-- Ambient Halo for persistent decorative edge lighting
+- **Luminote Halo** for notification-driven edge glow.
+- Choose whether every app or only selected apps can trigger the Halo.
+- Choose a solid color, match the notifying app's icon color, or use a gradient. Gradients can use Luminote's palette or colors from active notifications.
+- Adjust brightness, edge width, effect speed, and gradient flow.
+- Choose Pulse, Snake, Corner pulse, Rain, or Ripple edge animations.
+- Set notification reminders to play once, repeat, or remain visible until relevant notifications are dismissed.
+- **Ambient Halo**, a separate always-visible edge effect while the screen is on, with its own color, brightness, width, animation, and speed.
+- Optional lock-screen Halo support through Luminote's accessibility service.
+- In-app updates from GitHub Releases, with Stable, QA, and Dev channels. Update notifications are optional.
+- English and Ukrainian interface translations. In **Language**, choose System default, English, or Ukrainian; System default follows the phone's language.
 
-## Tested Devices
+## Requirements and permissions
 
-Luminote has been tested on:
+Luminote requires **Android 16 (API 36) or later**.
 
-- Samsung Galaxy S25
-- Google Pixel 6
-- Google Pixel 9a
-- Xiaomi 14T Pro
+To use notification effects, open **Access** in Luminote and allow:
 
-The Halo outline correctly follows the physical display contour on all tested devices.
+- **Display over other apps** — lets the Halo appear above the app currently on screen.
+- **Notification access** — lets Luminote detect notifications and, when selected, use the notifying app's icon color.
 
-## Project Structure
+The following permissions are used for specific optional features:
 
-Luminote is built natively for Android using:
+- **Accessibility service** — enables the lock-screen Halo. The service does not retrieve window content, accept touches, or wake the display.
+- **Notifications** — needed only when you enable update notifications.
+- **Install unknown apps** — requested only when you choose to install a downloaded in-app update.
+- **Internet** — checks GitHub Releases and downloads an update when you request one.
 
-- Kotlin
-- Jetpack Compose
-- Material 3
-- Android Notification Listener
-- Android Overlay APIs
-- Android Accessibility APIs
-- DataStore Preferences
+Luminote also runs its active Halo renderer as an Android foreground service so the effect can remain available when the app is not open.
 
-## Build
+## Install and use
 
-Clone the repository:
+1. Download an APK from the project's [GitHub Releases](https://github.com/pasternak2048/yuriipasternak-luminote/releases) page and install it. Android may ask you to allow installs from the app you used to open the APK.
+2. Open Luminote and select **Alerts** or **Ambient** on the home screen.
+3. For notification effects, open **Access** and enable Display over other apps and Notification access.
+4. Open **Luminote Halo** to customize notification lighting, and **Apps** to limit which apps can trigger it. Use **Ambient Halo** to customize the persistent effect.
+5. Optionally enable the lock-screen Halo in **Access**, or choose a language in **Language**.
+
+In **About**, you can check for updates, choose an update channel, download an available APK, and install it through Android's installer.
+
+## Development
+
+Luminote is a Kotlin Android application built with Jetpack Compose and Material 3. The repository includes the Gradle wrapper and uses Java 17 in its release workflow.
 
 ```bash
 git clone https://github.com/pasternak2048/yuriipasternak-luminote.git
 cd yuriipasternak-luminote
-```
-
-Build a debug APK:
-
-```bash
 ./gradlew assembleDebug
+./gradlew test
 ```
 
-On Windows:
+On Windows, use `./gradlew.bat assembleDebug` and `./gradlew.bat test`.
 
-```powershell
-.\gradlew.bat assembleDebug
-```
-
-## Releases
-
-Signed APK builds are produced automatically through GitHub Actions for tagged releases.
-
-Release tags follow semantic versioning:
-
-```text
-v0.1.0
-v0.1.1
-v0.2.0
-```
-
-The resulting APK is published in the GitHub Releases section.
-
-## Permissions
-
-Luminote requires notification access and system permissions necessary to render its notification effects.
-
-Some Halo functionality may also require the Luminote accessibility service.
-
-These permissions are used exclusively for notification processing and edge-lighting functionality.
+The app module targets API 37, has a minimum SDK of 36, and includes unit and instrumentation tests. Tagged `v*` releases are built by GitHub Actions; the workflow publishes an APK and its update manifest to GitHub Releases.
 
 ## Status
 
-Luminote is currently in early development.
-
-Features, behavior and UI may change between releases.
-
-## Author
-
-**Yurii Pasternak**
+Luminote is in early development. Device-specific behavior, especially overlays and lock-screen effects, should be tested on the Android device you plan to use.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE).
+Copyright (c) 2026 Yurii Pasternak. Licensed under the [MIT License](LICENSE).
