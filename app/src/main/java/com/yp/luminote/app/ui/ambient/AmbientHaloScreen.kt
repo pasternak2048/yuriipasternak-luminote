@@ -27,10 +27,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloColorMode
@@ -38,6 +41,7 @@ import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
@@ -48,6 +52,7 @@ fun AmbientHaloScreen(
     viewModel: LuminoteSettingsViewModel
 ) {
     val context = LocalContext.current
+    val backDescription = stringResource(R.string.back)
     val settings by viewModel.settings.collectAsState()
     val uiMetrics = rememberLuminoteUiMetrics()
 
@@ -84,12 +89,13 @@ fun AmbientHaloScreen(
                     text = "‹",
                     modifier = Modifier
                         .size(uiMetrics.backButtonSize)
+                        .semantics { contentDescription = backDescription }
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
                     color = Color.White
                 )
                 Text(
-                    text = "Ambient Halo",
+                    text = stringResource(R.string.ambient_halo),
                     style = if (uiMetrics.isCompactHeight) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White
@@ -97,7 +103,7 @@ fun AmbientHaloScreen(
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "Personalize the edge of your screen while it is on.",
+                text = stringResource(R.string.ambient_intro),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color(0xFFBDBDBD)
             )
@@ -124,11 +130,11 @@ fun AmbientHaloScreen(
 
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Animation", uiMetrics = uiMetrics) {
+                    AmbientGroup(title = stringResource(R.string.animation), uiMetrics = uiMetrics) {
                         AmbientSlider(
-                            title = "Effect speed",
+                            title = stringResource(R.string.effect_speed),
                             value = settings.ambientEffectSpeed,
-                            valueText = "${"%.2g".format(settings.ambientEffectSpeed)}×",
+                            valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.2g", settings.ambientEffectSpeed)),
                             range = 0.25f..2f,
                             steps = 6,
                             onValueChange = viewModel::setAmbientEffectSpeed,
@@ -140,8 +146,8 @@ fun AmbientHaloScreen(
 
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Colors", uiMetrics = uiMetrics) {
-                        Text("Ambient color", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+                    AmbientGroup(title = stringResource(R.string.colors), uiMetrics = uiMetrics) {
+                        Text(stringResource(R.string.ambient_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
                         Spacer(Modifier.height(12.dp))
                         AmbientColorGrid(
                             selectedColor = Color(settings.ambientColor),
@@ -152,9 +158,9 @@ fun AmbientHaloScreen(
                         if (settings.ambientColorMode == HaloColorMode.GRADIENT) {
                             Spacer(Modifier.height(18.dp))
                             AmbientSlider(
-                                title = "Color flow",
+                                title = stringResource(R.string.color_flow),
                                 value = settings.ambientGradientFlowSpeed,
-                                valueText = "${"%.1f".format(settings.ambientGradientFlowSpeed)}×",
+                                valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.ambientGradientFlowSpeed)),
                                 range = 0.5f..2.5f,
                                 steps = 3,
                                 onValueChange = viewModel::setAmbientGradientFlowSpeed,
@@ -167,19 +173,19 @@ fun AmbientHaloScreen(
 
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
-                    AmbientGroup(title = "Appearance", uiMetrics = uiMetrics) {
+                    AmbientGroup(title = stringResource(R.string.appearance), uiMetrics = uiMetrics) {
                         AmbientSlider(
-                            title = "Halo brightness",
+                            title = stringResource(R.string.halo_brightness),
                             value = settings.ambientIntensity,
-                            valueText = "${(settings.ambientIntensity * 100).toInt()}%",
+                            valueText = stringResource(R.string.percentage, (settings.ambientIntensity * 100).toInt()),
                             onValueChange = viewModel::setAmbientIntensity,
                             onValueChangeFinished = viewModel::flushPendingSettings
                         )
                         Spacer(Modifier.height(16.dp))
                         AmbientSlider(
-                            title = "Edge width",
+                            title = stringResource(R.string.edge_width),
                             value = settings.ambientThickness,
-                            valueText = "${(settings.ambientThickness * 100).toInt()}%",
+                            valueText = stringResource(R.string.percentage, (settings.ambientThickness * 100).toInt()),
                             onValueChange = viewModel::setAmbientThickness,
                             onValueChangeFinished = viewModel::flushPendingSettings
                         )

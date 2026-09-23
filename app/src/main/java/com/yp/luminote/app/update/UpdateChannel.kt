@@ -1,19 +1,22 @@
 package com.yp.luminote.app.update
 
+import androidx.annotation.StringRes
+import com.yp.luminote.app.R
+
 enum class UpdateChannel(
-    val label: String,
+    @get:StringRes val labelRes: Int,
     private val tagMarker: String?
 ) {
     STABLE(
-        label = "Stable",
+        labelRes = R.string.update_channel_stable,
         tagMarker = null
     ),
     QA(
-        label = "QA",
+        labelRes = R.string.update_channel_qa,
         tagMarker = ".qa."
     ),
     DEV(
-        label = "Dev",
+        labelRes = R.string.update_channel_dev,
         tagMarker = ".dev."
     );
 

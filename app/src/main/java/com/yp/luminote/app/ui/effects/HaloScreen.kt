@@ -35,16 +35,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.definition
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
@@ -58,6 +62,7 @@ fun HaloScreen(
 ) {
     val context =
         androidx.compose.ui.platform.LocalContext.current
+    val backDescription = stringResource(R.string.back)
 
     DisposableEffect(context) {
         onDispose {
@@ -109,6 +114,7 @@ fun HaloScreen(
                     modifier =
                         Modifier
                             .size(48.dp)
+                            .semantics { contentDescription = backDescription }
                             .clickable(
                                 onClick =
                                     onBackClick
@@ -118,7 +124,7 @@ fun HaloScreen(
                 )
 
                 Text(
-                    text = "Luminote Halo",
+                    text = stringResource(R.string.luminote_halo),
                     modifier =
                         Modifier.padding(
                             start = 4.dp
@@ -136,7 +142,7 @@ fun HaloScreen(
 
             Text(
                 text =
-                    "Customize your notification lighting",
+                    stringResource(R.string.customize_notification_lighting),
                 style =
                     MaterialTheme
                         .typography
@@ -348,12 +354,12 @@ private fun AppearanceGroup(
     viewModel: LuminoteSettingsViewModel
 ) {
     SettingsGroup(
-        title = "Colors"
+        title = stringResource(R.string.colors)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Match app color", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                Text("Use the notifying app’s icon color", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+                Text(stringResource(R.string.match_app_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+                Text(stringResource(R.string.match_app_color_description), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
             }
             Switch(
                 checked = settings.colorSource == HaloColorSource.APP_ICON,
@@ -363,7 +369,7 @@ private fun AppearanceGroup(
 
         if (settings.colorSource != HaloColorSource.APP_ICON) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Halo color", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+            Text(stringResource(R.string.halo_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
             Spacer(modifier = Modifier.height(12.dp))
             ColorGrid(
                 selectedColor = selectedColor,
@@ -380,8 +386,8 @@ private fun AppearanceGroup(
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Use app palette", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                    Text("Build the palette from active alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+                    Text(stringResource(R.string.use_app_palette), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+                    Text(stringResource(R.string.use_app_palette_description), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
                 }
                 Switch(
                     checked = settings.gradientPalette == com.yp.luminote.app.data.settings.GradientPalette.NOTIFICATION_APPS,
@@ -395,9 +401,9 @@ private fun AppearanceGroup(
             }
             Spacer(modifier = Modifier.height(16.dp))
             SliderSetting(
-                title = "Color flow",
+                title = stringResource(R.string.color_flow),
                 value = settings.gradientFlowSpeed,
-                valueText = "${"%.1f".format(settings.gradientFlowSpeed)}×",
+                valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.gradientFlowSpeed)),
                 valueRange = 0.5f..2.5f,
                 steps = 3,
                 onValueChange = viewModel::setGradientFlowSpeed,
@@ -411,7 +417,7 @@ private fun AppearanceGroup(
         )
 
         SliderSetting(
-            title = "Halo brightness",
+            title = stringResource(R.string.halo_brightness),
             value =
                 settings
                     .haloIntensity,
@@ -437,7 +443,7 @@ private fun AppearanceGroup(
         )
 
         SliderSetting(
-            title = "Edge width",
+            title = stringResource(R.string.edge_width),
             value =
                 settings
                     .haloThickness,
@@ -465,11 +471,11 @@ private fun MotionGroup(
     settings: LuminoteSettings,
     viewModel: LuminoteSettingsViewModel
 ) {
-    SettingsGroup(title = "Animation") {
+    SettingsGroup(title = stringResource(R.string.animation)) {
         SliderSetting(
-            title = "Effect speed",
+            title = stringResource(R.string.effect_speed),
             value = settings.haloEffectSpeed,
-            valueText = "${"%.2g".format(settings.haloEffectSpeed)}×",
+            valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.2g", settings.haloEffectSpeed)),
             valueRange = 0.25f..2f,
             steps = 6,
             onValueChange = viewModel::setHaloEffectSpeed,
@@ -484,7 +490,7 @@ private fun TimingGroup(
     viewModel: LuminoteSettingsViewModel
 ) {
     SettingsGroup(
-        title = "Reminders"
+        title = stringResource(R.string.reminders)
     ) {
 
         val repeatsEnabled = settings.notificationPlayback != NotificationPlayback.ONCE
@@ -500,13 +506,13 @@ private fun TimingGroup(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PlaybackChoice(
                     selected = settings.notificationPlayback == NotificationPlayback.REPEAT,
-                    title = "Repeat",
+                    title = stringResource(R.string.repeat),
                     onClick = { viewModel.setNotificationPlayback(NotificationPlayback.REPEAT) },
                     modifier = Modifier.weight(1f)
                 )
                 PlaybackChoice(
                     selected = settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE,
-                    title = "Keep visible",
+                    title = stringResource(R.string.keep_visible),
                     onClick = { viewModel.setNotificationPlayback(NotificationPlayback.KEEP_VISIBLE) },
                     modifier = Modifier.weight(1f)
                 )
@@ -517,9 +523,9 @@ private fun TimingGroup(
             Spacer(modifier = Modifier.height(16.dp))
             val repeatPosition = settings.haloRepeatCount.toFloat()
             SliderSetting(
-                title = "Reminder pulses",
+                title = stringResource(R.string.reminder_pulses),
                 value = repeatPosition,
-                valueText = "${settings.haloRepeatCount} times",
+                valueText = androidx.compose.ui.res.pluralStringResource(R.plurals.times, settings.haloRepeatCount, settings.haloRepeatCount),
                 valueRange = 2f..5f,
                 steps = 3,
                 onValueChange = { value -> viewModel.setHaloRepeatCount(value.toInt()) },
@@ -528,9 +534,9 @@ private fun TimingGroup(
 
             Spacer(modifier = Modifier.height(16.dp))
             SliderSetting(
-                title = "Repeat after",
+                title = stringResource(R.string.repeat_after),
                 value = settings.haloInterval,
-                valueText = "${"%.1f".format(settings.haloInterval)} s",
+                valueText = stringResource(R.string.seconds, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.haloInterval)),
                 valueRange = 0f..10f,
                 onValueChange = viewModel::setHaloInterval,
                 onValueChangeFinished = viewModel::flushPendingSettings
@@ -539,8 +545,8 @@ private fun TimingGroup(
 
         if (settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(settings.haloMotion.definition.ambientDescription, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
-            Text("Stops after all relevant alerts are dismissed", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text(stringResource(settings.haloMotion.definition.ambientDescriptionRes), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text(stringResource(R.string.stops_when_alerts_dismissed), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
         }
 
     }
@@ -550,8 +556,8 @@ private fun TimingGroup(
 private fun RepeatHaloSetting(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Repeat notification effect", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-            Text("Replay the effect for unread alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text(stringResource(R.string.repeat_notification_effect), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+            Text(stringResource(R.string.repeat_notification_effect_description), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
         }
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
@@ -621,7 +627,7 @@ private fun TestEffectButton(
         ) {
 
             Text(
-                text = if (settings.ambientEnabled) "Turn off Ambient Halo to preview" else "Preview Halo",
+                text = stringResource(if (settings.ambientEnabled) R.string.turn_off_ambient_to_preview else R.string.preview_halo),
                 style =
                     MaterialTheme
                         .typography
