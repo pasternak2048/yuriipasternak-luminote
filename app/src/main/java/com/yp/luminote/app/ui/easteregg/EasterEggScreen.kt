@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +45,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.R
 
 @Composable
 fun EasterEggScreen(
@@ -121,7 +123,7 @@ fun EasterEggScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Some lights never really fade.",
+                text = stringResource(R.string.easter_egg_line_one),
                 modifier = Modifier.alpha(mainTextAlpha.value),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Medium,
@@ -130,7 +132,7 @@ fun EasterEggScreen(
             )
             Spacer(modifier = Modifier.height(18.dp))
             Text(
-                text = "Just kidding.",
+                text = stringResource(R.string.easter_egg_line_two),
                 modifier = Modifier.alpha(secondaryTextAlpha.value),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Normal,

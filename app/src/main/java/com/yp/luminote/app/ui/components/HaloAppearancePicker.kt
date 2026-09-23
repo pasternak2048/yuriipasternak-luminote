@@ -16,10 +16,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.data.settings.definition
+import com.yp.luminote.app.R
 
 @Composable
 fun HaloAppearancePicker(
@@ -36,20 +38,20 @@ fun HaloAppearancePicker(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Frame", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(stringResource(R.string.frame), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
         AppearanceChoice(
-            title = frame.definition.title,
-            subtitle = frame.definition.description,
+            title = stringResource(frame.definition.titleRes),
+            subtitle = stringResource(frame.definition.descriptionRes),
             selected = true
         )
 
-        Text("Animation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(stringResource(R.string.animation), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             availableMotions.forEach { candidate ->
                 val definition = candidate.definition
                 AppearanceChoice(
-                    title = definition.title,
-                    subtitle = definition.description,
+                    title = stringResource(definition.titleRes),
+                    subtitle = stringResource(definition.descriptionRes),
                     selected = motion == candidate,
                     onClick = { onMotionSelected(candidate) }
                 )

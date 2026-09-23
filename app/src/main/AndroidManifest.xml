@@ -78,7 +78,7 @@
         <service
             android:name=".effects.HaloAccessibilityService"
             android:exported="false"
-            android:label="Luminote lock screen halo"
+            android:label="@string/accessibility_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
 
             <intent-filter>

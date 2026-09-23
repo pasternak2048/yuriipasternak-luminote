@@ -38,12 +38,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.effects.HaloAccessibilityService
+import com.yp.luminote.app.R
 import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.theme.LuminoteDarkBackground
@@ -61,6 +65,7 @@ fun AccessScreen(
     viewModel: LuminoteSettingsViewModel
 ) {
     val context = LocalContext.current
+    val backDescription = stringResource(R.string.back)
     var refreshKey by remember { mutableIntStateOf(0) }
 
     val settings by
@@ -108,12 +113,13 @@ fun AccessScreen(
                     text = "‹",
                     modifier = Modifier
                         .size(48.dp)
+                        .semantics { contentDescription = backDescription }
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
                     color = LuminoteDarkOnSurface
                 )
                 Text(
-                    text = "Access",
+                    text = stringResource(R.string.access),
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = LuminoteDarkOnSurface
@@ -122,7 +128,7 @@ fun AccessScreen(
 
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Manage the permissions Luminote needs for alerts and edge personalization.",
+                text = stringResource(R.string.access_intro),
                 style = MaterialTheme.typography.bodyLarge,
                 color = LuminoteDarkSecondaryText
             )
@@ -136,8 +142,8 @@ fun AccessScreen(
                 .luminoteSafeHorizontalPadding(),
         ) {
             AccessItem(
-                title = "Display over other apps",
-                description = "Lets Luminote draw the halo above the current app.",
+                title = stringResource(R.string.display_over_other_apps),
+                description = stringResource(R.string.display_over_other_apps_description),
                 granted = overlayAllowed,
                 onClick = {
                     context.startActivity(
@@ -152,8 +158,8 @@ fun AccessScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             AccessItem(
-                title = "Notification access",
-                description = "Lets Luminote read active notifications and choose their color.",
+                title = stringResource(R.string.notification_access),
+                description = stringResource(R.string.notification_access_description),
                 granted = notificationAccessAllowed,
                 onClick = {
                     context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
@@ -163,8 +169,8 @@ fun AccessScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             AccessItem(
-                title = "Lock screen halo",
-                description = "Lets the halo appear after you turn on the lock screen. Enable Luminote lock screen halo in Accessibility.",
+                title = stringResource(R.string.lock_screen_halo),
+                description = stringResource(R.string.lock_screen_halo_description),
                 granted = lockScreenAccessAllowed,
                 onClick = {
                     context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
@@ -206,9 +212,9 @@ private fun AccessStatusCard(
         Text(
             text =
                 if (haloReady) {
-                    "Halo is ready"
+                    stringResource(R.string.halo_ready)
                 } else {
-                    "Halo needs access"
+                    stringResource(R.string.halo_needs_access)
                 },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
@@ -220,9 +226,9 @@ private fun AccessStatusCard(
         Text(
             text =
                 if (haloReady) {
-                    "Send a preview to confirm the effect is visible on this device."
+                    stringResource(R.string.halo_ready_description)
                 } else {
-                    "Allow display access and notification access to use notification effects."
+                    stringResource(R.string.halo_needs_access_description)
                 },
             style = MaterialTheme.typography.bodyMedium,
             color = LuminoteDarkSecondaryText
@@ -241,7 +247,7 @@ private fun AccessStatusCard(
                     disabledContentColor = LuminoteDarkSecondaryText
                 )
         ) {
-            Text("Test Halo")
+            Text(stringResource(R.string.test_halo))
         }
     }
 }
@@ -280,7 +286,7 @@ private fun AccessItem(
 
         Spacer(modifier = Modifier.size(16.dp))
         Text(
-            text = if (granted) "Allowed" else "Required",
+            text = stringResource(if (granted) R.string.allowed else R.string.required),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
             color = if (granted) LuminoteSuccess else LuminoteWarning

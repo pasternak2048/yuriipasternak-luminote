@@ -1,5 +1,8 @@
 package com.yp.luminote.app.data.settings
 
+import androidx.annotation.StringRes
+import com.yp.luminote.app.R
+
 enum class HaloFrame {
     CLASSIC
 }
@@ -14,17 +17,17 @@ enum class HaloMotion {
 
 data class HaloFrameDefinition(
     val frame: HaloFrame,
-    val title: String,
-    val description: String,
+    @get:StringRes val titleRes: Int,
+    @get:StringRes val descriptionRes: Int,
     val supportedMotions: List<HaloMotion>
 )
 
 data class HaloMotionDefinition(
     val motion: HaloMotion,
-    val title: String,
-    val description: String,
+    @get:StringRes val titleRes: Int,
+    @get:StringRes val descriptionRes: Int,
     val baseDurationSeconds: Float,
-    val ambientDescription: String
+    @get:StringRes val ambientDescriptionRes: Int
 )
 
 /** Single source of truth for selectable frames, animations and their capabilities. */
@@ -32,8 +35,8 @@ object HaloEffectCatalog {
     private val frames = listOf(
         HaloFrameDefinition(
             frame = HaloFrame.CLASSIC,
-            title = "Edge Frame",
-            description = "Follows the display contour",
+            titleRes = R.string.frame_edge,
+            descriptionRes = R.string.frame_edge_description,
             supportedMotions = listOf(HaloMotion.PULSE, HaloMotion.SNAKE, HaloMotion.CORNER_PULSE, HaloMotion.RAIN, HaloMotion.RIPPLE_EDGE)
         )
     )
@@ -41,38 +44,38 @@ object HaloEffectCatalog {
     private val motions = listOf(
         HaloMotionDefinition(
             motion = HaloMotion.PULSE,
-            title = "Pulse",
-            description = "A clean edge pulse",
+            titleRes = R.string.motion_pulse,
+            descriptionRes = R.string.motion_pulse_description,
             baseDurationSeconds = 2.5f,
-            ambientDescription = "Stays gently visible around the edge"
+            ambientDescriptionRes = R.string.motion_pulse_ambient_description
         ),
         HaloMotionDefinition(
             motion = HaloMotion.SNAKE,
-            title = "Snake",
-            description = "A segment runs around the edge",
+            titleRes = R.string.motion_snake,
+            descriptionRes = R.string.motion_snake_description,
             baseDurationSeconds = 2.5f,
-            ambientDescription = "Keeps moving around the edge"
+            ambientDescriptionRes = R.string.motion_snake_ambient_description
         ),
         HaloMotionDefinition(
             motion = HaloMotion.CORNER_PULSE,
-            title = "Corner pulse",
-            description = "Light moves between the four corners",
+            titleRes = R.string.motion_corner_pulse,
+            descriptionRes = R.string.motion_corner_pulse_description,
             baseDurationSeconds = 2.8f,
-            ambientDescription = "Gently moves attention between corners"
+            ambientDescriptionRes = R.string.motion_corner_pulse_ambient_description
         ),
         HaloMotionDefinition(
             motion = HaloMotion.RAIN,
-            title = "Rain",
-            description = "Light falls down both edges",
+            titleRes = R.string.motion_rain,
+            descriptionRes = R.string.motion_rain_description,
             baseDurationSeconds = 2.6f,
-            ambientDescription = "Keeps a gentle rainfall along the edges"
+            ambientDescriptionRes = R.string.motion_rain_ambient_description
         ),
         HaloMotionDefinition(
             motion = HaloMotion.RIPPLE_EDGE,
-            title = "Ripple edge",
-            description = "Two waves spread around the frame",
+            titleRes = R.string.motion_ripple_edge,
+            descriptionRes = R.string.motion_ripple_edge_description,
             baseDurationSeconds = 2.8f,
-            ambientDescription = "Keeps soft waves moving around the edge"
+            ambientDescriptionRes = R.string.motion_ripple_edge_ambient_description
         )
     )
 

@@ -22,9 +22,8 @@ sealed interface UpdateUiState {
         val update: UpdateInfo,
         val apk: File
     ) : UpdateUiState
-    data class Error(
-        val message: String
-    ) : UpdateUiState
+    data object CheckError : UpdateUiState
+    data object DownloadError : UpdateUiState
 }
 
 class UpdateViewModel(
@@ -82,11 +81,7 @@ class UpdateViewModel(
                     update?.let(UpdateUiState::Available)
                         ?: UpdateUiState.UpToDate
                 },
-                onFailure = { error ->
-                    UpdateUiState.Error(
-                        error.message ?: "Unable to check for updates."
-                    )
-                }
+                onFailure = { UpdateUiState.CheckError }
             )
         }
     }
@@ -107,11 +102,7 @@ class UpdateViewModel(
                 onSuccess = { apk ->
                     UpdateUiState.ReadyToInstall(update, apk)
                 },
-                onFailure = { error ->
-                    UpdateUiState.Error(
-                        error.message ?: "Unable to download the update."
-                    )
-                }
+                onFailure = { UpdateUiState.DownloadError }
             )
         }
     }

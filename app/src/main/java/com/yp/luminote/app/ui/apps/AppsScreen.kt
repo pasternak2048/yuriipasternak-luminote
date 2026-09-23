@@ -47,16 +47,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.data.apps.InstalledApp
+import com.yp.luminote.app.R
 import com.yp.luminote.app.data.apps.InstalledAppsRepository
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.NotificationSource
@@ -73,6 +77,7 @@ fun AppsScreen(
     viewModel: LuminoteSettingsViewModel
 ) {
     val context = LocalContext.current
+    val backDescription = stringResource(R.string.back)
 
     val appsRepository =
         remember {
@@ -195,6 +200,7 @@ fun AppsScreen(
                     modifier =
                         Modifier
                             .size(48.dp)
+                            .semantics { contentDescription = backDescription }
                             .clickable(
                                 onClick =
                                     onBackClick
@@ -211,7 +217,7 @@ fun AppsScreen(
                 )
 
                 Text(
-                    text = "Apps",
+                    text = stringResource(R.string.apps),
                     modifier =
                         Modifier.padding(
                             start = 4.dp
@@ -234,7 +240,7 @@ fun AppsScreen(
 
             Text(
                 text =
-                    "Choose which apps can trigger notifications",
+                    stringResource(R.string.apps_intro),
                 style =
                     MaterialTheme
                         .typography
@@ -387,7 +393,7 @@ private fun CompactAppsContent(
             )
 
             Text(
-                text = "Applications",
+                text = stringResource(R.string.applications),
                 style =
                     MaterialTheme
                         .typography
@@ -402,7 +408,7 @@ private fun CompactAppsContent(
 
             Text(
                 text =
-                    "${settings.selectedApps.size} selected",
+                    androidx.compose.ui.res.pluralStringResource(R.plurals.selected_apps, settings.selectedApps.size, settings.selectedApps.size),
                 style =
                     MaterialTheme
                         .typography
@@ -525,7 +531,7 @@ private fun WideAppsContent(
             ) {
 
                 Text(
-                    text = "Applications",
+                    text = stringResource(R.string.applications),
                     style =
                         MaterialTheme
                             .typography
@@ -540,7 +546,7 @@ private fun WideAppsContent(
 
                 Text(
                     text =
-                        "${settings.selectedApps.size} selected",
+                        androidx.compose.ui.res.pluralStringResource(R.plurals.selected_apps, settings.selectedApps.size, settings.selectedApps.size),
                     style =
                         MaterialTheme
                             .typography
@@ -594,7 +600,7 @@ private fun WideAppsContent(
 
                 Text(
                     text =
-                        "All apps can trigger Luminote Halo",
+                        stringResource(R.string.all_apps_can_trigger),
                     style =
                         MaterialTheme
                             .typography
@@ -635,7 +641,7 @@ private fun AppSearchField(
         placeholder = {
             Text(
                 text =
-                    "Search apps",
+                    stringResource(R.string.search_apps),
                 color =
                     MaterialTheme
                         .colorScheme
@@ -721,7 +727,7 @@ private fun NotificationSourceGroup(
 
                 Text(
                     text =
-                        "Alerts from",
+                        stringResource(R.string.alerts_from),
                     style =
                         MaterialTheme
                             .typography
@@ -746,10 +752,10 @@ private fun NotificationSourceGroup(
                         ) {
 
                             NotificationSource.ALL_APPS ->
-                                "All apps"
+                                stringResource(R.string.all_apps)
 
                             NotificationSource.SELECTED_APPS ->
-                                "Selected apps"
+                                stringResource(R.string.selected_apps_label)
                         },
                     style =
                         MaterialTheme
@@ -799,9 +805,9 @@ private fun NotificationSourceGroup(
 
             SourceOption(
                 title =
-                    "All apps",
+                    stringResource(R.string.all_apps),
                 description =
-                    "Notifications from every app",
+                    stringResource(R.string.notifications_from_every_app),
                 selected =
                     settings.notificationSource ==
                             NotificationSource.ALL_APPS,
@@ -819,9 +825,9 @@ private fun NotificationSourceGroup(
 
             SourceOption(
                 title =
-                    "Selected apps",
+                    stringResource(R.string.selected_apps_label),
                 description =
-                    "Choose apps individually",
+                    stringResource(R.string.choose_apps_individually),
                 selected =
                     settings.notificationSource ==
                             NotificationSource.SELECTED_APPS,
@@ -965,7 +971,7 @@ private fun AppsListContent(
 
             Text(
                 text =
-                    "No apps found",
+                    stringResource(R.string.no_apps_found),
                 style =
                     MaterialTheme
                         .typography

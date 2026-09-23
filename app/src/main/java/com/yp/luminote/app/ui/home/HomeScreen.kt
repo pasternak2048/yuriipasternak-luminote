@@ -31,10 +31,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloMode
+import com.yp.luminote.app.R
 import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
@@ -142,7 +144,7 @@ fun HomeScreen(
         )
 
         Text(
-            text = "Luminote",
+            text = stringResource(R.string.app_name),
             style =
                 if (
                     uiMetrics.isCompactHeight
@@ -170,7 +172,7 @@ fun HomeScreen(
 
         Text(
             text =
-                "Edge lighting for alerts and ambient style",
+                stringResource(R.string.home_tagline),
             style =
                 MaterialTheme
                     .typography
@@ -413,18 +415,18 @@ private fun HomeSettingsList(
             HaloMode.NOTIFICATIONS -> {
                 HomeSettingItem(
                     title =
-                        "Luminote Halo",
+                        stringResource(R.string.luminote_halo),
                     subtitle =
-                        "Notification effects and appearance",
+                        stringResource(R.string.home_halo_description),
                     onClick =
                         onHaloClick
                 )
 
                 HomeSettingItem(
                     title =
-                        "Apps",
+                        stringResource(R.string.apps),
                     subtitle =
-                        "Choose which apps can trigger the effect",
+                        stringResource(R.string.home_apps_description),
                     onClick =
                         onAppsClick
                 )
@@ -433,9 +435,9 @@ private fun HomeSettingsList(
             HaloMode.AMBIENT ->
                 HomeSettingItem(
                     title =
-                        "Ambient Halo",
+                        stringResource(R.string.ambient_halo),
                     subtitle =
-                        "Keep a custom edge effect visible",
+                        stringResource(R.string.home_ambient_description),
                     onClick =
                         onAmbientClick
                 )
@@ -445,17 +447,17 @@ private fun HomeSettingsList(
         }
 
         HomeSettingItem(
-            title = "Access",
+            title = stringResource(R.string.access),
             subtitle =
-                "Permissions for alerts and edge effects",
+                stringResource(R.string.home_access_description),
             onClick =
                 onAccessClick
         )
 
         HomeSettingItem(
-            title = "About",
+            title = stringResource(R.string.about),
             subtitle =
-                "Luminote, developer and source code",
+                stringResource(R.string.home_about_description),
             onClick =
                 onAboutClick
         )
@@ -498,7 +500,7 @@ private fun HomeModeSelector(
                 )
     ) {
         Text(
-            text = "Mode",
+            text = stringResource(R.string.mode),
             style =
                 MaterialTheme
                     .typography
@@ -518,7 +520,7 @@ private fun HomeModeSelector(
 
         Text(
             text =
-                "Choose when Luminote uses the screen edge",
+                stringResource(R.string.mode_description),
             style =
                 MaterialTheme
                     .typography
@@ -543,7 +545,7 @@ private fun HomeModeSelector(
                 )
         ) {
             HomeModeChoice(
-                label = "Alerts",
+                label = stringResource(R.string.alerts),
                 selected =
                     mode ==
                             HaloMode.NOTIFICATIONS,
@@ -555,7 +557,7 @@ private fun HomeModeSelector(
             )
 
             HomeModeChoice(
-                label = "Ambient",
+                label = stringResource(R.string.ambient),
                 selected =
                     mode ==
                             HaloMode.AMBIENT,
@@ -567,7 +569,7 @@ private fun HomeModeSelector(
             )
 
             HomeModeChoice(
-                label = "Off",
+                label = stringResource(R.string.off),
                 selected =
                     mode ==
                             HaloMode.OFF,
