@@ -7,6 +7,7 @@
     <string name="language_system_default">System default</string>
     <string name="language_system_default_description">Follow your phone’s system language.</string>
     <string name="language_english">English</string>
+    <string name="language_polish">Polish</string>
     <string name="language_ukrainian">Ukrainian</string>
     <string name="author_name" translatable="false">Yurii Pasternak</string>
     <string name="github" translatable="false">GitHub</string>

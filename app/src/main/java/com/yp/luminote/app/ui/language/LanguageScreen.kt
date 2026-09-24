@@ -44,6 +44,7 @@ import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 private enum class AppLanguage {
     SYSTEM_DEFAULT,
     ENGLISH,
+    POLISH,
     UKRAINIAN
 }
 
@@ -125,6 +126,15 @@ fun LanguageScreen(
             )
 
             LanguageOption(
+                title = stringResource(R.string.language_polish),
+                selected = selectedLanguage == AppLanguage.POLISH,
+                onClick = {
+                    localeManager.applicationLocales = LocaleList.forLanguageTags("pl")
+                    applicationLocales = localeManager.applicationLocales
+                }
+            )
+
+            LanguageOption(
                 title = stringResource(R.string.language_ukrainian),
                 selected = selectedLanguage == AppLanguage.UKRAINIAN,
                 onClick = {
@@ -193,6 +203,7 @@ private fun LocaleList.toAppLanguageOrNull(): AppLanguage? =
     when {
         isEmpty -> AppLanguage.SYSTEM_DEFAULT
         size() == 1 && get(0).toLanguageTag() == "en" -> AppLanguage.ENGLISH
+        size() == 1 && get(0).toLanguageTag() == "pl" -> AppLanguage.POLISH
         size() == 1 && get(0).toLanguageTag() == "uk" -> AppLanguage.UKRAINIAN
         else -> null
     }
