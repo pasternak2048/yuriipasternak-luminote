@@ -76,6 +76,11 @@
     <string name="colors">Colors</string>
     <string name="animation">Animation</string>
     <string name="appearance">Appearance</string>
+    <string name="theme">Theme</string>
+    <string name="theme_description">Choose how Luminote appears.</string>
+    <string name="theme_system_default">System default</string>
+    <string name="theme_light">Light</string>
+    <string name="theme_dark">Dark</string>
     <string name="frame">Frame</string>
     <string name="match_app_color">Match app color</string>
     <string name="match_app_color_description">Use the notifying app’s icon color.</string>

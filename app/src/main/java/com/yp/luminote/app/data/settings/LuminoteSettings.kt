@@ -16,6 +16,19 @@ enum class NotificationPlayback {
     KEEP_VISIBLE
 }
 
+enum class ThemeMode {
+    SYSTEM,
+    LIGHT,
+    DARK;
+
+    companion object {
+        fun fromStorage(value: String?): ThemeMode =
+            value
+                ?.let { stored -> entries.firstOrNull { it.name == stored } }
+                ?: SYSTEM
+    }
+}
+
 /** Only one screen-edge experience can own the overlay at a time. */
 enum class HaloMode {
     NOTIFICATIONS,
@@ -24,6 +37,8 @@ enum class HaloMode {
 }
 
 data class LuminoteSettings(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+
     val haloMode: HaloMode = HaloMode.NOTIFICATIONS,
 
     val haloColor: Int =

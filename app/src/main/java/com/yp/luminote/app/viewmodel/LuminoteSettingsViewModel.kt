@@ -16,6 +16,7 @@ import com.yp.luminote.app.data.settings.MIN_HALO_INTERVAL_SECONDS
 import com.yp.luminote.app.data.settings.MIN_HALO_VALUE
 import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.data.settings.NotificationPlayback
+import com.yp.luminote.app.data.settings.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,6 +73,14 @@ class LuminoteSettingsViewModel(
     ) {
         updateSettings {
             copy(haloColor = color)
+        }
+    }
+
+    fun setThemeMode(
+        mode: ThemeMode
+    ) {
+        updateSettings {
+            copy(themeMode = mode)
         }
     }
 

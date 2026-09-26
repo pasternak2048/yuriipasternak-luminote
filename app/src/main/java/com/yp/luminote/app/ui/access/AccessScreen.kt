@@ -54,13 +54,7 @@ import com.yp.luminote.app.effects.HaloAccessibilityService
 import com.yp.luminote.app.R
 import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
-import com.yp.luminote.app.ui.theme.LuminoteDarkBackground
-import com.yp.luminote.app.ui.theme.LuminoteDarkOnSurface
-import com.yp.luminote.app.ui.theme.LuminoteDarkOutline
-import com.yp.luminote.app.ui.theme.LuminoteDarkSecondaryText
-import com.yp.luminote.app.ui.theme.LuminoteDarkSurface
-import com.yp.luminote.app.ui.theme.LuminoteSuccess
-import com.yp.luminote.app.ui.theme.LuminoteWarning
+import com.yp.luminote.app.ui.theme.LocalLuminoteStatusColors
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 @Composable
@@ -99,7 +93,7 @@ fun AccessScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(LuminoteDarkBackground)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -121,13 +115,13 @@ fun AccessScreen(
                         .semantics { contentDescription = backDescription }
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = LuminoteDarkOnSurface
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
                     text = stringResource(R.string.access),
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = LuminoteDarkOnSurface
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
 
@@ -135,7 +129,7 @@ fun AccessScreen(
             Text(
                 text = stringResource(R.string.access_intro),
                 style = MaterialTheme.typography.bodyLarge,
-                color = LuminoteDarkSecondaryText
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -249,13 +243,15 @@ private fun AccessStatusCard(
     haloReady: Boolean,
     onTestHaloClick: () -> Unit
 ) {
+    val statusColors = LocalLuminoteStatusColors.current
+
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(24.dp))
-                .background(LuminoteDarkSurface)
-                .border(1.dp, LuminoteDarkOutline, RoundedCornerShape(24.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
                 .padding(20.dp)
     ) {
         Text(
@@ -267,7 +263,7 @@ private fun AccessStatusCard(
                 },
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = if (haloReady) LuminoteSuccess else LuminoteWarning
+            color = if (haloReady) statusColors.successText else statusColors.warningText
         )
 
         Spacer(modifier = Modifier.height(4.dp))
@@ -280,7 +276,7 @@ private fun AccessStatusCard(
                     stringResource(R.string.halo_needs_access_description)
                 },
             style = MaterialTheme.typography.bodyMedium,
-            color = LuminoteDarkSecondaryText
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -290,10 +286,10 @@ private fun AccessStatusCard(
             enabled = haloReady,
             colors =
                 ButtonDefaults.buttonColors(
-                    containerColor = LuminoteDarkOnSurface,
-                    contentColor = LuminoteDarkBackground,
-                    disabledContainerColor = LuminoteDarkOutline,
-                    disabledContentColor = LuminoteDarkSecondaryText
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f),
+                    disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
         ) {
             Text(stringResource(R.string.test_halo))
@@ -308,12 +304,14 @@ private fun AccessItem(
     granted: Boolean,
     onClick: () -> Unit
 ) {
+    val statusColors = LocalLuminoteStatusColors.current
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(LuminoteDarkSurface)
-            .border(1.dp, LuminoteDarkOutline, RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -323,13 +321,13 @@ private fun AccessItem(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = LuminoteDarkOnSurface
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
-                color = LuminoteDarkSecondaryText
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -338,7 +336,7 @@ private fun AccessItem(
             text = stringResource(if (granted) R.string.allowed else R.string.required),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
-            color = if (granted) LuminoteSuccess else LuminoteWarning
+            color = if (granted) statusColors.successText else statusColors.warningText
         )
     }
 }

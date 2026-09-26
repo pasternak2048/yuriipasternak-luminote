@@ -74,6 +74,11 @@
     <string name="colors">Кольори</string>
     <string name="animation">Анімація</string>
     <string name="appearance">Вигляд</string>
+    <string name="theme">Тема</string>
+    <string name="theme_description">Виберіть вигляд Luminote.</string>
+    <string name="theme_system_default">Системна</string>
+    <string name="theme_light">Світла</string>
+    <string name="theme_dark">Темна</string>
     <string name="frame">Контур</string>
     <string name="match_app_color">Колір застосунку</string>
     <string name="match_app_color_description">Використовувати колір значка застосунку, який надіслав сповіщення.</string>

@@ -74,7 +74,7 @@ fun AmbientHaloScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
     ) {
@@ -92,20 +92,20 @@ fun AmbientHaloScreen(
                         .semantics { contentDescription = backDescription }
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Text(
                     text = stringResource(R.string.ambient_halo),
                     style = if (uiMetrics.isCompactHeight) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.ambient_intro),
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -147,7 +147,7 @@ fun AmbientHaloScreen(
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
                     AmbientGroup(title = stringResource(R.string.colors), uiMetrics = uiMetrics) {
-                        Text(stringResource(R.string.ambient_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+                        Text(stringResource(R.string.ambient_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
                         Spacer(Modifier.height(12.dp))
                         AmbientColorGrid(
                             selectedColor = Color(settings.ambientColor),
@@ -206,11 +206,11 @@ private fun AmbientGroup(
         modifier = Modifier
             .fillMaxWidth()
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
-            .background(Color(0xFF101010))
-            .border(1.dp, Color(0xFF3D3D3D), androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
             .padding(uiMetrics.cardPadding)
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(if (uiMetrics.isCompactHeight) 8.dp else 12.dp))
         content()
     }
@@ -227,8 +227,8 @@ private fun AmbientSlider(
     onValueChangeFinished: () -> Unit
 ) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-        Text(valueText, style = MaterialTheme.typography.bodyLarge, color = Color(0xFFBDBDBD))
+        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+        Text(valueText, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     Slider(value = value, onValueChange = onValueChange, valueRange = range, steps = steps, onValueChangeFinished = onValueChangeFinished)
 }

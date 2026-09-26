@@ -74,6 +74,11 @@
     <string name="colors">Kolory</string>
     <string name="animation">Animacja</string>
     <string name="appearance">Wygląd</string>
+    <string name="theme">Motyw</string>
+    <string name="theme_description">Wybierz wygląd Luminote.</string>
+    <string name="theme_system_default">Systemowy</string>
+    <string name="theme_light">Jasny</string>
+    <string name="theme_dark">Ciemny</string>
     <string name="frame">Ramka</string>
     <string name="match_app_color">Dopasuj kolor aplikacji</string>
     <string name="match_app_color_description">Użyj koloru ikony aplikacji, która wysłała powiadomienie.</string>
