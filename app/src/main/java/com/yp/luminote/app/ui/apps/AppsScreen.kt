@@ -70,6 +70,7 @@ import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.core.graphics.createBitmap
 
 @Composable
 fun AppsScreen(
@@ -1279,11 +1280,7 @@ private fun drawableToBitmap(
     sizePx: Int
 ): Bitmap {
     val bitmap =
-        Bitmap.createBitmap(
-            sizePx,
-            sizePx,
-            Bitmap.Config.ARGB_8888
-        )
+        createBitmap(sizePx, sizePx)
 
     val canvas =
         AndroidCanvas(bitmap)
