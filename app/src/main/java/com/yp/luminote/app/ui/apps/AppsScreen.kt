@@ -8,6 +8,7 @@ import android.util.LruCache
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,6 +35,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -688,25 +690,23 @@ private fun NotificationSourceGroup(
     onToggle: () -> Unit,
     onSourceSelected: (NotificationSource) -> Unit
 ) {
-    Column(
+    Surface(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(24.dp)
-                )
-                .background(Color(0xFF101010))
-                .border(
-                    width = 1.dp,
-                    color = Color(0xFF3D3D3D),
-                    shape = RoundedCornerShape(24.dp)
-                )
-                .animateContentSize()
-                .padding(
+                .animateContentSize(),
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+    ) {
+        Column(
+            modifier =
+                Modifier.padding(
                     horizontal = 20.dp,
                     vertical = 16.dp
                 )
-    ) {
+        ) {
 
         Row(
             modifier =
@@ -764,10 +764,7 @@ private fun NotificationSourceGroup(
                     color =
                         MaterialTheme
                             .colorScheme
-                            .onSurface
-                            .copy(
-                                alpha = 0.6f
-                            )
+                            .onSurfaceVariant
                 )
             }
 
@@ -789,10 +786,7 @@ private fun NotificationSourceGroup(
                 color =
                     MaterialTheme
                         .colorScheme
-                        .onSurface
-                        .copy(
-                            alpha = 0.55f
-                        )
+                        .onSurfaceVariant
             )
         }
 
@@ -838,6 +832,7 @@ private fun NotificationSourceGroup(
                 }
             )
         }
+        }
     }
 }
 
@@ -857,10 +852,7 @@ private fun SourceOption(
     val selectedBackground =
         MaterialTheme
             .colorScheme
-            .onSurface
-            .copy(
-                alpha = 0.08f
-            )
+            .surfaceVariant
 
     Row(
         modifier =
@@ -937,10 +929,7 @@ private fun SourceOption(
                 color =
                     MaterialTheme
                         .colorScheme
-                        .onSurface
-                        .copy(
-                            alpha = 0.55f
-                        )
+                        .onSurfaceVariant
             )
         }
     }
