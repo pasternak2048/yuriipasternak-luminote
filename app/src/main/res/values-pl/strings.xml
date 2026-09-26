@@ -125,6 +125,7 @@
     <string name="choose_apps_individually">Wybieraj aplikacje pojedynczo</string>
     <string name="no_apps_found">Nie znaleziono aplikacji</string>
     <string name="mode">Tryb</string>
+    <string name="working_mode">Tryb działania</string>
     <string name="mode_description">Wybierz, kiedy Luminote używa krawędzi ekranu.</string>
     <string name="alerts">Alerty</string>
     <string name="ambient">Otoczenie</string>
@@ -159,4 +160,8 @@
     <string name="not_selected_state">Nie wybrano</string>
     <string name="expanded_state">Rozwinięto</string>
     <string name="collapsed_state">Zwinięto</string>
+    <string name="settings">Ustawienia</string>
+    <string name="settings_appearance_description">Motyw i preferencje wyglądu</string>
+    <string name="settings_updates_description">Kanał i powiadomienia o aktualizacjach</string>
+    <string name="settings_content_description">Otwórz ustawienia</string>
 </resources>

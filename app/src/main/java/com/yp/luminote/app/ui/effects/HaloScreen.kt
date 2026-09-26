@@ -23,7 +23,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,6 +54,10 @@ import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
+import com.yp.luminote.app.ui.components.LuminoteSelectionControl
+import com.yp.luminote.app.ui.components.LuminoteSelectionRow
+import com.yp.luminote.app.ui.components.LuminoteSliderSetting
+import com.yp.luminote.app.ui.components.LuminoteColorSwatchPicker
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 import com.yp.luminote.app.ui.components.LuminoteSettingsCard
@@ -332,7 +335,7 @@ private fun AppearanceGroup(
                 )
             }
             Spacer(modifier = Modifier.height(16.dp))
-            SliderSetting(
+            LuminoteSliderSetting(
                 title = stringResource(R.string.color_flow),
                 value = settings.gradientFlowSpeed,
                 valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.gradientFlowSpeed)),
@@ -348,7 +351,7 @@ private fun AppearanceGroup(
                 Modifier.height(20.dp)
         )
 
-        SliderSetting(
+        LuminoteSliderSetting(
             title = stringResource(R.string.halo_brightness),
             value =
                 settings
@@ -374,7 +377,7 @@ private fun AppearanceGroup(
                 Modifier.height(16.dp)
         )
 
-        SliderSetting(
+        LuminoteSliderSetting(
             title = stringResource(R.string.edge_width),
             value =
                 settings
@@ -404,7 +407,7 @@ private fun MotionGroup(
     viewModel: LuminoteSettingsViewModel
 ) {
     SettingsGroup(title = stringResource(R.string.animation)) {
-        SliderSetting(
+        LuminoteSliderSetting(
             title = stringResource(R.string.effect_speed),
             value = settings.haloEffectSpeed,
             valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.2g", settings.haloEffectSpeed)),
@@ -435,18 +438,21 @@ private fun TimingGroup(
 
         if (repeatsEnabled) {
             Spacer(modifier = Modifier.height(12.dp))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .selectableGroup(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 PlaybackChoice(
                     selected = settings.notificationPlayback == NotificationPlayback.REPEAT,
                     title = stringResource(R.string.repeat),
-                    onClick = { viewModel.setNotificationPlayback(NotificationPlayback.REPEAT) },
-                    modifier = Modifier.weight(1f)
+                    onClick = { viewModel.setNotificationPlayback(NotificationPlayback.REPEAT) }
                 )
                 PlaybackChoice(
                     selected = settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE,
                     title = stringResource(R.string.keep_visible),
-                    onClick = { viewModel.setNotificationPlayback(NotificationPlayback.KEEP_VISIBLE) },
-                    modifier = Modifier.weight(1f)
+                    onClick = { viewModel.setNotificationPlayback(NotificationPlayback.KEEP_VISIBLE) }
                 )
             }
         }
@@ -454,7 +460,7 @@ private fun TimingGroup(
         if (repeatsEnabled && settings.notificationPlayback == NotificationPlayback.REPEAT) {
             Spacer(modifier = Modifier.height(16.dp))
             val repeatPosition = settings.haloRepeatCount.toFloat()
-            SliderSetting(
+            LuminoteSliderSetting(
                 title = stringResource(R.string.reminder_pulses),
                 value = repeatPosition,
                 valueText = androidx.compose.ui.res.pluralStringResource(R.plurals.times, settings.haloRepeatCount, settings.haloRepeatCount),
@@ -465,7 +471,7 @@ private fun TimingGroup(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
-            SliderSetting(
+            LuminoteSliderSetting(
                 title = stringResource(R.string.repeat_after),
                 value = settings.haloInterval,
                 valueText = stringResource(R.string.seconds, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.haloInterval)),
@@ -499,20 +505,14 @@ private fun RepeatHaloSetting(enabled: Boolean, onEnabledChange: (Boolean) -> Un
 private fun PlaybackChoice(
     selected: Boolean,
     title: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    onClick: () -> Unit
 ) {
-    Button(
+    LuminoteSelectionRow(
+        title = title,
+        selected = selected,
         onClick = onClick,
-        modifier = modifier.height(42.dp),
-        shape = RoundedCornerShape(14.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    ) {
-        Text(title)
-    }
+        control = LuminoteSelectionControl.Radio
+    )
 }
 
 @Composable
@@ -520,6 +520,7 @@ private fun TestEffectButton(
     context: android.content.Context,
     settings: LuminoteSettings
 ) {
+    val previewAppColor = MaterialTheme.colorScheme.primary.toArgb()
     Column(
         modifier =
             Modifier
@@ -539,7 +540,9 @@ private fun TestEffectButton(
                     HaloOverlayService.createPreviewIntent(
                         context = context,
                         settings = settings.copy(
-                            haloColor = if (settings.colorSource == HaloColorSource.APP_ICON) Color.White.toArgb() else settings.haloColor,
+                            // App icon colors are resolved at notification time. Preview uses the
+                            // current theme primary instead, so its default outline remains visible.
+                            haloColor = if (settings.colorSource == HaloColorSource.APP_ICON) previewAppColor else settings.haloColor,
                             haloRepeatCount = if (settings.notificationPlayback == NotificationPlayback.REPEAT) settings.haloRepeatCount else 1,
                             notificationPlayback = NotificationPlayback.ONCE
                         )
@@ -610,223 +613,11 @@ private fun ColorGrid(
     onColorSelected: (Color) -> Unit,
     onGradientSelected: () -> Unit
 ) {
-    val colors =
-        listOf(
-            Color(0xFF3E91FF),
-            Color(0xFF64D2FF),
-            Color(0xFF00C7BE),
-            Color(0xFF30D158),
-            Color(0xFFA8D800),
-            Color(0xFFFFD60A),
-            Color(0xFFFF9F0A),
-            Color(0xFFFF453A),
-            Color(0xFFFF375F),
-            Color(0xFFFF6482),
-            Color(0xFFBF5AF2),
-            Color(0xFFAF52DE),
-            Color(0xFF5E5CE6),
-            Color(0xFF007AFF),
-            Color.White,
-            Color.White
-        )
-
-    BoxWithConstraints {
-        val columnCount = if (maxWidth / 5f >= 48.dp) 5 else 4
-        val optionSize = minOf(56.dp, maxWidth / columnCount)
-        Column(
-            modifier = Modifier.selectableGroup(),
-            verticalArrangement =
-                Arrangement.spacedBy(10.dp)
-        ) {
-
-        colors.take(15)
-            .chunked(columnCount)
-            .forEach { rowColors ->
-
-                Row(
-                    modifier =
-                        Modifier.fillMaxWidth(),
-                    horizontalArrangement =
-                        Arrangement.SpaceBetween
-                ) {
-
-                    rowColors.forEach { color ->
-
-                        ColorOption(
-                            color = color,
-                            selected =
-                                !gradientSelected && color.value == selectedColor.value,
-                            size = optionSize,
-                            onClick = {
-                                onColorSelected(
-                                    color
-                                )
-                            }
-                        )
-                    }
-                }
-            }
-        Row(modifier = Modifier.fillMaxWidth()) {
-            GradientColorOption(
-                selected = gradientSelected,
-                size = optionSize,
-                onClick = onGradientSelected
-            )
-        }
-        }
-    }
-}
-
-@Composable
-private fun GradientColorOption(
-    selected: Boolean,
-    size: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit
-) {
-    val label = stringResource(R.string.gradient_color)
-    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-            .semantics {
-                contentDescription = label
-                stateDescription = stateLabel
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(CircleShape)
-                .background(
-                    Brush.sweepGradient(
-                        listOf(Color(0xFF3E91FF), Color(0xFFBF5AF2), Color(0xFFFF6482), Color(0xFFFF9F0A), Color(0xFF3E91FF))
-                    )
-                )
-        )
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .border(2.dp, Color.White, CircleShape)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ColorOption(
-    color: Color,
-    selected: Boolean,
-    size: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit
-) {
-    val label = stringResource(
-        R.string.color_swatch,
-        String.format("#%06X", color.toArgb() and 0xFFFFFF)
+    LuminoteColorSwatchPicker(
+        selectedColor = selectedColor,
+        gradientSelected = gradientSelected,
+        onColorSelected = onColorSelected,
+        onGradientSelected = onGradientSelected
     )
-    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
-    Box(
-        modifier =
-            Modifier
-                .size(size)
-                .clip(CircleShape)
-                .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-                .semantics {
-                    contentDescription = label
-                    stateDescription = stateLabel
-                },
-        contentAlignment =
-            Alignment.Center
-    ) {
-
-        if (selected) {
-            Box(
-                modifier =
-                    Modifier
-                        .size(size)
-                        .border(
-                            width = 2.dp,
-                            color = color,
-                            shape = CircleShape
-                        )
-            )
-        }
-
-        Box(
-            modifier =
-                Modifier
-                    .size(
-                        size * if (selected) 0.75f else 0.8f
-                    )
-                    .clip(CircleShape)
-                    .background(
-                        color = color,
-                        shape = CircleShape
-                    )
-        )
-    }
-}
-
-@Composable
-private fun SliderSetting(
-    title: String,
-    value: Float,
-    valueText: String,
-    valueRange:
-    ClosedFloatingPointRange<Float> =
-        0f..1f,
-    steps: Int = 0,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit = {}
-) {
-    Column(
-        modifier =
-            Modifier.fillMaxWidth()
-    ) {
-
-        Row(
-            modifier =
-                Modifier.fillMaxWidth(),
-            horizontalArrangement =
-                Arrangement.SpaceBetween,
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            Text(
-                text = title,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge,
-                fontWeight =
-                    FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Text(
-                text = valueText,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        Slider(
-            value = value,
-            onValueChange =
-                onValueChange,
-            onValueChangeFinished =
-                onValueChangeFinished,
-            valueRange =
-                valueRange,
-            steps = steps
-        )
-    }
 }
 

@@ -19,6 +19,8 @@ import com.yp.luminote.app.ui.easteregg.EasterEggScreen
 import com.yp.luminote.app.ui.effects.HaloScreen
 import com.yp.luminote.app.ui.home.HomeScreen
 import com.yp.luminote.app.ui.language.LanguageScreen
+import com.yp.luminote.app.ui.settings.AppearanceScreen
+import com.yp.luminote.app.ui.settings.SettingsScreen
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 object LuminoteRoutes {
@@ -30,6 +32,9 @@ object LuminoteRoutes {
     const val AMBIENT = "ambient"
     const val EASTER_EGG = "easter_egg"
     const val LANGUAGE = "language"
+    const val SETTINGS = "settings"
+    const val APPEARANCE = "appearance"
+    const val UPDATES = "updates"
 }
 
 @Composable
@@ -104,19 +109,9 @@ fun LuminoteNavHost(
                         LuminoteRoutes.APPS
                     )
                 },
-                onLanguageClick = {
-                    navController.navigate(
-                        LuminoteRoutes.LANGUAGE
-                    )
-                },
                 onAmbientClick = {
                     navController.navigate(
                         LuminoteRoutes.AMBIENT
-                    )
-                },
-                onAboutClick = {
-                    navController.navigate(
-                        LuminoteRoutes.ABOUT
                     )
                 },
                 onAccessClick = {
@@ -124,10 +119,32 @@ fun LuminoteNavHost(
                         LuminoteRoutes.ACCESS
                     )
                 },
-                windowSizeClass =
-                    windowSizeClass,
+                onSettingsClick = { navController.navigate(LuminoteRoutes.SETTINGS) },
+                windowSizeClass = windowSizeClass,
                 viewModel =
                     settingsViewModel
+            )
+        }
+
+        composable(LuminoteRoutes.SETTINGS) {
+            SettingsScreen(
+                onBackClick = { navController.popBackStack() },
+                onAppearanceClick = { navController.navigate(LuminoteRoutes.APPEARANCE) },
+                onLanguageClick = { navController.navigate(LuminoteRoutes.LANGUAGE) },
+                onUpdatesClick = { navController.navigate(LuminoteRoutes.UPDATES) },
+                onAboutClick = { navController.navigate(LuminoteRoutes.ABOUT) }
+            )
+        }
+
+        composable(LuminoteRoutes.APPEARANCE) {
+            AppearanceScreen(onBackClick = { navController.popBackStack() }, viewModel = settingsViewModel)
+        }
+
+        composable(LuminoteRoutes.UPDATES) {
+            AboutScreen(
+                onBackClick = { navController.popBackStack() },
+                onEasterEggClick = { },
+                showUpdatesOnly = true
             )
         }
 

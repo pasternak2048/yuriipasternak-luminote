@@ -123,6 +123,7 @@
     <string name="choose_apps_individually">Choose apps individually</string>
     <string name="no_apps_found">No apps found</string>
     <string name="mode">Mode</string>
+    <string name="working_mode">Operating mode</string>
     <string name="mode_description">Choose when Luminote uses the screen edge.</string>
     <string name="alerts">Alerts</string>
     <string name="ambient">Ambient</string>
@@ -157,4 +158,8 @@
     <string name="not_selected_state">Not selected</string>
     <string name="expanded_state">Expanded</string>
     <string name="collapsed_state">Collapsed</string>
+    <string name="settings">Settings</string>
+    <string name="settings_appearance_description">Theme and visual preferences</string>
+    <string name="settings_updates_description">Channel and update notifications</string>
+    <string name="settings_content_description">Open settings</string>
 </resources>
