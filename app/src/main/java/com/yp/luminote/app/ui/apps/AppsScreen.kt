@@ -6,7 +6,12 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.util.LruCache
 import androidx.activity.ComponentActivity
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -23,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -44,12 +50,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -68,6 +77,9 @@ import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.ui.components.LuminoteExpandIcon
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.graphics.createBitmap
@@ -128,7 +140,7 @@ fun AppsScreen(
     }
 
     var sourceExpanded by
-    remember {
+    rememberSaveable {
         mutableStateOf(false)
     }
 
@@ -168,6 +180,7 @@ fun AppsScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .imePadding()
     ) {
 
         /*
@@ -188,52 +201,11 @@ fun AppsScreen(
                     Modifier.height(32.dp)
             )
 
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                verticalAlignment =
-                    Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = "‹",
-                    modifier =
-                        Modifier
-                            .size(48.dp)
-                            .semantics { contentDescription = backDescription }
-                            .clickable(
-                                onClick =
-                                    onBackClick
-                            )
-                            .padding(
-                                bottom = 4.dp
-                            ),
-                    style =
-                        MaterialTheme
-                            .typography
-                            .headlineLarge,
-                    color =
-                        MaterialTheme.colorScheme.onBackground
-                )
-
-                Text(
-                    text = stringResource(R.string.apps),
-                    modifier =
-                        Modifier.padding(
-                            start = 4.dp
-                        ),
-                    style =
-                        MaterialTheme
-                            .typography
-                            .displayLarge,
-                    fontWeight =
-                        FontWeight.SemiBold,
-                    color =
-                        MaterialTheme.colorScheme.onBackground
-                )
-            }
+            LuminoteScreenHeader(
+                title = stringResource(R.string.apps),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
 
             Spacer(
                 modifier =
@@ -690,15 +662,19 @@ private fun NotificationSourceGroup(
     onToggle: () -> Unit,
     onSourceSelected: (NotificationSource) -> Unit
 ) {
-    Surface(
+    val sourceLabel = stringResource(R.string.alerts_from)
+    val sourceStateLabel = stringResource(
+        if (expanded) R.string.expanded_state else R.string.collapsed_state
+    )
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        label = "notification source chevron"
+    )
+    LuminoteSettingsCard(
         modifier =
             Modifier
-                .fillMaxWidth()
-                .animateContentSize(),
-        shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)
+                .fillMaxWidth(),
+        borderColor = MaterialTheme.colorScheme.outline
     ) {
         Column(
             modifier =
@@ -712,6 +688,10 @@ private fun NotificationSourceGroup(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = sourceLabel
+                        stateDescription = sourceStateLabel
+                    }
                     .clickable(
                         onClick =
                             onToggle
@@ -768,29 +748,21 @@ private fun NotificationSourceGroup(
                 )
             }
 
-            Text(
-                text =
-                    if (expanded) {
-                        "⌃"
-                    } else {
-                        "⌄"
-                    },
-                modifier =
-                    Modifier.padding(
-                        start = 16.dp
-                    ),
-                style =
-                    MaterialTheme
-                        .typography
-                        .titleLarge,
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurfaceVariant
+            LuminoteExpandIcon(
+                expanded = expanded,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(start = 16.dp)
+                    .graphicsLayer { rotationZ = chevronRotation }
             )
         }
 
-        if (expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column {
 
             Spacer(
                 modifier =
@@ -831,6 +803,7 @@ private fun NotificationSourceGroup(
                     )
                 }
             )
+            }
         }
         }
     }

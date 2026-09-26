@@ -20,8 +20,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -43,6 +46,9 @@ import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.ui.components.LuminoteForwardIcon
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
+import androidx.compose.ui.semantics.Role
 
 @Composable
 fun HomeScreen(
@@ -516,14 +522,8 @@ private fun HomeThemeSelector(
     themeMode: ThemeMode,
     onThemeModeSelected: (ThemeMode) -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-            .padding(20.dp)
-    ) {
+    LuminoteSettingsCard {
+        Column(modifier = Modifier.padding(20.dp)) {
         Text(
             text = stringResource(R.string.theme),
             style = MaterialTheme.typography.titleMedium,
@@ -536,6 +536,7 @@ private fun HomeThemeSelector(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(12.dp))
+        Column(Modifier.selectableGroup()) {
         ThemeMode.entries.forEach { mode ->
             val label = when (mode) {
                 ThemeMode.SYSTEM -> stringResource(R.string.theme_system_default)
@@ -546,15 +547,15 @@ private fun HomeThemeSelector(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .clickable { onThemeModeSelected(mode) }
+                    .selectable(
+                        selected = themeMode == mode,
+                        role = Role.RadioButton,
+                        onClick = { onThemeModeSelected(mode) }
+                    )
                     .padding(vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (themeMode == mode) "●" else "○",
-                    color = if (themeMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.titleLarge
-                )
+                RadioButton(selected = themeMode == mode, onClick = null)
                 Text(
                     text = label,
                     modifier = Modifier.padding(start = 12.dp),
@@ -562,6 +563,8 @@ private fun HomeThemeSelector(
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
+        }
+        }
         }
     }
 }
@@ -571,32 +574,8 @@ private fun HomeModeSelector(
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(
-                        24.dp
-                    )
-                )
-                .background(
-                    MaterialTheme.colorScheme.surface
-                )
-                .border(
-                    width =
-                        1.dp,
-                    color =
-                        MaterialTheme.colorScheme.outlineVariant,
-                    shape =
-                        RoundedCornerShape(
-                            24.dp
-                        )
-                )
-                .padding(
-                    20.dp
-                )
-    ) {
+    LuminoteSettingsCard {
+        Column(modifier = Modifier.padding(20.dp)) {
         Text(
             text = stringResource(R.string.mode),
             style =
@@ -635,6 +614,7 @@ private fun HomeModeSelector(
         )
 
         Row(
+            modifier = Modifier.selectableGroup(),
             horizontalArrangement =
                 Arrangement.spacedBy(
                     8.dp
@@ -675,6 +655,7 @@ private fun HomeModeSelector(
                     )
                 }
             )
+        }
         }
     }
 }
@@ -718,9 +699,10 @@ private fun RowScope.HomeModeChoice(
                     shape =
                         shape
                 )
-                .clickable(
-                    onClick =
-                        onClick
+                .selectable(
+                    selected = selected,
+                    role = Role.RadioButton,
+                    onClick = onClick
                 )
                 .padding(
                     vertical =
@@ -754,43 +736,24 @@ private fun HomeSettingItem(
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(
-                        24.dp
-                    )
-                )
-                .background(
-                    MaterialTheme.colorScheme.surface
-                )
-                .border(
-                    width =
-                        1.dp,
-                    color =
-                        MaterialTheme.colorScheme.outlineVariant,
-                    shape =
-                        RoundedCornerShape(
-                            24.dp
-                        )
-                )
+    val contentColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    LuminoteSettingsCard(
+        modifier = Modifier
                 .clickable(
                     enabled =
                         enabled,
                     onClick =
                         onClick
                 )
-                .padding(
-                    horizontal =
-                        20.dp,
-                    vertical =
-                        18.dp
-                ),
-        verticalAlignment =
-            Alignment.CenterVertically
     ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Column(
             modifier =
                 Modifier.weight(
@@ -809,7 +772,7 @@ private fun HomeSettingItem(
                     if (enabled) {
                         MaterialTheme.colorScheme.onSurface
                     } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        contentColor
                     }
             )
 
@@ -830,23 +793,12 @@ private fun HomeSettingItem(
                     if (enabled) {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        contentColor
                     }
             )
         }
 
-        Text(
-            text = "›",
-            style =
-                MaterialTheme
-                    .typography
-                    .headlineMedium,
-            color =
-                if (enabled) {
-                    MaterialTheme.colorScheme.onSurface
-                } else {
-                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                }
-        )
+        LuminoteForwardIcon(tint = contentColor)
+        }
     }
 }

@@ -153,4 +153,10 @@
     <string name="motion_ripple_edge">Falująca krawędź</string>
     <string name="motion_ripple_edge_description">Dwie fale poruszają się wokół ramki</string>
     <string name="motion_ripple_edge_ambient_description">Delikatne fale poruszają się wzdłuż krawędzi</string>
+    <string name="color_swatch">Kolor %1$s</string>
+    <string name="gradient_color">Kolor gradientu</string>
+    <string name="selected_state">Wybrano</string>
+    <string name="not_selected_state">Nie wybrano</string>
+    <string name="expanded_state">Rozwinięto</string>
+    <string name="collapsed_state">Zwinięto</string>
 </resources>

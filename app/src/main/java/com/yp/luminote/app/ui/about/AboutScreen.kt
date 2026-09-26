@@ -43,6 +43,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.yp.luminote.app.ui.components.LuminoteExternalLinkIcon
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
@@ -101,27 +104,11 @@ fun AboutScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "‹",
-                    modifier = Modifier
-                        .size(48.dp)
-                        .semantics { contentDescription = backDescription }
-                        .clickable(onClick = onBackClick),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-
-                Text(
-                    text = stringResource(R.string.about),
-                    style = MaterialTheme.typography.displayLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
+            LuminoteScreenHeader(
+                title = stringResource(R.string.about),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
 
             Spacer(modifier = Modifier.height(18.dp))
 
@@ -237,14 +224,8 @@ private fun AboutBlock(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))
-            .padding(20.dp)
-    ) {
+    LuminoteSettingsCard(modifier = modifier) {
+        Column(modifier = Modifier.padding(20.dp)) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
@@ -253,21 +234,17 @@ private fun AboutBlock(
         )
         Spacer(modifier = Modifier.height(10.dp))
         content()
+        }
     }
 }
 
 @Composable
 private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    LuminoteSettingsCard(modifier = Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -282,11 +259,8 @@ private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Text(
-            text = "↗",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        LuminoteExternalLinkIcon(tint = MaterialTheme.colorScheme.onSurface)
+        }
     }
 }
 
