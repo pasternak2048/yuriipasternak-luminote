@@ -9,7 +9,6 @@ import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
 import com.yp.luminote.app.data.settings.NotificationPlayback
-import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.effects.HaloConfig
 import com.yp.luminote.app.effects.HaloOverlayService
 import kotlinx.coroutines.CompletableDeferred
@@ -834,10 +833,13 @@ class LuminoteNotificationListener :
                 recentNotifications[key]
 
             if (
-                previous != null &&
-                previous.postTime == sbn.postTime &&
-                now - previous.timestamp <
-                DEDUP_WINDOW_MS
+                NotificationDeduplicationPolicy.isDuplicate(
+                    previousPostTime = previous?.postTime,
+                    previousTimestamp = previous?.timestamp,
+                    postTime = sbn.postTime,
+                    now = now,
+                    windowMs = DEDUP_WINDOW_MS
+                )
             ) {
                 return true
             }
@@ -959,16 +961,11 @@ class LuminoteNotificationListener :
         sbn: StatusBarNotification,
         settings: LuminoteSettings
     ): Boolean =
-        when (
-            settings.notificationSource
-        ) {
-            NotificationSource.ALL_APPS ->
-                true
-
-            NotificationSource.SELECTED_APPS ->
-                sbn.packageName in
-                        settings.selectedApps
-        }
+        NotificationEligibilityDecider.shouldHandleSource(
+            packageName = sbn.packageName,
+            notificationSource = settings.notificationSource,
+            selectedApps = settings.selectedApps
+        )
 
     private fun shouldTrackPaletteNotification(
         sbn: StatusBarNotification,

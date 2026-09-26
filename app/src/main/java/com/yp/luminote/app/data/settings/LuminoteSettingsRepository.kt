@@ -443,7 +443,9 @@ class LuminoteSettingsRepository(
 
     /**
      * Persists one coherent settings snapshot in a single
-     * DataStore transaction.
+     * DataStore transaction. Save ordering is intentionally owned by
+     * LuminoteSettingsViewModel; do not add a competing debounce or revision
+     * policy at this persistence boundary.
      */
     suspend fun saveSettings(
         settings: LuminoteSettings
