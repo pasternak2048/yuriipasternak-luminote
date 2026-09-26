@@ -151,4 +151,10 @@
     <string name="motion_ripple_edge">Ripple edge</string>
     <string name="motion_ripple_edge_description">Two waves move around the frame</string>
     <string name="motion_ripple_edge_ambient_description">Keeps soft waves moving around the edge</string>
+    <string name="color_swatch">Color %1$s</string>
+    <string name="gradient_color">Gradient color</string>
+    <string name="selected_state">Selected</string>
+    <string name="not_selected_state">Not selected</string>
+    <string name="expanded_state">Expanded</string>
+    <string name="collapsed_state">Collapsed</string>
 </resources>

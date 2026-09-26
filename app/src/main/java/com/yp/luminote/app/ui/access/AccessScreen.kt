@@ -56,6 +56,8 @@ import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.theme.LocalLuminoteStatusColors
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 
 @Composable
 fun AccessScreen(
@@ -104,26 +106,11 @@ fun AccessScreen(
                 .luminoteSafeHorizontalPadding()
         ) {
             Spacer(modifier = Modifier.height(24.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "‹",
-                    modifier = Modifier
-                        .size(48.dp)
-                        .semantics { contentDescription = backDescription }
-                        .clickable(onClick = onBackClick),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = stringResource(R.string.access),
-                    style = MaterialTheme.typography.displayLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
+            LuminoteScreenHeader(
+                title = stringResource(R.string.access),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
 
             Spacer(modifier = Modifier.height(12.dp))
             Text(
@@ -245,15 +232,8 @@ private fun AccessStatusCard(
 ) {
     val statusColors = LocalLuminoteStatusColors.current
 
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-                .padding(20.dp)
-    ) {
+    LuminoteSettingsCard {
+        Column(modifier = Modifier.padding(20.dp)) {
         Text(
             text =
                 if (haloReady) {
@@ -294,6 +274,7 @@ private fun AccessStatusCard(
         ) {
             Text(stringResource(R.string.test_halo))
         }
+        }
     }
 }
 
@@ -306,16 +287,11 @@ private fun AccessItem(
 ) {
     val statusColors = LocalLuminoteStatusColors.current
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    LuminoteSettingsCard(modifier = Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -338,6 +314,7 @@ private fun AccessItem(
             fontWeight = FontWeight.SemiBold,
             color = if (granted) statusColors.successText else statusColors.warningText
         )
+        }
     }
 }
 

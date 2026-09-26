@@ -153,4 +153,10 @@
     <string name="motion_ripple_edge">Хвилі по краю</string>
     <string name="motion_ripple_edge_description">Дві хвилі рухаються навколо контуру</string>
     <string name="motion_ripple_edge_ambient_description">М’які хвилі рухаються вздовж краю</string>
+    <string name="color_swatch">Колір %1$s</string>
+    <string name="gradient_color">Градієнтний колір</string>
+    <string name="selected_state">Вибрано</string>
+    <string name="not_selected_state">Не вибрано</string>
+    <string name="expanded_state">Розгорнуто</string>
+    <string name="collapsed_state">Згорнуто</string>
 </resources>

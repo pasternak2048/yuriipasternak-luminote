@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +42,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 
 private enum class AppLanguage {
     SYSTEM_DEFAULT,
@@ -73,27 +77,11 @@ fun LanguageScreen(
     ) {
         Spacer(modifier = Modifier.height(24.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "‹",
-                modifier = Modifier
-                    .size(48.dp)
-                    .semantics { contentDescription = backDescription }
-                    .clickable(onClick = onBackClick),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            Text(
-                text = stringResource(R.string.language),
-                style = MaterialTheme.typography.displayLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
+        LuminoteScreenHeader(
+            title = stringResource(R.string.language),
+            backContentDescription = backDescription,
+            onBackClick = onBackClick
+        )
 
         Spacer(modifier = Modifier.height(18.dp))
 
@@ -105,7 +93,10 @@ fun LanguageScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier.selectableGroup(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             LanguageOption(
                 title = stringResource(R.string.language_system_default),
                 description = stringResource(R.string.language_system_default_description),
@@ -153,26 +144,20 @@ private fun LanguageOption(
     onClick: () -> Unit,
     description: String? = null
 ) {
-    val shape = RoundedCornerShape(24.dp)
-
-    Row(
+    LuminoteSettingsCard(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
-            .border(
-                width = 1.dp,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
-                shape = shape
-            )
             .selectable(
                 selected = selected,
                 onClick = onClick,
                 role = Role.RadioButton
-            )
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
+            ),
+        containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        borderColor = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
@@ -191,11 +176,8 @@ private fun LanguageOption(
             }
         }
 
-        Text(
-            text = if (selected) "✓" else "",
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        RadioButton(selected = selected, onClick = null)
+        }
     }
 }
 

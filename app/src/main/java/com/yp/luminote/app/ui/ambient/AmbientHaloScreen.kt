@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -27,6 +29,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Brush
@@ -44,6 +48,8 @@ import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 @Composable
@@ -84,23 +90,12 @@ fun AmbientHaloScreen(
                 .luminoteSafeHorizontalPadding()
         ) {
             Spacer(modifier = Modifier.height(uiMetrics.headerTopSpacing))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "‹",
-                    modifier = Modifier
-                        .size(uiMetrics.backButtonSize)
-                        .semantics { contentDescription = backDescription }
-                        .clickable(onClick = onBackClick),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = stringResource(R.string.ambient_halo),
-                    style = if (uiMetrics.isCompactHeight) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-            }
+            LuminoteScreenHeader(
+                title = stringResource(R.string.ambient_halo),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick,
+                backButtonSize = uiMetrics.backButtonSize
+            )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.ambient_intro),
@@ -112,7 +107,7 @@ fun AmbientHaloScreen(
         Spacer(modifier = Modifier.height(uiMetrics.sectionSpacing))
 
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = uiMetrics.sectionSpacing),
             verticalArrangement = Arrangement.spacedBy(uiMetrics.sectionSpacing)
         ) {
@@ -202,17 +197,12 @@ private fun AmbientGroup(
     uiMetrics: com.yp.luminote.app.ui.adaptive.LuminoteUiMetrics,
     content: @Composable () -> Unit
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, androidx.compose.foundation.shape.RoundedCornerShape(uiMetrics.cardCornerRadius))
-            .padding(uiMetrics.cardPadding)
-    ) {
+    LuminoteSettingsCard {
+        Column(modifier = Modifier.padding(uiMetrics.cardPadding)) {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         Spacer(Modifier.height(if (uiMetrics.isCompactHeight) 8.dp else 12.dp))
         content()
+        }
     }
 }
 
@@ -247,9 +237,13 @@ private fun AmbientColorGrid(
         Color(0xFF5E5CE6), Color(0xFF007AFF), Color.White
     )
     BoxWithConstraints {
-        val optionSize = minOf(40.dp, maxWidth / 8f)
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        colors.chunked(8).forEachIndexed { rowIndex, row ->
+        val columnCount = if (maxWidth / 5f >= 48.dp) 5 else 4
+        val optionSize = minOf(56.dp, maxWidth / columnCount)
+        Column(
+            modifier = Modifier.selectableGroup(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+        colors.chunked(columnCount).forEach { row ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -262,14 +256,14 @@ private fun AmbientColorGrid(
                         onClick = { onColorSelected(color) }
                     )
                 }
-                if (rowIndex == 1) {
-                    AmbientGradientColorOption(
-                        selected = gradientSelected,
-                        size = optionSize,
-                        onClick = onGradientSelected
-                    )
-                }
             }
+        }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            AmbientGradientColorOption(
+                selected = gradientSelected,
+                size = optionSize,
+                onClick = onGradientSelected
+            )
         }
         }
     }
@@ -277,11 +271,20 @@ private fun AmbientColorGrid(
 
 @Composable
 private fun AmbientColorOption(color: Color, selected: Boolean, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val label = stringResource(
+        R.string.color_swatch,
+        String.format("#%06X", color.toArgb() and 0xFFFFFF)
+    )
+    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
     Box(
         modifier = Modifier
             .size(size)
             .clip(androidx.compose.foundation.shape.CircleShape)
-            .clickable(onClick = onClick),
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .semantics {
+                contentDescription = label
+                stateDescription = stateLabel
+            },
         contentAlignment = Alignment.Center
     ) {
         if (selected) {
@@ -302,11 +305,17 @@ private fun AmbientColorOption(color: Color, selected: Boolean, size: androidx.c
 
 @Composable
 private fun AmbientGradientColorOption(selected: Boolean, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val label = stringResource(R.string.gradient_color)
+    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
     Box(
         modifier = Modifier
             .size(size)
             .clip(androidx.compose.foundation.shape.CircleShape)
-            .clickable(onClick = onClick),
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .semantics {
+                contentDescription = label
+                stateDescription = stateLabel
+            },
         contentAlignment = Alignment.Center
     ) {
         Box(

@@ -3,14 +3,16 @@ package com.yp.luminote.app.ui.theme
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 val LuminoteTypography = Typography(
 
     displayLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontSize = 36.sp,
-        lineHeight = 44.sp
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
+        fontWeight = FontWeight.SemiBold
     ),
 
     headlineLarge = TextStyle(
@@ -22,7 +24,8 @@ val LuminoteTypography = Typography(
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontSize = 28.sp,
-        lineHeight = 36.sp
+        lineHeight = 34.sp,
+        fontWeight = FontWeight.SemiBold
     ),
 
     titleLarge = TextStyle(
@@ -34,19 +37,20 @@ val LuminoteTypography = Typography(
     titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontSize = 18.sp,
-        lineHeight = 24.sp
+        lineHeight = 24.sp,
+        fontWeight = FontWeight.SemiBold
     ),
 
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
-        fontSize = 17.sp,
+        fontSize = 16.sp,
         lineHeight = 24.sp
     ),
 
     bodyMedium = TextStyle(
         fontFamily = FontFamily.Default,
-        fontSize = 15.sp,
-        lineHeight = 21.sp
+        fontSize = 14.sp,
+        lineHeight = 20.sp
     ),
 
     bodySmall = TextStyle(
