@@ -89,7 +89,7 @@ fun AboutScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
@@ -112,14 +112,14 @@ fun AboutScreen(
                         .semantics { contentDescription = backDescription }
                         .clickable(onClick = onBackClick),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
 
                 Text(
                     text = stringResource(R.string.about),
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
 
@@ -129,7 +129,7 @@ fun AboutScreen(
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -137,7 +137,7 @@ fun AboutScreen(
             Text(
                 text = stringResource(R.string.about_tagline),
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
         }
@@ -154,7 +154,7 @@ fun AboutScreen(
                 Text(
                     text = stringResource(R.string.about_description),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFBDBDBD)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -163,7 +163,7 @@ fun AboutScreen(
                     text = stringResource(R.string.author_name),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
@@ -194,7 +194,7 @@ fun AboutScreen(
                 Text(
                     text = versionInfo,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFBDBDBD)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -241,15 +241,15 @@ private fun AboutBlock(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(28.dp))
-            .background(Color(0xFF101010))
-            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))
             .padding(20.dp)
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(10.dp))
         content()
@@ -262,8 +262,8 @@ private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF101010))
-            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 18.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -273,19 +273,19 @@ private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         Text(
             text = "↗",
             style = MaterialTheme.typography.titleLarge,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }
@@ -307,7 +307,7 @@ private fun UpdateBlock(
         Text(
             text = stringResource(R.string.update_channel),
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFBDBDBD)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -401,6 +401,6 @@ private fun UpdateStatus(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        color = Color(0xFFBDBDBD)
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }

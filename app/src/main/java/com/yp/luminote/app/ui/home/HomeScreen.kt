@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloMode
+import com.yp.luminote.app.data.settings.ThemeMode
 import com.yp.luminote.app.R
 import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
@@ -101,7 +102,7 @@ fun HomeScreen(
                 Modifier
                     .fillMaxSize()
                     .background(
-                        Color.Black
+                        MaterialTheme.colorScheme.background
                     ),
             contentAlignment =
                 Alignment.Center
@@ -122,7 +123,7 @@ fun HomeScreen(
             Modifier
                 .fillMaxSize()
                 .background(
-                    Color.Black
+                    MaterialTheme.colorScheme.background
                 )
                 .statusBarsPadding()
                 .luminoteSafeHorizontalPadding()
@@ -161,7 +162,7 @@ fun HomeScreen(
             fontWeight =
                 FontWeight.SemiBold,
             color =
-                Color.White
+                MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(
@@ -179,9 +180,7 @@ fun HomeScreen(
                     .typography
                     .bodyLarge,
             color =
-                Color(
-                    0xFFBDBDBD
-                )
+                MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(
@@ -210,8 +209,10 @@ fun HomeScreen(
                         onLanguageClick,
                     onAboutClick =
                         onAboutClick,
-                    onAccessClick =
-                        onAccessClick,
+                        onAccessClick =
+                            onAccessClick,
+                    themeMode = settings.themeMode,
+                    onThemeModeSelected = viewModel::setThemeMode,
                     mode =
                         settings.haloMode,
                     onModeSelected =
@@ -231,8 +232,10 @@ fun HomeScreen(
                         onLanguageClick,
                     onAboutClick =
                         onAboutClick,
-                    onAccessClick =
-                        onAccessClick,
+                        onAccessClick =
+                            onAccessClick,
+                    themeMode = settings.themeMode,
+                    onThemeModeSelected = viewModel::setThemeMode,
                     mode =
                         settings.haloMode,
                     onModeSelected =
@@ -252,8 +255,10 @@ fun HomeScreen(
                         onLanguageClick,
                     onAboutClick =
                         onAboutClick,
-                    onAccessClick =
-                        onAccessClick,
+                        onAccessClick =
+                            onAccessClick,
+                    themeMode = settings.themeMode,
+                    onThemeModeSelected = viewModel::setThemeMode,
                     mode =
                         settings.haloMode,
                     onModeSelected =
@@ -272,6 +277,8 @@ private fun CompactHomeContent(
     onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
@@ -289,8 +296,10 @@ private fun CompactHomeContent(
             onLanguageClick,
         onAboutClick =
             onAboutClick,
-        onAccessClick =
+            onAccessClick =
             onAccessClick,
+        themeMode = themeMode,
+        onThemeModeSelected = onThemeModeSelected,
         spacing =
             12.dp
     )
@@ -304,6 +313,8 @@ private fun MediumHomeContent(
     onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
@@ -343,6 +354,8 @@ private fun MediumHomeContent(
                     onAboutClick,
                 onAccessClick =
                     onAccessClick,
+                themeMode = themeMode,
+                onThemeModeSelected = onThemeModeSelected,
                 spacing =
                     12.dp
             )
@@ -358,6 +371,8 @@ private fun ExpandedHomeContent(
     onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
@@ -397,6 +412,8 @@ private fun ExpandedHomeContent(
                     onAboutClick,
                 onAccessClick =
                     onAccessClick,
+                themeMode = themeMode,
+                onThemeModeSelected = onThemeModeSelected,
                 spacing =
                     16.dp
             )
@@ -414,6 +431,8 @@ private fun HomeSettingsList(
     onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     spacing: Dp
 ) {
     Column(
@@ -426,6 +445,11 @@ private fun HomeSettingsList(
             mode = mode,
             onModeSelected =
                 onModeSelected
+        )
+
+        HomeThemeSelector(
+            themeMode = themeMode,
+            onThemeModeSelected = onThemeModeSelected
         )
 
         when (mode) {
@@ -488,6 +512,61 @@ private fun HomeSettingsList(
 }
 
 @Composable
+private fun HomeThemeSelector(
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(24.dp))
+            .padding(20.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.theme),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = stringResource(R.string.theme_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+        ThemeMode.entries.forEach { mode ->
+            val label = when (mode) {
+                ThemeMode.SYSTEM -> stringResource(R.string.theme_system_default)
+                ThemeMode.LIGHT -> stringResource(R.string.theme_light)
+                ThemeMode.DARK -> stringResource(R.string.theme_dark)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable { onThemeModeSelected(mode) }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (themeMode == mode) "●" else "○",
+                    color = if (themeMode == mode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(start = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun HomeModeSelector(
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
@@ -502,17 +581,13 @@ private fun HomeModeSelector(
                     )
                 )
                 .background(
-                    Color(
-                        0xFF101010
-                    )
+                    MaterialTheme.colorScheme.surface
                 )
                 .border(
                     width =
                         1.dp,
                     color =
-                        Color(
-                            0xFF3D3D3D
-                        ),
+                        MaterialTheme.colorScheme.outlineVariant,
                     shape =
                         RoundedCornerShape(
                             24.dp
@@ -531,7 +606,7 @@ private fun HomeModeSelector(
             fontWeight =
                 FontWeight.SemiBold,
             color =
-                Color.White
+                MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(
@@ -549,9 +624,7 @@ private fun HomeModeSelector(
                     .typography
                     .bodyMedium,
             color =
-                Color(
-                    0xFFBDBDBD
-                )
+                MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(
@@ -628,13 +701,9 @@ private fun RowScope.HomeModeChoice(
                 )
                 .background(
                     if (selected) {
-                        Color(
-                            0xFF303030
-                        )
+                        MaterialTheme.colorScheme.secondaryContainer
                     } else {
-                        Color(
-                            0xFF202020
-                        )
+                        MaterialTheme.colorScheme.surfaceVariant
                     }
                 )
                 .border(
@@ -642,7 +711,7 @@ private fun RowScope.HomeModeChoice(
                         1.dp,
                     color =
                         if (selected) {
-                            Color.White
+                            MaterialTheme.colorScheme.primary
                         } else {
                             Color.Transparent
                         },
@@ -670,11 +739,9 @@ private fun RowScope.HomeModeChoice(
                 FontWeight.Medium,
             color =
                 if (selected) {
-                    Color.White
+                    MaterialTheme.colorScheme.onSecondaryContainer
                 } else {
-                    Color(
-                        0xFFBDBDBD
-                    )
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 }
         )
     }
@@ -697,17 +764,13 @@ private fun HomeSettingItem(
                     )
                 )
                 .background(
-                    Color(
-                        0xFF101010
-                    )
+                    MaterialTheme.colorScheme.surface
                 )
                 .border(
                     width =
                         1.dp,
                     color =
-                        Color(
-                            0xFF3D3D3D
-                        ),
+                        MaterialTheme.colorScheme.outlineVariant,
                     shape =
                         RoundedCornerShape(
                             24.dp
@@ -744,11 +807,9 @@ private fun HomeSettingItem(
                     FontWeight.SemiBold,
                 color =
                     if (enabled) {
-                        Color.White
+                        MaterialTheme.colorScheme.onSurface
                     } else {
-                        Color(
-                            0xFF808080
-                        )
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     }
             )
 
@@ -767,13 +828,9 @@ private fun HomeSettingItem(
                         .bodyMedium,
                 color =
                     if (enabled) {
-                        Color(
-                            0xFFBDBDBD
-                        )
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
-                        Color(
-                            0xFF5A5A5A
-                        )
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     }
             )
         }
@@ -786,11 +843,9 @@ private fun HomeSettingItem(
                     .headlineMedium,
             color =
                 if (enabled) {
-                    Color.White
+                    MaterialTheme.colorScheme.onSurface
                 } else {
-                    Color(
-                        0xFF5A5A5A
-                    )
+                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 }
         )
     }

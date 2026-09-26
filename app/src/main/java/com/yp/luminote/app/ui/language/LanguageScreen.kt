@@ -65,7 +65,7 @@ fun LanguageScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
             .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -84,14 +84,14 @@ fun LanguageScreen(
                     .semantics { contentDescription = backDescription }
                     .clickable(onClick = onBackClick),
                 style = MaterialTheme.typography.headlineLarge,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Text(
                 text = stringResource(R.string.language),
                 style = MaterialTheme.typography.displayLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
 
@@ -100,7 +100,7 @@ fun LanguageScreen(
         Text(
             text = stringResource(R.string.language_intro),
             style = MaterialTheme.typography.bodyLarge,
-            color = Color(0xFFBDBDBD)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(32.dp))
@@ -159,10 +159,10 @@ private fun LanguageOption(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(if (selected) Color(0xFF303030) else Color(0xFF101010))
+            .background(if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
             .border(
                 width = 1.dp,
-                color = if (selected) Color.White else Color(0xFF3D3D3D),
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 shape = shape
             )
             .selectable(
@@ -178,7 +178,7 @@ private fun LanguageOption(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             if (description != null) {
@@ -186,7 +186,7 @@ private fun LanguageOption(
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFBDBDBD)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -194,7 +194,7 @@ private fun LanguageOption(
         Text(
             text = if (selected) "✓" else "",
             style = MaterialTheme.typography.headlineSmall,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
     }
 }

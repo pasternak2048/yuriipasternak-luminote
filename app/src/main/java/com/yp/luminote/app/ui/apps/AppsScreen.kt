@@ -165,7 +165,7 @@ fun AppsScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
                 .navigationBarsPadding()
     ) {
@@ -215,7 +215,7 @@ fun AppsScreen(
                             .typography
                             .headlineLarge,
                     color =
-                        Color.White
+                        MaterialTheme.colorScheme.onBackground
                 )
 
                 Text(
@@ -231,7 +231,7 @@ fun AppsScreen(
                     fontWeight =
                         FontWeight.SemiBold,
                     color =
-                        Color.White
+                        MaterialTheme.colorScheme.onBackground
                 )
             }
 
@@ -248,7 +248,7 @@ fun AppsScreen(
                         .typography
                         .bodyLarge,
                 color =
-                    Color(0xFFBDBDBD)
+                    MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -658,21 +658,21 @@ private fun AppSearchField(
         colors =
             OutlinedTextFieldDefaults.colors(
                 focusedContainerColor =
-                    Color(0xFF101010),
+                    MaterialTheme.colorScheme.surface,
                 unfocusedContainerColor =
-                    Color(0xFF101010),
+                    MaterialTheme.colorScheme.surface,
                 disabledContainerColor =
-                    Color(0xFF101010),
+                    MaterialTheme.colorScheme.surface,
                 focusedTextColor =
-                    Color.White,
+                    MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor =
-                    Color.White,
+                    MaterialTheme.colorScheme.onSurface,
                 focusedBorderColor =
-                    Color(0xFF5C5C5C),
+                    MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor =
-                    Color(0xFF3D3D3D),
+                    MaterialTheme.colorScheme.outline,
                 cursorColor =
-                    Color.White
+                    MaterialTheme.colorScheme.primary
             )
     )
 }
@@ -1010,10 +1010,10 @@ private fun AppsList(
                 .clip(
                     RoundedCornerShape(24.dp)
                 )
-                .background(Color(0xFF101010))
+                .background(MaterialTheme.colorScheme.surface)
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF3D3D3D),
+                    color = MaterialTheme.colorScheme.outlineVariant,
                     shape = RoundedCornerShape(24.dp)
                 ),
         contentPadding =
@@ -1187,6 +1187,9 @@ private fun AppItemRow(
 private fun SelectionIndicator(
     selected: Boolean
 ) {
+    val selectedColor = MaterialTheme.colorScheme.primary
+    val unselectedColor = MaterialTheme.colorScheme.outline
+
     Canvas(
         modifier =
             Modifier.size(22.dp)
@@ -1195,9 +1198,9 @@ private fun SelectionIndicator(
         drawCircle(
             color =
                 if (selected) {
-                    Color.White
+                    selectedColor
                 } else {
-                    Color(0xFF777777)
+                    unselectedColor
                 },
             style =
                 Stroke(
@@ -1209,7 +1212,7 @@ private fun SelectionIndicator(
 
             drawCircle(
                 color =
-                    Color.White,
+                    selectedColor,
                 radius =
                     size.minDimension * 0.22f
             )

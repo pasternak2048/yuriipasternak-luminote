@@ -16,6 +16,7 @@ class LuminoteSettingsContractTest {
         assertFalse(settings.ambientEnabled)
         assertEquals(NotificationSource.ALL_APPS, settings.notificationSource)
         assertEquals(NotificationPlayback.ONCE, settings.notificationPlayback)
+        assertEquals(ThemeMode.SYSTEM, settings.themeMode)
         assertTrue(settings.selectedApps.isEmpty())
     }
 
@@ -28,5 +29,12 @@ class LuminoteSettingsContractTest {
         assertTrue(ambient.ambientEnabled)
         assertFalse(off.haloEnabled)
         assertFalse(off.ambientEnabled)
+    }
+
+    @Test
+    fun `theme mode parser falls back to system for missing or malformed data`() {
+        assertEquals(ThemeMode.SYSTEM, ThemeMode.fromStorage(null))
+        assertEquals(ThemeMode.SYSTEM, ThemeMode.fromStorage("night"))
+        assertEquals(ThemeMode.LIGHT, ThemeMode.fromStorage("LIGHT"))
     }
 }

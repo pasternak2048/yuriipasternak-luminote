@@ -26,6 +26,11 @@ class LuminoteSettingsRepository(
 
     private object Keys {
 
+        val themeMode =
+            stringPreferencesKey(
+                "theme_mode"
+            )
+
         val haloMode =
             stringPreferencesKey(
                 "halo_mode"
@@ -158,6 +163,10 @@ class LuminoteSettingsRepository(
             .map { preferences ->
 
                 LuminoteSettings(
+
+                    themeMode = ThemeMode.fromStorage(
+                        preferences[Keys.themeMode]
+                    ),
 
                     haloMode =
                         preferences[Keys.haloMode]
@@ -451,6 +460,9 @@ class LuminoteSettingsRepository(
         settings: LuminoteSettings
     ) {
         context.luminoteDataStore.edit { preferences ->
+            preferences[Keys.themeMode] =
+                settings.themeMode.name
+
             preferences[Keys.haloMode] =
                 settings.haloMode.name
 

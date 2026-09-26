@@ -7,12 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
 import com.yp.luminote.app.ui.about.AboutScreen
 import com.yp.luminote.app.ui.access.AccessScreen
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteWindowSizeClass
@@ -23,7 +20,6 @@ import com.yp.luminote.app.ui.effects.HaloScreen
 import com.yp.luminote.app.ui.home.HomeScreen
 import com.yp.luminote.app.ui.language.LanguageScreen
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
-import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModelFactory
 
 object LuminoteRoutes {
     const val HOME = "home"
@@ -37,28 +33,11 @@ object LuminoteRoutes {
 }
 
 @Composable
-fun LuminoteNavHost() {
+fun LuminoteNavHost(
+    settingsViewModel: LuminoteSettingsViewModel
+) {
     val navController =
         rememberNavController()
-
-    val applicationContext =
-        LocalContext.current.applicationContext
-
-    val settingsRepository =
-        remember(applicationContext) {
-            LuminoteSettingsRepository(
-                applicationContext
-            )
-        }
-
-    val settingsViewModel:
-            LuminoteSettingsViewModel =
-        viewModel(
-            factory =
-                LuminoteSettingsViewModelFactory(
-                    settingsRepository
-                )
-        )
 
     val windowSizeClass =
         rememberLuminoteWindowSizeClass()

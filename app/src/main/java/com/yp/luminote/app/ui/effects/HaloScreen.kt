@@ -80,7 +80,7 @@ fun HaloScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
     ) {
 
@@ -120,7 +120,7 @@ fun HaloScreen(
                                     onBackClick
                             ),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
 
                 Text(
@@ -131,7 +131,7 @@ fun HaloScreen(
                         ),
                     style = MaterialTheme.typography.displayLarge,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
 
@@ -147,7 +147,7 @@ fun HaloScreen(
                     MaterialTheme
                         .typography
                         .bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -358,8 +358,8 @@ private fun AppearanceGroup(
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.match_app_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                Text(stringResource(R.string.match_app_color_description), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+                Text(stringResource(R.string.match_app_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                Text(stringResource(R.string.match_app_color_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(
                 checked = settings.colorSource == HaloColorSource.APP_ICON,
@@ -369,7 +369,7 @@ private fun AppearanceGroup(
 
         if (settings.colorSource != HaloColorSource.APP_ICON) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text(stringResource(R.string.halo_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+            Text(stringResource(R.string.halo_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(12.dp))
             ColorGrid(
                 selectedColor = selectedColor,
@@ -386,8 +386,8 @@ private fun AppearanceGroup(
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.use_app_palette), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                    Text(stringResource(R.string.use_app_palette_description), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+                    Text(stringResource(R.string.use_app_palette), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                    Text(stringResource(R.string.use_app_palette_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(
                     checked = settings.gradientPalette == com.yp.luminote.app.data.settings.GradientPalette.NOTIFICATION_APPS,
@@ -545,8 +545,8 @@ private fun TimingGroup(
 
         if (settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(stringResource(settings.haloMotion.definition.ambientDescriptionRes), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
-            Text(stringResource(R.string.stops_when_alerts_dismissed), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text(stringResource(settings.haloMotion.definition.ambientDescriptionRes), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.stops_when_alerts_dismissed), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
     }
@@ -556,8 +556,8 @@ private fun TimingGroup(
 private fun RepeatHaloSetting(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.repeat_notification_effect), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-            Text(stringResource(R.string.repeat_notification_effect_description), style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text(stringResource(R.string.repeat_notification_effect), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.repeat_notification_effect_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
@@ -575,8 +575,8 @@ private fun PlaybackChoice(
         modifier = modifier.height(42.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color.White else Color(0xFF202020),
-            contentColor = if (selected) Color.Black else Color.White
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
         )
     ) {
         Text(title)
@@ -621,8 +621,8 @@ private fun TestEffectButton(
             enabled = !settings.ambientEnabled,
             shape = RoundedCornerShape(28.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
 
@@ -649,10 +649,10 @@ private fun SettingsGroup(
                 .clip(
                     RoundedCornerShape(28.dp)
                 )
-                .background(Color(0xFF101010))
+                .background(MaterialTheme.colorScheme.surface)
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF3D3D3D),
+                    color = MaterialTheme.colorScheme.outlineVariant,
                     shape = RoundedCornerShape(28.dp)
                 )
                 .padding(
@@ -669,7 +669,7 @@ private fun SettingsGroup(
                     .titleMedium,
             fontWeight =
                 FontWeight.SemiBold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(
@@ -864,7 +864,7 @@ private fun SliderSetting(
                         .bodyLarge,
                 fontWeight =
                     FontWeight.Medium,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
@@ -873,7 +873,7 @@ private fun SliderSetting(
                     MaterialTheme
                         .typography
                         .bodyMedium,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
