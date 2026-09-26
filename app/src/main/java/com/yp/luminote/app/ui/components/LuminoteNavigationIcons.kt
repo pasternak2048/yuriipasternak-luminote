@@ -1,10 +1,10 @@
 package com.yp.luminote.app.ui.components
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
@@ -20,7 +20,7 @@ fun LuminoteBackButton(
 ) {
     IconButton(onClick = onClick, modifier = modifier) {
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
             contentDescription = contentDescription,
             tint = tint
         )
@@ -35,7 +35,7 @@ fun LuminoteExpandIcon(
     modifier: Modifier = Modifier
 ) {
     Icon(
-        imageVector = Icons.Filled.KeyboardArrowDown,
+        imageVector = Icons.Outlined.KeyboardArrowDown,
         contentDescription = contentDescription,
         modifier = modifier,
         tint = tint
@@ -45,7 +45,7 @@ fun LuminoteExpandIcon(
 @Composable
 fun LuminoteExternalLinkIcon(tint: Color, modifier: Modifier = Modifier) {
     Icon(
-        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+        imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
         contentDescription = null,
         modifier = modifier,
         tint = tint
@@ -55,7 +55,7 @@ fun LuminoteExternalLinkIcon(tint: Color, modifier: Modifier = Modifier) {
 @Composable
 fun LuminoteForwardIcon(tint: Color, modifier: Modifier = Modifier) {
     Icon(
-        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+        imageVector = Icons.AutoMirrored.Outlined.ArrowForward,
         contentDescription = null,
         modifier = modifier,
         tint = tint

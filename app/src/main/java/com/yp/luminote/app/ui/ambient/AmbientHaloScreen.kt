@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,7 +48,9 @@ import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
 import com.yp.luminote.app.ui.components.LuminoteScreenHeader
+import com.yp.luminote.app.ui.components.LuminoteSliderSetting
 import com.yp.luminote.app.ui.components.LuminoteSettingsCard
+import com.yp.luminote.app.ui.components.LuminoteColorSwatchPicker
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 @Composable
@@ -126,11 +127,11 @@ fun AmbientHaloScreen(
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
                     AmbientGroup(title = stringResource(R.string.animation), uiMetrics = uiMetrics) {
-                        AmbientSlider(
+                        LuminoteSliderSetting(
                             title = stringResource(R.string.effect_speed),
                             value = settings.ambientEffectSpeed,
                             valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.2g", settings.ambientEffectSpeed)),
-                            range = 0.25f..2f,
+                            valueRange = 0.25f..2f,
                             steps = 6,
                             onValueChange = viewModel::setAmbientEffectSpeed,
                             onValueChangeFinished = viewModel::flushPendingSettings
@@ -152,11 +153,11 @@ fun AmbientHaloScreen(
                         )
                         if (settings.ambientColorMode == HaloColorMode.GRADIENT) {
                             Spacer(Modifier.height(18.dp))
-                            AmbientSlider(
+                            LuminoteSliderSetting(
                                 title = stringResource(R.string.color_flow),
                                 value = settings.ambientGradientFlowSpeed,
                                 valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.ambientGradientFlowSpeed)),
-                                range = 0.5f..2.5f,
+                                valueRange = 0.5f..2.5f,
                                 steps = 3,
                                 onValueChange = viewModel::setAmbientGradientFlowSpeed,
                                 onValueChangeFinished = viewModel::flushPendingSettings
@@ -169,7 +170,7 @@ fun AmbientHaloScreen(
             item {
                 Column(Modifier.luminoteSafeHorizontalPadding()) {
                     AmbientGroup(title = stringResource(R.string.appearance), uiMetrics = uiMetrics) {
-                        AmbientSlider(
+                        LuminoteSliderSetting(
                             title = stringResource(R.string.halo_brightness),
                             value = settings.ambientIntensity,
                             valueText = stringResource(R.string.percentage, (settings.ambientIntensity * 100).toInt()),
@@ -177,7 +178,7 @@ fun AmbientHaloScreen(
                             onValueChangeFinished = viewModel::flushPendingSettings
                         )
                         Spacer(Modifier.height(16.dp))
-                        AmbientSlider(
+                        LuminoteSliderSetting(
                             title = stringResource(R.string.edge_width),
                             value = settings.ambientThickness,
                             valueText = stringResource(R.string.percentage, (settings.ambientThickness * 100).toInt()),
@@ -207,136 +208,16 @@ private fun AmbientGroup(
 }
 
 @Composable
-private fun AmbientSlider(
-    title: String,
-    value: Float,
-    valueText: String,
-    range: ClosedFloatingPointRange<Float> = 0f..1f,
-    steps: Int = 0,
-    onValueChange: (Float) -> Unit,
-    onValueChangeFinished: () -> Unit
-) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-        Text(valueText, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    Slider(value = value, onValueChange = onValueChange, valueRange = range, steps = steps, onValueChangeFinished = onValueChangeFinished)
-}
-
-@Composable
 private fun AmbientColorGrid(
     selectedColor: Color,
     gradientSelected: Boolean,
     onColorSelected: (Color) -> Unit,
     onGradientSelected: () -> Unit
 ) {
-    val colors = listOf(
-        Color(0xFF3E91FF), Color(0xFF64D2FF), Color(0xFF00C7BE), Color(0xFF30D158),
-        Color(0xFFA8D800), Color(0xFFFFD60A), Color(0xFFFF9F0A), Color(0xFFFF453A),
-        Color(0xFFFF375F), Color(0xFFFF6482), Color(0xFFBF5AF2), Color(0xFFAF52DE),
-        Color(0xFF5E5CE6), Color(0xFF007AFF), Color.White
+    LuminoteColorSwatchPicker(
+        selectedColor = selectedColor,
+        gradientSelected = gradientSelected,
+        onColorSelected = onColorSelected,
+        onGradientSelected = onGradientSelected
     )
-    BoxWithConstraints {
-        val columnCount = if (maxWidth / 5f >= 48.dp) 5 else 4
-        val optionSize = minOf(56.dp, maxWidth / columnCount)
-        Column(
-            modifier = Modifier.selectableGroup(),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-        colors.chunked(columnCount).forEach { row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                row.forEach { color ->
-                    AmbientColorOption(
-                        color = color,
-                        selected = !gradientSelected && color.value == selectedColor.value,
-                        size = optionSize,
-                        onClick = { onColorSelected(color) }
-                    )
-                }
-            }
-        }
-        Row(modifier = Modifier.fillMaxWidth()) {
-            AmbientGradientColorOption(
-                selected = gradientSelected,
-                size = optionSize,
-                onClick = onGradientSelected
-            )
-        }
-        }
-    }
-}
-
-@Composable
-private fun AmbientColorOption(color: Color, selected: Boolean, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
-    val label = stringResource(
-        R.string.color_swatch,
-        String.format("#%06X", color.toArgb() and 0xFFFFFF)
-    )
-    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-            .semantics {
-                contentDescription = label
-                stateDescription = stateLabel
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .border(2.dp, color, androidx.compose.foundation.shape.CircleShape)
-            )
-        }
-        Box(
-            modifier = Modifier
-                .size(size * if (selected) 0.75f else 0.8f)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(color)
-        )
-    }
-}
-
-@Composable
-private fun AmbientGradientColorOption(selected: Boolean, size: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
-    val label = stringResource(R.string.gradient_color)
-    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(androidx.compose.foundation.shape.CircleShape)
-            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
-            .semantics {
-                contentDescription = label
-                stateDescription = stateLabel
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(size)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(
-                    Brush.sweepGradient(
-                        listOf(
-                            Color(0xFF3E91FF), Color(0xFFBF5AF2), Color(0xFFFF6482),
-                            Color(0xFFFF9F0A), Color(0xFF3E91FF)
-                        )
-                    )
-                )
-        )
-        if (selected) {
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .border(2.dp, Color.White, androidx.compose.foundation.shape.CircleShape)
-            )
-        }
-    }
 }

@@ -125,6 +125,7 @@
     <string name="choose_apps_individually">Вибирати застосунки окремо</string>
     <string name="no_apps_found">Застосунків не знайдено</string>
     <string name="mode">Режим</string>
+    <string name="working_mode">Режим роботи</string>
     <string name="mode_description">Виберіть, коли Luminote використовує край екрана.</string>
     <string name="alerts">Сповіщення</string>
     <string name="ambient">Постійне</string>
@@ -159,4 +160,8 @@
     <string name="not_selected_state">Не вибрано</string>
     <string name="expanded_state">Розгорнуто</string>
     <string name="collapsed_state">Згорнуто</string>
+    <string name="settings">Налаштування</string>
+    <string name="settings_appearance_description">Тема й візуальні параметри</string>
+    <string name="settings_updates_description">Канал та сповіщення про оновлення</string>
+    <string name="settings_content_description">Відкрити налаштування</string>
 </resources>

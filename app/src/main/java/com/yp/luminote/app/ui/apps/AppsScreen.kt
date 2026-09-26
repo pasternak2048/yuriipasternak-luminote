@@ -12,8 +12,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,11 +34,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -59,9 +57,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
@@ -80,6 +76,8 @@ import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 import com.yp.luminote.app.ui.components.LuminoteExpandIcon
 import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 import com.yp.luminote.app.ui.components.LuminoteSettingsCard
+import com.yp.luminote.app.ui.components.LuminoteSelectionControl
+import com.yp.luminote.app.ui.components.LuminoteSelectionRow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.core.graphics.createBitmap
@@ -762,7 +760,7 @@ private fun NotificationSourceGroup(
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
-            Column {
+            Column(modifier = Modifier.selectableGroup()) {
 
             Spacer(
                 modifier =
@@ -822,90 +820,13 @@ private fun SourceOption(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val selectedBackground =
-        MaterialTheme
-            .colorScheme
-            .surfaceVariant
-
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(16.dp)
-                )
-                .background(
-                    if (selected) {
-                        selectedBackground
-                    } else {
-                        Color.Transparent
-                    }
-                )
-                .clickable(
-                    onClick =
-                        onClick
-                )
-                .padding(
-                    horizontal = 12.dp,
-                    vertical = 12.dp
-                ),
-        verticalAlignment =
-            Alignment.CenterVertically
-    ) {
-
-        SelectionIndicator(
-            selected =
-                selected
-        )
-
-        Spacer(
-            modifier =
-                Modifier.width(16.dp)
-        )
-
-        Column(
-            modifier =
-                Modifier.weight(1f)
-        ) {
-
-            Text(
-                text =
-                    title,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge,
-                fontWeight =
-                    if (selected) {
-                        FontWeight.SemiBold
-                    } else {
-                        FontWeight.Medium
-                    },
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurface
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.height(2.dp)
-            )
-
-            Text(
-                text =
-                    description,
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyMedium,
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurfaceVariant
-            )
-        }
-    }
+    LuminoteSelectionRow(
+        title = title,
+        description = description,
+        selected = selected,
+        onClick = onClick,
+        control = LuminoteSelectionControl.Radio
+    )
 }
 
 /*
@@ -1083,55 +1004,20 @@ private fun AppItemRow(
 
     Column {
 
-        Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .clickable(
-                        onClick =
-                            onClick
-                    ),
-            verticalAlignment =
-                Alignment.CenterVertically
-        ) {
-
-            Image(
-                bitmap =
-                    bitmap.asImageBitmap(),
-                contentDescription =
-                    app.name,
-                modifier =
-                    Modifier.size(32.dp)
-            )
-
-            Spacer(
-                modifier =
-                    Modifier.width(16.dp)
-            )
-
-            Text(
-                text =
-                    app.name,
-                modifier =
-                    Modifier.weight(1f),
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge,
-                fontWeight =
-                    FontWeight.Medium,
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurface
-            )
-
-            SelectionIndicator(
-                selected =
-                    selected
-            )
-        }
+        LuminoteSelectionRow(
+            title = app.name,
+            selected = selected,
+            onClick = onClick,
+            control = LuminoteSelectionControl.Checkbox,
+            modifier = Modifier.height(64.dp),
+            leadingContent = {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+        )
 
         Box(
             modifier =
@@ -1147,49 +1033,6 @@ private fun AppItemRow(
                             )
                     )
         )
-    }
-}
-
-/*
- * ================================================================
- * SELECTION INDICATOR
- * ================================================================
- */
-
-@Composable
-private fun SelectionIndicator(
-    selected: Boolean
-) {
-    val selectedColor = MaterialTheme.colorScheme.primary
-    val unselectedColor = MaterialTheme.colorScheme.outline
-
-    Canvas(
-        modifier =
-            Modifier.size(22.dp)
-    ) {
-
-        drawCircle(
-            color =
-                if (selected) {
-                    selectedColor
-                } else {
-                    unselectedColor
-                },
-            style =
-                Stroke(
-                    width = 2.dp.toPx()
-                )
-        )
-
-        if (selected) {
-
-            drawCircle(
-                color =
-                    selectedColor,
-                radius =
-                    size.minDimension * 0.22f
-            )
-        }
     }
 }
 
