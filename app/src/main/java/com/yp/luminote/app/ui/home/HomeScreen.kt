@@ -20,8 +20,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -31,21 +34,28 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloMode
+import com.yp.luminote.app.data.settings.ThemeMode
+import com.yp.luminote.app.R
 import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.ui.components.LuminoteForwardIcon
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
+import androidx.compose.ui.semantics.Role
 
 @Composable
 fun HomeScreen(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
     windowSizeClass: LuminoteWindowSizeClass,
@@ -98,7 +108,7 @@ fun HomeScreen(
                 Modifier
                     .fillMaxSize()
                     .background(
-                        Color.Black
+                        MaterialTheme.colorScheme.background
                     ),
             contentAlignment =
                 Alignment.Center
@@ -119,7 +129,7 @@ fun HomeScreen(
             Modifier
                 .fillMaxSize()
                 .background(
-                    Color.Black
+                    MaterialTheme.colorScheme.background
                 )
                 .statusBarsPadding()
                 .luminoteSafeHorizontalPadding()
@@ -142,7 +152,7 @@ fun HomeScreen(
         )
 
         Text(
-            text = "Luminote",
+            text = stringResource(R.string.app_name),
             style =
                 if (
                     uiMetrics.isCompactHeight
@@ -158,7 +168,7 @@ fun HomeScreen(
             fontWeight =
                 FontWeight.SemiBold,
             color =
-                Color.White
+                MaterialTheme.colorScheme.onBackground
         )
 
         Spacer(
@@ -170,15 +180,13 @@ fun HomeScreen(
 
         Text(
             text =
-                "Edge lighting for alerts and ambient style",
+                stringResource(R.string.home_tagline),
             style =
                 MaterialTheme
                     .typography
                     .bodyLarge,
             color =
-                Color(
-                    0xFFBDBDBD
-                )
+                MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(
@@ -203,10 +211,14 @@ fun HomeScreen(
                         onAmbientClick,
                     onAppsClick =
                         onAppsClick,
+                    onLanguageClick =
+                        onLanguageClick,
                     onAboutClick =
                         onAboutClick,
-                    onAccessClick =
-                        onAccessClick,
+                        onAccessClick =
+                            onAccessClick,
+                    themeMode = settings.themeMode,
+                    onThemeModeSelected = viewModel::setThemeMode,
                     mode =
                         settings.haloMode,
                     onModeSelected =
@@ -222,10 +234,14 @@ fun HomeScreen(
                         onAmbientClick,
                     onAppsClick =
                         onAppsClick,
+                    onLanguageClick =
+                        onLanguageClick,
                     onAboutClick =
                         onAboutClick,
-                    onAccessClick =
-                        onAccessClick,
+                        onAccessClick =
+                            onAccessClick,
+                    themeMode = settings.themeMode,
+                    onThemeModeSelected = viewModel::setThemeMode,
                     mode =
                         settings.haloMode,
                     onModeSelected =
@@ -241,10 +257,14 @@ fun HomeScreen(
                         onAmbientClick,
                     onAppsClick =
                         onAppsClick,
+                    onLanguageClick =
+                        onLanguageClick,
                     onAboutClick =
                         onAboutClick,
-                    onAccessClick =
-                        onAccessClick,
+                        onAccessClick =
+                            onAccessClick,
+                    themeMode = settings.themeMode,
+                    onThemeModeSelected = viewModel::setThemeMode,
                     mode =
                         settings.haloMode,
                     onModeSelected =
@@ -260,8 +280,11 @@ private fun CompactHomeContent(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
@@ -275,10 +298,14 @@ private fun CompactHomeContent(
             onAmbientClick,
         onAppsClick =
             onAppsClick,
+        onLanguageClick =
+            onLanguageClick,
         onAboutClick =
             onAboutClick,
-        onAccessClick =
+            onAccessClick =
             onAccessClick,
+        themeMode = themeMode,
+        onThemeModeSelected = onThemeModeSelected,
         spacing =
             12.dp
     )
@@ -289,8 +316,11 @@ private fun MediumHomeContent(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
@@ -324,10 +354,14 @@ private fun MediumHomeContent(
                     onAmbientClick,
                 onAppsClick =
                     onAppsClick,
+                onLanguageClick =
+                    onLanguageClick,
                 onAboutClick =
                     onAboutClick,
                 onAccessClick =
                     onAccessClick,
+                themeMode = themeMode,
+                onThemeModeSelected = onThemeModeSelected,
                 spacing =
                     12.dp
             )
@@ -340,8 +374,11 @@ private fun ExpandedHomeContent(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
@@ -375,10 +412,14 @@ private fun ExpandedHomeContent(
                     onAmbientClick,
                 onAppsClick =
                     onAppsClick,
+                onLanguageClick =
+                    onLanguageClick,
                 onAboutClick =
                     onAboutClick,
                 onAccessClick =
                     onAccessClick,
+                themeMode = themeMode,
+                onThemeModeSelected = onThemeModeSelected,
                 spacing =
                     16.dp
             )
@@ -393,8 +434,11 @@ private fun HomeSettingsList(
     onHaloClick: () -> Unit,
     onAmbientClick: () -> Unit,
     onAppsClick: () -> Unit,
+    onLanguageClick: () -> Unit,
     onAboutClick: () -> Unit,
     onAccessClick: () -> Unit,
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit,
     spacing: Dp
 ) {
     Column(
@@ -409,22 +453,27 @@ private fun HomeSettingsList(
                 onModeSelected
         )
 
+        HomeThemeSelector(
+            themeMode = themeMode,
+            onThemeModeSelected = onThemeModeSelected
+        )
+
         when (mode) {
             HaloMode.NOTIFICATIONS -> {
                 HomeSettingItem(
                     title =
-                        "Luminote Halo",
+                        stringResource(R.string.luminote_halo),
                     subtitle =
-                        "Notification effects and appearance",
+                        stringResource(R.string.home_halo_description),
                     onClick =
                         onHaloClick
                 )
 
                 HomeSettingItem(
                     title =
-                        "Apps",
+                        stringResource(R.string.apps),
                     subtitle =
-                        "Choose which apps can trigger the effect",
+                        stringResource(R.string.home_apps_description),
                     onClick =
                         onAppsClick
                 )
@@ -433,9 +482,9 @@ private fun HomeSettingsList(
             HaloMode.AMBIENT ->
                 HomeSettingItem(
                     title =
-                        "Ambient Halo",
+                        stringResource(R.string.ambient_halo),
                     subtitle =
-                        "Keep a custom edge effect visible",
+                        stringResource(R.string.home_ambient_description),
                     onClick =
                         onAmbientClick
                 )
@@ -445,20 +494,78 @@ private fun HomeSettingsList(
         }
 
         HomeSettingItem(
-            title = "Access",
+            title = stringResource(R.string.access),
             subtitle =
-                "Permissions for alerts and edge effects",
+                stringResource(R.string.home_access_description),
             onClick =
                 onAccessClick
         )
 
         HomeSettingItem(
-            title = "About",
+            title = stringResource(R.string.language),
+            subtitle = stringResource(R.string.home_language_description),
+            onClick = onLanguageClick
+        )
+
+        HomeSettingItem(
+            title = stringResource(R.string.about),
             subtitle =
-                "Luminote, developer and source code",
+                stringResource(R.string.home_about_description),
             onClick =
                 onAboutClick
         )
+    }
+}
+
+@Composable
+private fun HomeThemeSelector(
+    themeMode: ThemeMode,
+    onThemeModeSelected: (ThemeMode) -> Unit
+) {
+    LuminoteSettingsCard {
+        Column(modifier = Modifier.padding(20.dp)) {
+        Text(
+            text = stringResource(R.string.theme),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        Text(
+            text = stringResource(R.string.theme_description),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+        Column(Modifier.selectableGroup()) {
+        ThemeMode.entries.forEach { mode ->
+            val label = when (mode) {
+                ThemeMode.SYSTEM -> stringResource(R.string.theme_system_default)
+                ThemeMode.LIGHT -> stringResource(R.string.theme_light)
+                ThemeMode.DARK -> stringResource(R.string.theme_dark)
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .selectable(
+                        selected = themeMode == mode,
+                        role = Role.RadioButton,
+                        onClick = { onThemeModeSelected(mode) }
+                    )
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                RadioButton(selected = themeMode == mode, onClick = null)
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(start = 12.dp),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+        }
+        }
     }
 }
 
@@ -467,38 +574,10 @@ private fun HomeModeSelector(
     mode: HaloMode,
     onModeSelected: (HaloMode) -> Unit
 ) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(
-                        24.dp
-                    )
-                )
-                .background(
-                    Color(
-                        0xFF101010
-                    )
-                )
-                .border(
-                    width =
-                        1.dp,
-                    color =
-                        Color(
-                            0xFF3D3D3D
-                        ),
-                    shape =
-                        RoundedCornerShape(
-                            24.dp
-                        )
-                )
-                .padding(
-                    20.dp
-                )
-    ) {
+    LuminoteSettingsCard {
+        Column(modifier = Modifier.padding(20.dp)) {
         Text(
-            text = "Mode",
+            text = stringResource(R.string.mode),
             style =
                 MaterialTheme
                     .typography
@@ -506,7 +585,7 @@ private fun HomeModeSelector(
             fontWeight =
                 FontWeight.SemiBold,
             color =
-                Color.White
+                MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(
@@ -518,15 +597,13 @@ private fun HomeModeSelector(
 
         Text(
             text =
-                "Choose when Luminote uses the screen edge",
+                stringResource(R.string.mode_description),
             style =
                 MaterialTheme
                     .typography
                     .bodyMedium,
             color =
-                Color(
-                    0xFFBDBDBD
-                )
+                MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(
@@ -537,13 +614,14 @@ private fun HomeModeSelector(
         )
 
         Row(
+            modifier = Modifier.selectableGroup(),
             horizontalArrangement =
                 Arrangement.spacedBy(
                     8.dp
                 )
         ) {
             HomeModeChoice(
-                label = "Alerts",
+                label = stringResource(R.string.alerts),
                 selected =
                     mode ==
                             HaloMode.NOTIFICATIONS,
@@ -555,7 +633,7 @@ private fun HomeModeSelector(
             )
 
             HomeModeChoice(
-                label = "Ambient",
+                label = stringResource(R.string.ambient),
                 selected =
                     mode ==
                             HaloMode.AMBIENT,
@@ -567,7 +645,7 @@ private fun HomeModeSelector(
             )
 
             HomeModeChoice(
-                label = "Off",
+                label = stringResource(R.string.off),
                 selected =
                     mode ==
                             HaloMode.OFF,
@@ -577,6 +655,7 @@ private fun HomeModeSelector(
                     )
                 }
             )
+        }
         }
     }
 }
@@ -603,13 +682,9 @@ private fun RowScope.HomeModeChoice(
                 )
                 .background(
                     if (selected) {
-                        Color(
-                            0xFF303030
-                        )
+                        MaterialTheme.colorScheme.secondaryContainer
                     } else {
-                        Color(
-                            0xFF202020
-                        )
+                        MaterialTheme.colorScheme.surfaceVariant
                     }
                 )
                 .border(
@@ -617,16 +692,17 @@ private fun RowScope.HomeModeChoice(
                         1.dp,
                     color =
                         if (selected) {
-                            Color.White
+                            MaterialTheme.colorScheme.primary
                         } else {
                             Color.Transparent
                         },
                     shape =
                         shape
                 )
-                .clickable(
-                    onClick =
-                        onClick
+                .selectable(
+                    selected = selected,
+                    role = Role.RadioButton,
+                    onClick = onClick
                 )
                 .padding(
                     vertical =
@@ -645,11 +721,9 @@ private fun RowScope.HomeModeChoice(
                 FontWeight.Medium,
             color =
                 if (selected) {
-                    Color.White
+                    MaterialTheme.colorScheme.onSecondaryContainer
                 } else {
-                    Color(
-                        0xFFBDBDBD
-                    )
+                    MaterialTheme.colorScheme.onSurfaceVariant
                 }
         )
     }
@@ -662,47 +736,24 @@ private fun HomeSettingItem(
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(
-                        24.dp
-                    )
-                )
-                .background(
-                    Color(
-                        0xFF101010
-                    )
-                )
-                .border(
-                    width =
-                        1.dp,
-                    color =
-                        Color(
-                            0xFF3D3D3D
-                        ),
-                    shape =
-                        RoundedCornerShape(
-                            24.dp
-                        )
-                )
+    val contentColor = if (enabled) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+    }
+    LuminoteSettingsCard(
+        modifier = Modifier
                 .clickable(
                     enabled =
                         enabled,
                     onClick =
                         onClick
                 )
-                .padding(
-                    horizontal =
-                        20.dp,
-                    vertical =
-                        18.dp
-                ),
-        verticalAlignment =
-            Alignment.CenterVertically
     ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Column(
             modifier =
                 Modifier.weight(
@@ -719,11 +770,9 @@ private fun HomeSettingItem(
                     FontWeight.SemiBold,
                 color =
                     if (enabled) {
-                        Color.White
+                        MaterialTheme.colorScheme.onSurface
                     } else {
-                        Color(
-                            0xFF808080
-                        )
+                        contentColor
                     }
             )
 
@@ -742,31 +791,14 @@ private fun HomeSettingItem(
                         .bodyMedium,
                 color =
                     if (enabled) {
-                        Color(
-                            0xFFBDBDBD
-                        )
+                        MaterialTheme.colorScheme.onSurfaceVariant
                     } else {
-                        Color(
-                            0xFF5A5A5A
-                        )
+                        contentColor
                     }
             )
         }
 
-        Text(
-            text = "›",
-            style =
-                MaterialTheme
-                    .typography
-                    .headlineMedium,
-            color =
-                if (enabled) {
-                    Color.White
-                } else {
-                    Color(
-                        0xFF5A5A5A
-                    )
-                }
-        )
+        LuminoteForwardIcon(tint = contentColor)
+        }
     }
 }

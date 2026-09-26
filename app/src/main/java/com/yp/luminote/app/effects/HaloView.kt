@@ -1,5 +1,6 @@
 package com.yp.luminote.app.effects
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.util.Log
@@ -7,7 +8,13 @@ import android.view.View
 import android.view.WindowInsets
 import com.yp.luminote.app.data.settings.HaloMotion
 
-/** Bridges the overlay window lifecycle to geometry, animation and rendering. */
+/**
+ * Bridges the overlay window lifecycle to geometry, animation and rendering.
+ *
+ * It is instantiated programmatically by overlay and accessibility services, so XML constructors
+ * are intentionally omitted.
+ */
+@SuppressLint("ViewConstructor")
 internal class HaloView(
     context: Context,
     config: HaloConfig

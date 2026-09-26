@@ -14,12 +14,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.data.settings.definition
+import com.yp.luminote.app.R
 
 @Composable
 fun HaloAppearancePicker(
@@ -31,25 +32,25 @@ fun HaloAppearancePicker(
 ) {
     Column(
         modifier = modifier
-            .background(Color(0xFF101010), RoundedCornerShape(28.dp))
-            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(28.dp))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(28.dp))
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Frame", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(stringResource(R.string.frame), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         AppearanceChoice(
-            title = frame.definition.title,
-            subtitle = frame.definition.description,
+            title = stringResource(frame.definition.titleRes),
+            subtitle = stringResource(frame.definition.descriptionRes),
             selected = true
         )
 
-        Text("Animation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color.White)
+        Text(stringResource(R.string.animation), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             availableMotions.forEach { candidate ->
                 val definition = candidate.definition
                 AppearanceChoice(
-                    title = definition.title,
-                    subtitle = definition.description,
+                    title = stringResource(definition.titleRes),
+                    subtitle = stringResource(definition.descriptionRes),
                     selected = motion == candidate,
                     onClick = { onMotionSelected(candidate) }
                 )
@@ -71,12 +72,12 @@ private fun AppearanceChoice(
     Row(
         modifier = Modifier
             .background(
-                if (selected) Color.White.copy(alpha = 0.14f) else Color(0xFF1C1C1C),
+                if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
                 RoundedCornerShape(18.dp)
             )
             .border(
                 if (selected) 1.dp else 0.dp,
-                if (selected) Color.White else Color.Transparent,
+                if (selected) MaterialTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent,
                 RoundedCornerShape(18.dp)
             )
             .then(onClick?.takeIf { enabled }?.let { Modifier.clickable(onClick = it) } ?: Modifier)
@@ -91,12 +92,12 @@ private fun AppearanceChoice(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                color = if (enabled) Color.White else Color(0xFF808080)
+                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (enabled) Color(0xFFBDBDBD) else Color(0xFF808080)
+                color = if (enabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             )
         }
     }

@@ -23,6 +23,7 @@
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:localeConfig="@xml/locales_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Luminote">
@@ -78,7 +79,7 @@
         <service
             android:name=".effects.HaloAccessibilityService"
             android:exported="false"
-            android:label="Luminote lock screen halo"
+            android:label="@string/accessibility_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
 
             <intent-filter>

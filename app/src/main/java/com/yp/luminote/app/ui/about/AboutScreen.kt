@@ -2,7 +2,6 @@ package com.yp.luminote.app.ui.about
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -35,14 +34,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.yp.luminote.app.ui.components.LuminoteExternalLinkIcon
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
+import com.yp.luminote.app.R
 import com.yp.luminote.app.update.UpdateChannel
 import com.yp.luminote.app.update.UpdateInstaller
 import com.yp.luminote.app.update.UpdateUiState
@@ -56,13 +62,18 @@ fun AboutScreen(
 ) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
-    val versionInfo = remember(context) {
-        val packageInfo = context.packageManager.getPackageInfo(
+    val packageInfo = remember(context) {
+        context.packageManager.getPackageInfo(
             context.packageName,
             PackageManager.PackageInfoFlags.of(0)
         )
-        "Version ${packageInfo.versionName ?: "Unknown"} (${packageInfo.longVersionCode})"
     }
+    val versionInfo = stringResource(
+        R.string.version_info,
+        packageInfo.versionName ?: stringResource(R.string.unknown),
+        packageInfo.longVersionCode
+    )
+    val backDescription = stringResource(R.string.back)
     var versionTapCount by remember { mutableIntStateOf(0) }
     val updateChannel by updateViewModel.channel.collectAsState()
     val updateState by updateViewModel.state.collectAsState()
@@ -73,16 +84,15 @@ fun AboutScreen(
             ActivityResultContracts.RequestPermission()
         ) { }
     val notificationsAllowed =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.POST_NOTIFICATIONS
-            ) == PackageManager.PERMISSION_GRANTED
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .verticalScroll(rememberScrollState())
@@ -94,42 +104,27 @@ fun AboutScreen(
         ) {
             Spacer(modifier = Modifier.height(24.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "‹",
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clickable(onClick = onBackClick),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
-                )
-
-                Text(
-                    text = "About",
-                    style = MaterialTheme.typography.displayLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-            }
+            LuminoteScreenHeader(
+                title = stringResource(R.string.about),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
 
             Spacer(modifier = Modifier.height(18.dp))
 
             Text(
-                text = "Luminote",
+                text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Edge lighting for alerts and ambient style.",
+                text = stringResource(R.string.about_tagline),
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
         }
@@ -142,33 +137,31 @@ fun AboutScreen(
                 .luminoteSafeHorizontalPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            AboutBlock(title = "About Luminote") {
+            AboutBlock(title = stringResource(R.string.about_luminote)) {
                 Text(
-                    text = "Luminote brings notification lighting and ambient edge personalization " +
-                        "to modern displays. It follows the physical contour of the screen while " +
-                        "keeping the experience fast and unobtrusive.",
+                    text = stringResource(R.string.about_description),
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFFBDBDBD)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            AboutBlock(title = "Created by") {
+            AboutBlock(title = stringResource(R.string.created_by)) {
                 Text(
-                    text = "Yurii Pasternak",
+                    text = stringResource(R.string.author_name),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
             AboutLink(
-                title = "GitHub",
+                title = stringResource(R.string.github),
                 subtitle = "github.com/pasternak2048",
                 onClick = { uriHandler.openUri("https://github.com/pasternak2048") }
             )
 
             AboutLink(
-                title = "Source code",
+                title = stringResource(R.string.source_code),
                 subtitle = "yuriipasternak-luminote",
                 onClick = {
                     uriHandler.openUri("https://github.com/pasternak2048/yuriipasternak-luminote")
@@ -176,7 +169,7 @@ fun AboutScreen(
             )
 
             AboutBlock(
-                title = "App version",
+                title = stringResource(R.string.app_version),
                 modifier = Modifier.clickable {
                     versionTapCount += 1
                     if (versionTapCount >= EASTER_EGG_TAP_COUNT) {
@@ -188,7 +181,7 @@ fun AboutScreen(
                 Text(
                     text = versionInfo,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFFBDBDBD)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -231,56 +224,43 @@ private fun AboutBlock(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(Color(0xFF101010))
-            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(28.dp))
-            .padding(20.dp)
-    ) {
+    LuminoteSettingsCard(modifier = modifier) {
+        Column(modifier = Modifier.padding(20.dp)) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
         Spacer(modifier = Modifier.height(10.dp))
         content()
+        }
     }
 }
 
 @Composable
 private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(24.dp))
-            .background(Color(0xFF101010))
-            .border(1.dp, Color(0xFF3D3D3D), RoundedCornerShape(24.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp, vertical = 18.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    LuminoteSettingsCard(modifier = Modifier.clickable(onClick = onClick)) {
+        Row(
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = subtitle,
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Text(
-            text = "↗",
-            style = MaterialTheme.typography.titleLarge,
-            color = Color.White
-        )
+        LuminoteExternalLinkIcon(tint = MaterialTheme.colorScheme.onSurface)
+        }
     }
 }
 
@@ -297,11 +277,11 @@ private fun UpdateBlock(
     onDisableNotificationsClick: () -> Unit,
     onInstallClick: (java.io.File) -> Unit
 ) {
-    AboutBlock(title = "Updates") {
+    AboutBlock(title = stringResource(R.string.updates)) {
         Text(
-            text = "Channel",
+            text = stringResource(R.string.update_channel),
             style = MaterialTheme.typography.bodyMedium,
-            color = Color(0xFFBDBDBD)
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -316,7 +296,7 @@ private fun UpdateBlock(
                         onChannelSelected(option)
                     },
                     label = {
-                        Text(option.label)
+                        Text(stringResource(option.labelRes))
                     }
                 )
             }
@@ -326,14 +306,14 @@ private fun UpdateBlock(
 
         when (state) {
             UpdateUiState.Checking ->
-                UpdateStatus("Checking GitHub Releases…")
+                UpdateStatus(stringResource(R.string.checking_updates))
 
             UpdateUiState.UpToDate ->
-                UpdateStatus("No newer ${channel.label} update is available.")
+                UpdateStatus(stringResource(R.string.no_update_available, stringResource(channel.labelRes)))
 
             is UpdateUiState.Available -> {
                 UpdateStatus(
-                    "${state.update.versionName} is available."
+                    stringResource(R.string.update_available, state.update.versionName)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
@@ -341,48 +321,48 @@ private fun UpdateBlock(
                         onDownloadClick(state.update)
                     }
                 ) {
-                    Text("Download update")
+                    Text(stringResource(R.string.download_update))
                 }
             }
 
             is UpdateUiState.Downloading ->
-                UpdateStatus("Downloading ${state.update.versionName}…")
+                UpdateStatus(stringResource(R.string.downloading_update, state.update.versionName))
 
             is UpdateUiState.ReadyToInstall -> {
-                UpdateStatus("${state.update.versionName} is ready to install.")
+                UpdateStatus(stringResource(R.string.update_ready_to_install, state.update.versionName))
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
                     onClick = {
                         onInstallClick(state.apk)
                     }
                 ) {
-                    Text("Install update")
+                    Text(stringResource(R.string.install_update))
                 }
             }
 
-            is UpdateUiState.Error ->
-                UpdateStatus(state.message)
+            UpdateUiState.CheckError -> UpdateStatus(stringResource(R.string.update_check_failed))
+            UpdateUiState.DownloadError -> UpdateStatus(stringResource(R.string.update_download_failed))
         }
 
         Spacer(modifier = Modifier.height(12.dp))
 
         Button(onClick = onCheckClick) {
-            Text("Check now")
+            Text(stringResource(R.string.check_now))
         }
 
         if (notificationsEnabled && notificationsAllowed) {
             Spacer(modifier = Modifier.height(12.dp))
             Button(onClick = onDisableNotificationsClick) {
-                Text("Disable update notifications")
+                Text(stringResource(R.string.disable_update_notifications))
             }
         } else {
             Spacer(modifier = Modifier.height(12.dp))
             Button(onClick = onEnableNotificationsClick) {
                 Text(
                     if (notificationsAllowed) {
-                        "Enable update notifications"
+                        stringResource(R.string.enable_update_notifications)
                     } else {
-                        "Allow update notifications"
+                        stringResource(R.string.allow_update_notifications)
                     }
                 )
             }
@@ -395,6 +375,6 @@ private fun UpdateStatus(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.bodyMedium,
-        color = Color(0xFFBDBDBD)
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }

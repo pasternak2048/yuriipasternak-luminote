@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -35,20 +36,28 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.definition
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.HaloAppearancePicker
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 
 @Composable
 fun HaloScreen(
@@ -58,6 +67,7 @@ fun HaloScreen(
 ) {
     val context =
         androidx.compose.ui.platform.LocalContext.current
+    val backDescription = stringResource(R.string.back)
 
     DisposableEffect(context) {
         onDispose {
@@ -75,7 +85,7 @@ fun HaloScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
     ) {
 
@@ -97,37 +107,11 @@ fun HaloScreen(
                     Modifier.height(24.dp)
             )
 
-            Row(
-                modifier =
-                    Modifier.fillMaxWidth(),
-                verticalAlignment =
-                    Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = "‹",
-                    modifier =
-                        Modifier
-                            .size(48.dp)
-                            .clickable(
-                                onClick =
-                                    onBackClick
-                            ),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color.White
-                )
-
-                Text(
-                    text = "Luminote Halo",
-                    modifier =
-                        Modifier.padding(
-                            start = 4.dp
-                        ),
-                    style = MaterialTheme.typography.displayLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-            }
+            LuminoteScreenHeader(
+                title = stringResource(R.string.luminote_halo),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
 
             Spacer(
                 modifier =
@@ -136,12 +120,12 @@ fun HaloScreen(
 
             Text(
                 text =
-                    "Customize your notification lighting",
+                    stringResource(R.string.customize_notification_lighting),
                 style =
                     MaterialTheme
                         .typography
                         .bodyLarge,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -265,78 +249,32 @@ private fun WideHaloContent(
     selectedColor: Color,
     viewModel: LuminoteSettingsViewModel
 ) {
-    Row(
-        modifier =
-            modifier
-                .luminoteSafeHorizontalPadding()
-                .padding(
-                    top = 24.dp,
-                    bottom = 16.dp
-                ),
-        horizontalArrangement =
-            Arrangement.spacedBy(20.dp),
-        verticalAlignment =
-            Alignment.Top
+    LazyColumn(
+        modifier = modifier.luminoteSafeHorizontalPadding(),
+        contentPadding = PaddingValues(top = 24.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
-
-        LazyColumn(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-
-            item {
-
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.Top
+            ) {
                 HaloAppearancePicker(
-                    modifier =
-                        Modifier.fillMaxWidth(),
+                    modifier = Modifier.weight(1f),
                     frame = settings.haloFrame,
                     motion = settings.haloMotion,
                     onMotionSelected = viewModel::setHaloMotion,
                 )
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(20.dp)
+                ) {
+                    AppearanceGroup(settings, selectedColor, viewModel)
+                    MotionGroup(settings, viewModel)
+                    TimingGroup(settings, viewModel)
+                }
             }
-        }
-
-        LazyColumn(
-            modifier =
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-
-            item {
-
-                AppearanceGroup(
-                    settings =
-                        settings,
-                    selectedColor =
-                        selectedColor,
-                    viewModel =
-                        viewModel
-                )
-            }
-
-            item {
-
-                MotionGroup(
-                    settings = settings,
-                    viewModel = viewModel
-                )
-            }
-
-            item {
-
-                TimingGroup(
-                    settings =
-                        settings,
-                    viewModel =
-                        viewModel
-                )
-            }
-
         }
     }
 }
@@ -348,12 +286,12 @@ private fun AppearanceGroup(
     viewModel: LuminoteSettingsViewModel
 ) {
     SettingsGroup(
-        title = "Colors"
+        title = stringResource(R.string.colors)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text("Match app color", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                Text("Use the notifying app’s icon color", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+                Text(stringResource(R.string.match_app_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                Text(stringResource(R.string.match_app_color_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Switch(
                 checked = settings.colorSource == HaloColorSource.APP_ICON,
@@ -363,7 +301,7 @@ private fun AppearanceGroup(
 
         if (settings.colorSource != HaloColorSource.APP_ICON) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text("Halo color", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
+            Text(stringResource(R.string.halo_color), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
             Spacer(modifier = Modifier.height(12.dp))
             ColorGrid(
                 selectedColor = selectedColor,
@@ -380,8 +318,8 @@ private fun AppearanceGroup(
             Spacer(modifier = Modifier.height(16.dp))
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Use app palette", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-                    Text("Build the palette from active alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+                    Text(stringResource(R.string.use_app_palette), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                    Text(stringResource(R.string.use_app_palette_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Switch(
                     checked = settings.gradientPalette == com.yp.luminote.app.data.settings.GradientPalette.NOTIFICATION_APPS,
@@ -395,9 +333,9 @@ private fun AppearanceGroup(
             }
             Spacer(modifier = Modifier.height(16.dp))
             SliderSetting(
-                title = "Color flow",
+                title = stringResource(R.string.color_flow),
                 value = settings.gradientFlowSpeed,
-                valueText = "${"%.1f".format(settings.gradientFlowSpeed)}×",
+                valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.gradientFlowSpeed)),
                 valueRange = 0.5f..2.5f,
                 steps = 3,
                 onValueChange = viewModel::setGradientFlowSpeed,
@@ -411,7 +349,7 @@ private fun AppearanceGroup(
         )
 
         SliderSetting(
-            title = "Halo brightness",
+            title = stringResource(R.string.halo_brightness),
             value =
                 settings
                     .haloIntensity,
@@ -437,7 +375,7 @@ private fun AppearanceGroup(
         )
 
         SliderSetting(
-            title = "Edge width",
+            title = stringResource(R.string.edge_width),
             value =
                 settings
                     .haloThickness,
@@ -465,11 +403,11 @@ private fun MotionGroup(
     settings: LuminoteSettings,
     viewModel: LuminoteSettingsViewModel
 ) {
-    SettingsGroup(title = "Animation") {
+    SettingsGroup(title = stringResource(R.string.animation)) {
         SliderSetting(
-            title = "Effect speed",
+            title = stringResource(R.string.effect_speed),
             value = settings.haloEffectSpeed,
-            valueText = "${"%.2g".format(settings.haloEffectSpeed)}×",
+            valueText = stringResource(R.string.multiplier, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.2g", settings.haloEffectSpeed)),
             valueRange = 0.25f..2f,
             steps = 6,
             onValueChange = viewModel::setHaloEffectSpeed,
@@ -484,7 +422,7 @@ private fun TimingGroup(
     viewModel: LuminoteSettingsViewModel
 ) {
     SettingsGroup(
-        title = "Reminders"
+        title = stringResource(R.string.reminders)
     ) {
 
         val repeatsEnabled = settings.notificationPlayback != NotificationPlayback.ONCE
@@ -500,13 +438,13 @@ private fun TimingGroup(
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PlaybackChoice(
                     selected = settings.notificationPlayback == NotificationPlayback.REPEAT,
-                    title = "Repeat",
+                    title = stringResource(R.string.repeat),
                     onClick = { viewModel.setNotificationPlayback(NotificationPlayback.REPEAT) },
                     modifier = Modifier.weight(1f)
                 )
                 PlaybackChoice(
                     selected = settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE,
-                    title = "Keep visible",
+                    title = stringResource(R.string.keep_visible),
                     onClick = { viewModel.setNotificationPlayback(NotificationPlayback.KEEP_VISIBLE) },
                     modifier = Modifier.weight(1f)
                 )
@@ -517,9 +455,9 @@ private fun TimingGroup(
             Spacer(modifier = Modifier.height(16.dp))
             val repeatPosition = settings.haloRepeatCount.toFloat()
             SliderSetting(
-                title = "Reminder pulses",
+                title = stringResource(R.string.reminder_pulses),
                 value = repeatPosition,
-                valueText = "${settings.haloRepeatCount} times",
+                valueText = androidx.compose.ui.res.pluralStringResource(R.plurals.times, settings.haloRepeatCount, settings.haloRepeatCount),
                 valueRange = 2f..5f,
                 steps = 3,
                 onValueChange = { value -> viewModel.setHaloRepeatCount(value.toInt()) },
@@ -528,9 +466,9 @@ private fun TimingGroup(
 
             Spacer(modifier = Modifier.height(16.dp))
             SliderSetting(
-                title = "Repeat after",
+                title = stringResource(R.string.repeat_after),
                 value = settings.haloInterval,
-                valueText = "${"%.1f".format(settings.haloInterval)} s",
+                valueText = stringResource(R.string.seconds, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.haloInterval)),
                 valueRange = 0f..10f,
                 onValueChange = viewModel::setHaloInterval,
                 onValueChangeFinished = viewModel::flushPendingSettings
@@ -539,8 +477,8 @@ private fun TimingGroup(
 
         if (settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(settings.haloMotion.definition.ambientDescription, style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
-            Text("Stops after all relevant alerts are dismissed", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text(stringResource(settings.haloMotion.definition.ambientDescriptionRes), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.stops_when_alerts_dismissed), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
     }
@@ -550,8 +488,8 @@ private fun TimingGroup(
 private fun RepeatHaloSetting(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text("Repeat notification effect", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = Color.White)
-            Text("Replay the effect for unread alerts", style = MaterialTheme.typography.bodyMedium, color = Color(0xFFBDBDBD))
+            Text(stringResource(R.string.repeat_notification_effect), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.repeat_notification_effect_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
@@ -569,8 +507,8 @@ private fun PlaybackChoice(
         modifier = modifier.height(42.dp),
         shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = if (selected) Color.White else Color(0xFF202020),
-            contentColor = if (selected) Color.Black else Color.White
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = if (selected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
         )
     ) {
         Text(title)
@@ -615,13 +553,13 @@ private fun TestEffectButton(
             enabled = !settings.ambientEnabled,
             shape = RoundedCornerShape(28.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = Color.White,
-                contentColor = Color.Black
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
             )
         ) {
 
             Text(
-                text = if (settings.ambientEnabled) "Turn off Ambient Halo to preview" else "Preview Halo",
+                text = stringResource(if (settings.ambientEnabled) R.string.turn_off_ambient_to_preview else R.string.preview_halo),
                 style =
                     MaterialTheme
                         .typography
@@ -636,24 +574,13 @@ private fun SettingsGroup(
     title: String,
     content: @Composable () -> Unit
 ) {
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(28.dp)
-                )
-                .background(Color(0xFF101010))
-                .border(
-                    width = 1.dp,
-                    color = Color(0xFF3D3D3D),
-                    shape = RoundedCornerShape(28.dp)
-                )
-                .padding(
-                    horizontal = 20.dp,
-                    vertical = 20.dp
-                )
-    ) {
+    LuminoteSettingsCard(shape = MaterialTheme.shapes.large) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = 20.dp,
+                vertical = 20.dp
+            )
+        ) {
 
         Text(
             text = title,
@@ -663,7 +590,7 @@ private fun SettingsGroup(
                     .titleMedium,
             fontWeight =
                 FontWeight.SemiBold,
-            color = Color.White
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         Spacer(
@@ -672,6 +599,7 @@ private fun SettingsGroup(
         )
 
         content()
+        }
     }
 }
 
@@ -703,15 +631,17 @@ private fun ColorGrid(
         )
 
     BoxWithConstraints {
-        val optionSize = minOf(40.dp, maxWidth / 8f)
+        val columnCount = if (maxWidth / 5f >= 48.dp) 5 else 4
+        val optionSize = minOf(56.dp, maxWidth / columnCount)
         Column(
+            modifier = Modifier.selectableGroup(),
             verticalArrangement =
                 Arrangement.spacedBy(10.dp)
         ) {
 
         colors.take(15)
-            .chunked(8)
-            .forEachIndexed { rowIndex, rowColors ->
+            .chunked(columnCount)
+            .forEach { rowColors ->
 
                 Row(
                     modifier =
@@ -734,15 +664,15 @@ private fun ColorGrid(
                             }
                         )
                     }
-                    if (rowIndex == 1) {
-                        GradientColorOption(
-                            selected = gradientSelected,
-                            size = optionSize,
-                            onClick = onGradientSelected
-                        )
-                    }
                 }
             }
+        Row(modifier = Modifier.fillMaxWidth()) {
+            GradientColorOption(
+                selected = gradientSelected,
+                size = optionSize,
+                onClick = onGradientSelected
+            )
+        }
         }
     }
 }
@@ -753,8 +683,17 @@ private fun GradientColorOption(
     size: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
+    val label = stringResource(R.string.gradient_color)
+    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
     Box(
-        modifier = Modifier.size(size).clip(CircleShape).clickable(onClick = onClick),
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+            .semantics {
+                contentDescription = label
+                stateDescription = stateLabel
+            },
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -784,14 +723,21 @@ private fun ColorOption(
     size: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
+    val label = stringResource(
+        R.string.color_swatch,
+        String.format("#%06X", color.toArgb() and 0xFFFFFF)
+    )
+    val stateLabel = stringResource(if (selected) R.string.selected_state else R.string.not_selected_state)
     Box(
         modifier =
             Modifier
                 .size(size)
                 .clip(CircleShape)
-                .clickable(
-                    onClick = onClick
-                ),
+                .selectable(selected = selected, onClick = onClick, role = Role.RadioButton)
+                .semantics {
+                    contentDescription = label
+                    stateDescription = stateLabel
+                },
         contentAlignment =
             Alignment.Center
     ) {
@@ -858,7 +804,7 @@ private fun SliderSetting(
                         .bodyLarge,
                 fontWeight =
                     FontWeight.Medium,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
@@ -867,7 +813,7 @@ private fun SliderSetting(
                     MaterialTheme
                         .typography
                         .bodyMedium,
-                color = Color(0xFFBDBDBD)
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 

@@ -26,6 +26,11 @@ class LuminoteSettingsRepository(
 
     private object Keys {
 
+        val themeMode =
+            stringPreferencesKey(
+                "theme_mode"
+            )
+
         val haloMode =
             stringPreferencesKey(
                 "halo_mode"
@@ -158,6 +163,10 @@ class LuminoteSettingsRepository(
             .map { preferences ->
 
                 LuminoteSettings(
+
+                    themeMode = ThemeMode.fromStorage(
+                        preferences[Keys.themeMode]
+                    ),
 
                     haloMode =
                         preferences[Keys.haloMode]
@@ -443,12 +452,17 @@ class LuminoteSettingsRepository(
 
     /**
      * Persists one coherent settings snapshot in a single
-     * DataStore transaction.
+     * DataStore transaction. Save ordering is intentionally owned by
+     * LuminoteSettingsViewModel; do not add a competing debounce or revision
+     * policy at this persistence boundary.
      */
     suspend fun saveSettings(
         settings: LuminoteSettings
     ) {
         context.luminoteDataStore.edit { preferences ->
+            preferences[Keys.themeMode] =
+                settings.themeMode.name
+
             preferences[Keys.haloMode] =
                 settings.haloMode.name
 

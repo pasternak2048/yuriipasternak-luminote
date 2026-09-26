@@ -6,8 +6,14 @@ import android.graphics.Bitmap
 import android.graphics.Canvas as AndroidCanvas
 import android.util.LruCache
 import androidx.activity.ComponentActivity
-import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,11 +36,11 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -43,28 +50,39 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.yp.luminote.app.data.apps.InstalledApp
+import com.yp.luminote.app.R
 import com.yp.luminote.app.data.apps.InstalledAppsRepository
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.ui.components.LuminoteExpandIcon
+import com.yp.luminote.app.ui.components.LuminoteScreenHeader
+import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.core.graphics.createBitmap
 
 @Composable
 fun AppsScreen(
@@ -73,6 +91,7 @@ fun AppsScreen(
     viewModel: LuminoteSettingsViewModel
 ) {
     val context = LocalContext.current
+    val backDescription = stringResource(R.string.back)
 
     val appsRepository =
         remember {
@@ -121,7 +140,7 @@ fun AppsScreen(
     }
 
     var sourceExpanded by
-    remember {
+    rememberSaveable {
         mutableStateOf(false)
     }
 
@@ -158,9 +177,10 @@ fun AppsScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
                 .statusBarsPadding()
                 .navigationBarsPadding()
+                .imePadding()
     ) {
 
         /*
@@ -181,51 +201,11 @@ fun AppsScreen(
                     Modifier.height(32.dp)
             )
 
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                verticalAlignment =
-                    Alignment.CenterVertically
-            ) {
-
-                Text(
-                    text = "‹",
-                    modifier =
-                        Modifier
-                            .size(48.dp)
-                            .clickable(
-                                onClick =
-                                    onBackClick
-                            )
-                            .padding(
-                                bottom = 4.dp
-                            ),
-                    style =
-                        MaterialTheme
-                            .typography
-                            .headlineLarge,
-                    color =
-                        Color.White
-                )
-
-                Text(
-                    text = "Apps",
-                    modifier =
-                        Modifier.padding(
-                            start = 4.dp
-                        ),
-                    style =
-                        MaterialTheme
-                            .typography
-                            .displayLarge,
-                    fontWeight =
-                        FontWeight.SemiBold,
-                    color =
-                        Color.White
-                )
-            }
+            LuminoteScreenHeader(
+                title = stringResource(R.string.apps),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
 
             Spacer(
                 modifier =
@@ -234,13 +214,13 @@ fun AppsScreen(
 
             Text(
                 text =
-                    "Choose which apps can trigger notifications",
+                    stringResource(R.string.apps_intro),
                 style =
                     MaterialTheme
                         .typography
                         .bodyLarge,
                 color =
-                    Color(0xFFBDBDBD)
+                    MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
@@ -387,7 +367,7 @@ private fun CompactAppsContent(
             )
 
             Text(
-                text = "Applications",
+                text = stringResource(R.string.applications),
                 style =
                     MaterialTheme
                         .typography
@@ -402,7 +382,7 @@ private fun CompactAppsContent(
 
             Text(
                 text =
-                    "${settings.selectedApps.size} selected",
+                    androidx.compose.ui.res.pluralStringResource(R.plurals.selected_apps, settings.selectedApps.size, settings.selectedApps.size),
                 style =
                     MaterialTheme
                         .typography
@@ -525,7 +505,7 @@ private fun WideAppsContent(
             ) {
 
                 Text(
-                    text = "Applications",
+                    text = stringResource(R.string.applications),
                     style =
                         MaterialTheme
                             .typography
@@ -540,7 +520,7 @@ private fun WideAppsContent(
 
                 Text(
                     text =
-                        "${settings.selectedApps.size} selected",
+                        androidx.compose.ui.res.pluralStringResource(R.plurals.selected_apps, settings.selectedApps.size, settings.selectedApps.size),
                     style =
                         MaterialTheme
                             .typography
@@ -594,7 +574,7 @@ private fun WideAppsContent(
 
                 Text(
                     text =
-                        "All apps can trigger Luminote Halo",
+                        stringResource(R.string.all_apps_can_trigger),
                     style =
                         MaterialTheme
                             .typography
@@ -635,7 +615,7 @@ private fun AppSearchField(
         placeholder = {
             Text(
                 text =
-                    "Search apps",
+                    stringResource(R.string.search_apps),
                 color =
                     MaterialTheme
                         .colorScheme
@@ -650,21 +630,21 @@ private fun AppSearchField(
         colors =
             OutlinedTextFieldDefaults.colors(
                 focusedContainerColor =
-                    Color(0xFF101010),
+                    MaterialTheme.colorScheme.surface,
                 unfocusedContainerColor =
-                    Color(0xFF101010),
+                    MaterialTheme.colorScheme.surface,
                 disabledContainerColor =
-                    Color(0xFF101010),
+                    MaterialTheme.colorScheme.surface,
                 focusedTextColor =
-                    Color.White,
+                    MaterialTheme.colorScheme.onSurface,
                 unfocusedTextColor =
-                    Color.White,
+                    MaterialTheme.colorScheme.onSurface,
                 focusedBorderColor =
-                    Color(0xFF5C5C5C),
+                    MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor =
-                    Color(0xFF3D3D3D),
+                    MaterialTheme.colorScheme.outline,
                 cursorColor =
-                    Color.White
+                    MaterialTheme.colorScheme.primary
             )
     )
 }
@@ -682,30 +662,36 @@ private fun NotificationSourceGroup(
     onToggle: () -> Unit,
     onSourceSelected: (NotificationSource) -> Unit
 ) {
-    Column(
+    val sourceLabel = stringResource(R.string.alerts_from)
+    val sourceStateLabel = stringResource(
+        if (expanded) R.string.expanded_state else R.string.collapsed_state
+    )
+    val chevronRotation by animateFloatAsState(
+        targetValue = if (expanded) 180f else 0f,
+        label = "notification source chevron"
+    )
+    LuminoteSettingsCard(
         modifier =
             Modifier
-                .fillMaxWidth()
-                .clip(
-                    RoundedCornerShape(24.dp)
-                )
-                .background(Color(0xFF101010))
-                .border(
-                    width = 1.dp,
-                    color = Color(0xFF3D3D3D),
-                    shape = RoundedCornerShape(24.dp)
-                )
-                .animateContentSize()
-                .padding(
+                .fillMaxWidth(),
+        borderColor = MaterialTheme.colorScheme.outline
+    ) {
+        Column(
+            modifier =
+                Modifier.padding(
                     horizontal = 20.dp,
                     vertical = 16.dp
                 )
-    ) {
+        ) {
 
         Row(
             modifier =
                 Modifier
                     .fillMaxWidth()
+                    .semantics(mergeDescendants = true) {
+                        contentDescription = sourceLabel
+                        stateDescription = sourceStateLabel
+                    }
                     .clickable(
                         onClick =
                             onToggle
@@ -721,7 +707,7 @@ private fun NotificationSourceGroup(
 
                 Text(
                     text =
-                        "Alerts from",
+                        stringResource(R.string.alerts_from),
                     style =
                         MaterialTheme
                             .typography
@@ -746,10 +732,10 @@ private fun NotificationSourceGroup(
                         ) {
 
                             NotificationSource.ALL_APPS ->
-                                "All apps"
+                                stringResource(R.string.all_apps)
 
                             NotificationSource.SELECTED_APPS ->
-                                "Selected apps"
+                                stringResource(R.string.selected_apps_label)
                         },
                     style =
                         MaterialTheme
@@ -758,39 +744,25 @@ private fun NotificationSourceGroup(
                     color =
                         MaterialTheme
                             .colorScheme
-                            .onSurface
-                            .copy(
-                                alpha = 0.6f
-                            )
+                            .onSurfaceVariant
                 )
             }
 
-            Text(
-                text =
-                    if (expanded) {
-                        "⌃"
-                    } else {
-                        "⌄"
-                    },
-                modifier =
-                    Modifier.padding(
-                        start = 16.dp
-                    ),
-                style =
-                    MaterialTheme
-                        .typography
-                        .titleLarge,
-                color =
-                    MaterialTheme
-                        .colorScheme
-                        .onSurface
-                        .copy(
-                            alpha = 0.55f
-                        )
+            LuminoteExpandIcon(
+                expanded = expanded,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(start = 16.dp)
+                    .graphicsLayer { rotationZ = chevronRotation }
             )
         }
 
-        if (expanded) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Column {
 
             Spacer(
                 modifier =
@@ -799,9 +771,9 @@ private fun NotificationSourceGroup(
 
             SourceOption(
                 title =
-                    "All apps",
+                    stringResource(R.string.all_apps),
                 description =
-                    "Notifications from every app",
+                    stringResource(R.string.notifications_from_every_app),
                 selected =
                     settings.notificationSource ==
                             NotificationSource.ALL_APPS,
@@ -819,9 +791,9 @@ private fun NotificationSourceGroup(
 
             SourceOption(
                 title =
-                    "Selected apps",
+                    stringResource(R.string.selected_apps_label),
                 description =
-                    "Choose apps individually",
+                    stringResource(R.string.choose_apps_individually),
                 selected =
                     settings.notificationSource ==
                             NotificationSource.SELECTED_APPS,
@@ -831,6 +803,8 @@ private fun NotificationSourceGroup(
                     )
                 }
             )
+            }
+        }
         }
     }
 }
@@ -851,10 +825,7 @@ private fun SourceOption(
     val selectedBackground =
         MaterialTheme
             .colorScheme
-            .onSurface
-            .copy(
-                alpha = 0.08f
-            )
+            .surfaceVariant
 
     Row(
         modifier =
@@ -931,10 +902,7 @@ private fun SourceOption(
                 color =
                     MaterialTheme
                         .colorScheme
-                        .onSurface
-                        .copy(
-                            alpha = 0.55f
-                        )
+                        .onSurfaceVariant
             )
         }
     }
@@ -965,7 +933,7 @@ private fun AppsListContent(
 
             Text(
                 text =
-                    "No apps found",
+                    stringResource(R.string.no_apps_found),
                 style =
                     MaterialTheme
                         .typography
@@ -1015,10 +983,10 @@ private fun AppsList(
                 .clip(
                     RoundedCornerShape(24.dp)
                 )
-                .background(Color(0xFF101010))
+                .background(MaterialTheme.colorScheme.surface)
                 .border(
                     width = 1.dp,
-                    color = Color(0xFF3D3D3D),
+                    color = MaterialTheme.colorScheme.outlineVariant,
                     shape = RoundedCornerShape(24.dp)
                 ),
         contentPadding =
@@ -1192,6 +1160,9 @@ private fun AppItemRow(
 private fun SelectionIndicator(
     selected: Boolean
 ) {
+    val selectedColor = MaterialTheme.colorScheme.primary
+    val unselectedColor = MaterialTheme.colorScheme.outline
+
     Canvas(
         modifier =
             Modifier.size(22.dp)
@@ -1200,9 +1171,9 @@ private fun SelectionIndicator(
         drawCircle(
             color =
                 if (selected) {
-                    Color.White
+                    selectedColor
                 } else {
-                    Color(0xFF777777)
+                    unselectedColor
                 },
             style =
                 Stroke(
@@ -1214,7 +1185,7 @@ private fun SelectionIndicator(
 
             drawCircle(
                 color =
-                    Color.White,
+                    selectedColor,
                 radius =
                     size.minDimension * 0.22f
             )
@@ -1285,11 +1256,7 @@ private fun drawableToBitmap(
     sizePx: Int
 ): Bitmap {
     val bitmap =
-        Bitmap.createBitmap(
-            sizePx,
-            sizePx,
-            Bitmap.Config.ARGB_8888
-        )
+        createBitmap(sizePx, sizePx)
 
     val canvas =
         AndroidCanvas(bitmap)

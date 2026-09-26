@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.yp.luminote.app.MainActivity
+import com.yp.luminote.app.R
 
 object UpdateNotifications {
 
@@ -43,8 +44,8 @@ object UpdateNotifications {
             UPDATE_NOTIFICATION_ID,
             NotificationCompat.Builder(context, UPDATE_CHANNEL_ID)
                 .setSmallIcon(com.yp.luminote.app.R.mipmap.ic_launcher)
-                .setContentTitle("Luminote ${update.versionName} is available")
-                .setContentText("${update.channel.label} channel • Tap to update")
+                .setContentTitle(context.getString(R.string.update_notification_title, update.versionName))
+                .setContentText(context.getString(R.string.update_notification_text, context.getString(update.channel.labelRes)))
                 .setContentIntent(openAppIntent)
                 .setAutoCancel(true)
                 .build()
@@ -60,10 +61,10 @@ object UpdateNotifications {
         manager.createNotificationChannel(
             NotificationChannel(
                 UPDATE_CHANNEL_ID,
-                "App updates",
+                context.getString(R.string.update_notification_channel_name),
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
-                description = "Notifications when a Luminote update is ready."
+                description = context.getString(R.string.update_notification_channel_description)
             }
         )
     }

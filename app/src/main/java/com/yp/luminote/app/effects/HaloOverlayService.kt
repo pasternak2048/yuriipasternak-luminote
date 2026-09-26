@@ -285,92 +285,63 @@ class HaloOverlayService : Service() {
         val defaults =
             HaloConfig()
 
-        val frameName =
-            intent?.getStringExtra(
-                EXTRA_FRAME
-            ) ?: defaults.frame.name
-
-        val motionName =
-            intent?.getStringExtra(
-                EXTRA_MOTION
-            ) ?: defaults.motion.name
-
-        val colorModeName =
-            intent?.getStringExtra(
-                EXTRA_COLOR_MODE
-            ) ?: defaults.colorMode.name
-
-        return HaloConfig(
-            color =
-                intent?.getIntExtra(
-                    EXTRA_COLOR,
-                    defaults.color
-                ) ?: defaults.color,
-            intervalSeconds =
-                intent?.getFloatExtra(
-                    EXTRA_INTERVAL,
-                    defaults.intervalSeconds
-                ) ?: defaults.intervalSeconds,
-            repeatCount =
-                intent?.getIntExtra(
-                    EXTRA_REPEAT_COUNT,
-                    defaults.repeatCount
-                ) ?: defaults.repeatCount,
-            intensity =
-                intent?.getFloatExtra(
-                    EXTRA_INTENSITY,
-                    defaults.intensity
-                ) ?: defaults.intensity,
-            thickness =
-                intent?.getFloatExtra(
-                    EXTRA_THICKNESS,
-                    defaults.thickness
-                ) ?: defaults.thickness,
-            frame =
-                runCatching {
-                    HaloFrame.valueOf(
-                        frameName
-                    )
-                }.getOrDefault(
-                    defaults.frame
-                ),
-            motion =
-                runCatching {
-                    HaloMotion.valueOf(
-                        motionName
-                    )
-                }.getOrDefault(
-                    defaults.motion
-                ),
-            effectSpeed =
-                intent?.getFloatExtra(
-                    EXTRA_EFFECT_SPEED,
-                    defaults.effectSpeed
-                ) ?: defaults.effectSpeed,
-            gradientFlowSpeed =
-                intent?.getFloatExtra(
-                    EXTRA_GRADIENT_FLOW_SPEED,
-                    defaults.gradientFlowSpeed
-                ) ?: defaults.gradientFlowSpeed,
-            colorMode =
-                runCatching {
-                    HaloColorMode.valueOf(
-                        colorModeName
-                    )
-                }.getOrDefault(
-                    defaults.colorMode
-                ),
-            notificationPlayback =
-                intent?.getStringExtra(
-                    EXTRA_NOTIFICATION_PLAYBACK
-                )?.let {
-                    runCatching {
-                        NotificationPlayback.valueOf(
-                            it
+        return HaloConfigCommandDecoder.decode(
+            command =
+                RawHaloConfigCommand(
+                    color =
+                        intent?.getIntExtra(
+                            EXTRA_COLOR,
+                            defaults.color
+                        ),
+                    intervalSeconds =
+                        intent?.getFloatExtra(
+                            EXTRA_INTERVAL,
+                            defaults.intervalSeconds
+                        ),
+                    repeatCount =
+                        intent?.getIntExtra(
+                            EXTRA_REPEAT_COUNT,
+                            defaults.repeatCount
+                        ),
+                    intensity =
+                        intent?.getFloatExtra(
+                            EXTRA_INTENSITY,
+                            defaults.intensity
+                        ),
+                    thickness =
+                        intent?.getFloatExtra(
+                            EXTRA_THICKNESS,
+                            defaults.thickness
+                        ),
+                    frameName =
+                        intent?.getStringExtra(
+                            EXTRA_FRAME
+                        ),
+                    motionName =
+                        intent?.getStringExtra(
+                            EXTRA_MOTION
+                        ),
+                    effectSpeed =
+                        intent?.getFloatExtra(
+                            EXTRA_EFFECT_SPEED,
+                            defaults.effectSpeed
+                        ),
+                    gradientFlowSpeed =
+                        intent?.getFloatExtra(
+                            EXTRA_GRADIENT_FLOW_SPEED,
+                            defaults.gradientFlowSpeed
+                        ),
+                    colorModeName =
+                        intent?.getStringExtra(
+                            EXTRA_COLOR_MODE
+                        ),
+                    notificationPlaybackName =
+                        intent?.getStringExtra(
+                            EXTRA_NOTIFICATION_PLAYBACK
                         )
-                    }.getOrNull()
-                } ?: defaults.notificationPlayback
-        ).sanitized()
+                ),
+            defaults = defaults
+        )
     }
 
     private fun showOverlay(
