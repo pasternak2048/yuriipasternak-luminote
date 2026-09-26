@@ -25,15 +25,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -68,6 +71,7 @@ fun AccessScreen(
     val context = LocalContext.current
     val backDescription = stringResource(R.string.back)
     var refreshKey by remember { mutableIntStateOf(0) }
+    var showLockScreenDisclosure by remember { mutableStateOf(false) }
 
     val settings by
     viewModel.settings.collectAsState()
@@ -174,7 +178,15 @@ fun AccessScreen(
                 description = stringResource(R.string.lock_screen_halo_description),
                 granted = lockScreenAccessAllowed,
                 onClick = {
-                    context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                    when (lockScreenAccessibilityAccessAction(lockScreenAccessAllowed)) {
+                        LockScreenAccessibilityAccessAction.OPEN_SETTINGS -> {
+                            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        }
+
+                        LockScreenAccessibilityAccessAction.SHOW_DISCLOSURE -> {
+                            showLockScreenDisclosure = true
+                        }
+                    }
                 }
             )
 
@@ -194,6 +206,42 @@ fun AccessScreen(
             )
         }
     }
+
+    if (showLockScreenDisclosure) {
+        LockScreenAccessibilityDisclosure(
+            onDismiss = { showLockScreenDisclosure = false },
+            onContinue = {
+                showLockScreenDisclosure = false
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        )
+    }
+}
+
+@Composable
+private fun LockScreenAccessibilityDisclosure(
+    onDismiss: () -> Unit,
+    onContinue: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(stringResource(R.string.lock_screen_halo_disclosure_title))
+        },
+        text = {
+            Text(stringResource(R.string.lock_screen_halo_disclosure_message))
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.lock_screen_halo_disclosure_cancel))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onContinue) {
+                Text(stringResource(R.string.lock_screen_halo_disclosure_continue))
+            }
+        }
+    )
 }
 
 @Composable

@@ -13,7 +13,7 @@ Luminote is an Android app that adds a configurable light around the edge of you
 - **Ambient Halo**, a separate always-visible edge effect while the screen is on, with its own color, brightness, width, animation, and speed.
 - Optional lock-screen Halo support through Luminote's accessibility service.
 - In-app updates from GitHub Releases, with Stable, QA, and Dev channels. Update notifications are optional.
-- English and Ukrainian interface translations. In **Language**, choose System default, English, or Ukrainian; System default follows the phone's language.
+- English, Polish, and Ukrainian interface translations. In **Language**, choose System default, English, Polish, or Ukrainian; System default follows the phone's language.
 
 ## Requirements and permissions
 
@@ -26,12 +26,12 @@ To use notification effects, open **Access** in Luminote and allow:
 
 The following permissions are used for specific optional features:
 
-- **Accessibility service** — enables the lock-screen Halo. The service does not retrieve window content, accept touches, or wake the display.
+- **Accessibility service** — enables the optional, non-interactive lock-screen Halo. It does not retrieve window content, read text, perform actions, accept touches, wake the display, or transfer accessibility events off the device.
 - **Notifications** — needed only when you enable update notifications.
 - **Install unknown apps** — requested only when you choose to install a downloaded in-app update.
 - **Internet** — checks GitHub Releases and downloads an update when you request one.
 
-Luminote also runs its active Halo renderer as an Android foreground service so the effect can remain available when the app is not open.
+Luminote also runs its active Halo renderer as an Android foreground service so the effect can remain available when the app is not open; Android shows an ongoing notification while it is active.
 
 ## Install and use
 

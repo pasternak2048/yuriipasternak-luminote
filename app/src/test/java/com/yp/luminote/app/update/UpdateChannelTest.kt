@@ -20,4 +20,12 @@ class UpdateChannelTest {
         assertTrue(UpdateChannel.DEV.acceptsTag("v0.1.5.dev.12"))
         assertFalse(UpdateChannel.DEV.acceptsTag("v0.1.5.qa.3"))
     }
+
+    @Test
+    fun `channel classification is marker based and case sensitive`() {
+        assertTrue(UpdateChannel.STABLE.acceptsTag("release-candidate"))
+        assertTrue(UpdateChannel.STABLE.acceptsTag("v0.1.5.QA.3"))
+        assertFalse(UpdateChannel.QA.acceptsTag("v0.1.5.QA.3"))
+        assertFalse(UpdateChannel.DEV.acceptsTag("v0.1.5.DEV.12"))
+    }
 }

@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Luminote</string>
     <string name="back">Wstecz</string>
@@ -9,11 +10,10 @@
     <string name="language_english">Angielski</string>
     <string name="language_polish">Polski</string>
     <string name="language_ukrainian">Ukraiński</string>
-
     <string name="halo_foreground_channel_name">Poświata powiadomień</string>
     <string name="halo_foreground_notification_title">Poświata powiadomień jest aktywna</string>
     <string name="accessibility_service_label">Poświata Luminote na ekranie blokady</string>
-    <string name="accessibility_service_description">Pokazuje poświatę Luminote po włączeniu ekranu blokady.</string>
+    <string name="accessibility_service_description">Pokazuje nieinteraktywną poświatę Luminote na ekranie blokady. Nie pobiera zawartości okien, nie odczytuje tekstu ani nie wykonuje działań.</string>
     <string name="about">Informacje</string>
     <string name="access">Dostęp</string>
     <string name="apps">Aplikacje</string>
@@ -29,7 +29,6 @@
     <string name="app_version">Wersja aplikacji</string>
     <string name="version_info">Wersja %1$s (%2$d)</string>
     <string name="unknown">Nieznana</string>
-
     <string name="updates">Aktualizacje</string>
     <string name="update_channel">Kanał</string>
     <string name="update_channel_stable">Stabilny</string>
@@ -52,14 +51,17 @@
     <string name="update_notification_text">Kanał %1$s • Dotknij, aby zaktualizować</string>
     <string name="update_notification_channel_name">Aktualizacje aplikacji</string>
     <string name="update_notification_channel_description">Powiadomienia, gdy aktualizacja Luminote jest gotowa.</string>
-
     <string name="access_intro">Wybierz, z czego Luminote może korzystać, aby wyświetlać oświetlenie krawędzi.</string>
     <string name="display_over_other_apps">Wyświetlanie nad innymi aplikacjami</string>
-    <string name="display_over_other_apps_description">Pozwala Luminote wyświetlać poświatę nad używaną aplikacją.</string>
+    <string name="display_over_other_apps_description">Pozwala Luminote wyświetlać poświatę nad używaną aplikacją. Gdy poświata jest aktywna, jej moduł renderujący działa jako usługa pierwszego planu ze stałym powiadomieniem.</string>
     <string name="notification_access">Dostęp do powiadomień</string>
     <string name="notification_access_description">Pozwala Luminote reagować na powiadomienia i dopasowywać kolory aplikacji.</string>
     <string name="lock_screen_halo">Poświata ekranu blokady</string>
     <string name="lock_screen_halo_description">Pozwala wyświetlać poświatę po włączeniu ekranu blokady. W Ułatwieniach dostępu włącz „Poświatę Luminote na ekranie blokady”.</string>
+    <string name="lock_screen_halo_disclosure_title">Przed otwarciem Ułatwień dostępu</string>
+    <string name="lock_screen_halo_disclosure_message">Luminote używa tej usługi ułatwień dostępu wyłącznie do wyświetlania nieinteraktywnej poświaty na ekranie blokady. Nie pobiera zawartości okien, nie odczytuje tekstu, nie wykonuje działań ani nie przekazuje zdarzeń ułatwień dostępu poza urządzenie.</string>
+    <string name="lock_screen_halo_disclosure_cancel">Anuluj</string>
+    <string name="lock_screen_halo_disclosure_continue">Przejdź do Ułatwień dostępu</string>
     <string name="halo_ready">Poświata jest gotowa</string>
     <string name="halo_needs_access">Poświata wymaga dostępu</string>
     <string name="halo_ready_description">Wyślij podgląd, aby sprawdzić, czy poświata jest widoczna na tym urządzeniu.</string>
@@ -67,7 +69,6 @@
     <string name="test_halo">Przetestuj poświatę</string>
     <string name="allowed">Dozwolone</string>
     <string name="required">Wymagane</string>
-
     <string name="ambient_intro">Utrzymuj własne światło wokół krawędzi ekranu, gdy ekran jest włączony.</string>
     <string name="customize_notification_lighting">Wybierz wygląd oświetlenia powiadomień.</string>
     <string name="colors">Kolory</string>
@@ -103,7 +104,6 @@
     <string name="seconds">%1$s s</string>
     <string name="multiplier">%1$s×</string>
     <string name="percentage">%1$d%%</string>
-
     <string name="apps_intro">Wybierz aplikacje, które mogą uruchamiać poświatę.</string>
     <plurals name="selected_apps">
         <item quantity="one">Wybrano %d aplikację</item>
@@ -131,7 +131,6 @@
     <string name="home_about_description">Luminote, jego twórca i kod źródłowy</string>
     <string name="easter_egg_line_one">Niektóre światła nigdy naprawdę nie gasną.</string>
     <string name="easter_egg_line_two">Tylko żartuję.</string>
-
     <string name="frame_edge">Ramka krawędzi</string>
     <string name="frame_edge_description">Dopasowuje się do kształtu ekranu</string>
     <string name="motion_pulse">Pulsowanie</string>
