@@ -65,13 +65,29 @@ object HaloEffectCatalog {
         )
     )
 
+    val defaultFrame: HaloFrame
+        get() = frames.first().frame
+
     fun frame(frame: HaloFrame): HaloFrameDefinition = frames.first { it.frame == frame }
 
     fun motion(motion: HaloMotion): HaloMotionDefinition = motions.first { it.motion == motion }
 
     fun supports(frame: HaloFrame, motion: HaloMotion): Boolean =
         motion in frame(frame).supportedMotions
+
+    /** Resolves persisted or external input to one supported surface/motion pair. */
+    fun resolve(frame: HaloFrame, motion: HaloMotion): HaloFrameMotionSelection {
+        val resolvedFrame = frames.firstOrNull { it.frame == frame }?.frame ?: defaultFrame
+        val resolvedMotion = motion.takeIf { supports(resolvedFrame, it) }
+            ?: frame(resolvedFrame).supportedMotions.first()
+        return HaloFrameMotionSelection(resolvedFrame, resolvedMotion)
+    }
 }
+
+data class HaloFrameMotionSelection(
+    val frame: HaloFrame,
+    val motion: HaloMotion
+)
 
 val HaloFrame.definition: HaloFrameDefinition
     get() = HaloEffectCatalog.frame(this)

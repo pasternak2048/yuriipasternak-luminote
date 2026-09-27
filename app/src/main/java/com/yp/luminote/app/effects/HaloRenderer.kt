@@ -8,17 +8,17 @@ import android.graphics.PathMeasure
 import android.graphics.RectF
 import android.graphics.SweepGradient
 import com.yp.luminote.app.data.settings.HaloColorMode
-import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import kotlin.math.PI
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
-/** Draws prepared geometry; the View supplies window size, insets and animation. */
-internal class HaloRenderer(
+/** Draws the Edge Frame surface and owns its display-outline geometry. */
+internal class EdgeFrameRenderer(
     config: HaloConfig,
-    private val outline: DisplayOutline
-) {
+    density: Float
+) : HaloSurfaceRenderer {
+    private val outline = DisplayOutline(density)
     private var config =
         config.sanitized()
 
@@ -74,7 +74,7 @@ internal class HaloRenderer(
                 renderStrokeWidth
         }
 
-    fun update(
+    override fun update(
         config: HaloConfig
     ) {
         val next =
@@ -100,17 +100,15 @@ internal class HaloRenderer(
         }
     }
 
-    fun draw(
+    override fun draw(
         canvas: Canvas,
-        animationProgress: Float,
-        effectPhase: Float,
-        gradientPhase: Float
+        state: HaloAnimationState
     ) {
         val baseAlpha =
             (
                     255f *
                             config.intensity *
-                            animationProgress.coerceIn(
+                            state.progress.coerceIn(
                                 0f,
                                 1f
                             )
@@ -145,20 +143,28 @@ internal class HaloRenderer(
 
             preparePaint(
                 baseAlpha = baseAlpha,
-                effectPhase = effectPhase,
-                gradientPhase = gradientPhase
+                effectPhase = state.phase,
+                gradientPhase = state.gradientPhase
             )
 
             drawStylePath(
                 canvas = canvas,
                 paint = corePaint,
-                phase = effectPhase
+                phase = state.phase
             )
         } finally {
             canvas.restoreToCount(
                 saveCount
             )
         }
+    }
+
+    override fun onSizeChanged(width: Int, height: Int) {
+        outline.resize(width, height)
+    }
+
+    override fun onInsetsChanged(insets: android.view.WindowInsets) {
+        outline.updateInsets(insets)
     }
 
     private fun preparePaint(
@@ -810,10 +816,7 @@ internal class HaloRenderer(
                 centerlineInset
             )
 
-        return when (config.frame) {
-            HaloFrame.CLASSIC ->
-                strokePath
-        }
+        return strokePath
     }
 
     private fun updateStrokeParameters() {

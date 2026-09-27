@@ -20,15 +20,14 @@ internal class HaloView(
     config: HaloConfig
 ) : View(context) {
 
-    private val outline =
-        DisplayOutline(
-            resources.displayMetrics.density
-        )
+    private val rendererRegistry = HaloSurfaceRendererRegistry()
 
-    private val renderer =
-        HaloRenderer(
-            config,
-            outline
+    private var currentConfig = config.sanitized()
+
+    private var renderer: HaloSurfaceRenderer? =
+        rendererRegistry.create(
+            config = currentConfig,
+            density = resources.displayMetrics.density
         )
 
     private var animationState =
@@ -83,12 +82,26 @@ internal class HaloView(
     fun update(
         config: HaloConfig
     ) {
-        renderer.update(
-            config
-        )
+        val nextConfig = config.sanitized()
+        val frameChanged = currentConfig.frame != nextConfig.frame
+
+        currentConfig = nextConfig
+        if (frameChanged) {
+            renderer = rendererRegistry.create(
+                config = nextConfig,
+                density = resources.displayMetrics.density
+            )
+
+            renderer?.apply {
+                onSizeChanged(width, height)
+                rootWindowInsets?.let(::onInsetsChanged)
+            }
+        } else {
+            renderer?.update(nextConfig)
+        }
 
         ambientEffectSpeed =
-            config.effectSpeed.coerceIn(
+            nextConfig.effectSpeed.coerceIn(
                 MIN_EFFECT_SPEED,
                 MAX_EFFECT_SPEED
             )
@@ -251,10 +264,7 @@ internal class HaloView(
             oldh
         )
 
-        outline.resize(
-            w,
-            h
-        )
+        renderer?.onSizeChanged(w, h)
 
         requestApplyInsets()
 
@@ -272,9 +282,7 @@ internal class HaloView(
     override fun onApplyWindowInsets(
         insets: WindowInsets
     ): WindowInsets {
-        outline.updateInsets(
-            insets
-        )
+        renderer?.onInsetsChanged(insets)
 
         invalidate()
 
@@ -300,16 +308,7 @@ internal class HaloView(
             canvas
         )
 
-        renderer.draw(
-            canvas =
-                canvas,
-            animationProgress =
-                animationState.progress,
-            effectPhase =
-                animationState.phase,
-            gradientPhase =
-                animationState.gradientPhase
-        )
+        renderer?.draw(canvas, animationState)
     }
 
     fun startAmbientEffect(

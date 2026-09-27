@@ -161,6 +161,22 @@ class LuminoteSettingsRepository(
             .luminoteDataStore
             .data
             .map { preferences ->
+                val persistedFrame =
+                    preferences[Keys.haloFrame]
+                        ?.let { stored ->
+                            runCatching { HaloFrame.valueOf(stored) }.getOrNull()
+                        }
+                        ?: defaultSettings.haloFrame
+
+                val persistedMotion =
+                    preferences[Keys.haloMotion]
+                        ?.let { stored ->
+                            runCatching { HaloMotion.valueOf(stored) }.getOrNull()
+                        }
+                        ?: defaultSettings.haloMotion
+
+                val haloSelection =
+                    HaloEffectCatalog.resolve(persistedFrame, persistedMotion)
 
                 LuminoteSettings(
 
@@ -256,33 +272,9 @@ class LuminoteSettingsRepository(
                             }
                             ?: NotificationPlayback.ONCE,
 
-                    haloFrame =
-                        preferences[
-                            Keys.haloFrame
-                        ]
-                            ?.let {
-                                runCatching {
-                                    HaloFrame.valueOf(it)
-                                }.getOrNull()
-                            }
-                            ?: HaloFrame.CLASSIC,
+                    haloFrame = haloSelection.frame,
 
-                    haloMotion =
-                        preferences[
-                            Keys.haloMotion
-                        ]
-                            ?.let {
-                                runCatching {
-                                    HaloMotion.valueOf(it)
-                                }.getOrNull()
-                            }
-                            ?.takeIf {
-                                HaloEffectCatalog.supports(
-                                    HaloFrame.CLASSIC,
-                                    it
-                                )
-                            }
-                            ?: HaloMotion.PULSE,
+                    haloMotion = haloSelection.motion,
 
                     haloEffectSpeed =
                         preferences[

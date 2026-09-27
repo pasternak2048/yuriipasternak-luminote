@@ -3,6 +3,10 @@ package com.yp.luminote.app.effects
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertTrue
+import com.yp.luminote.app.data.settings.HaloEffectCatalog
+import com.yp.luminote.app.data.settings.HaloFrame
+import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.definition
 import org.junit.Test
 
 class HaloConfigTest {
@@ -76,5 +80,16 @@ class HaloConfigTest {
             expectedPalette,
             HaloConfig.defaultGradientPalette()
         )
+    }
+
+    @Test
+    fun `sanitized config retains every supported classic motion`() {
+        HaloFrame.CLASSIC.definition.supportedMotions.forEach { motion ->
+            val config = HaloConfig(frame = HaloFrame.CLASSIC, motion = motion).sanitized()
+
+            assertEquals(HaloFrame.CLASSIC, config.frame)
+            assertEquals(motion, config.motion)
+            assertTrue(HaloEffectCatalog.supports(config.frame, config.motion))
+        }
     }
 }

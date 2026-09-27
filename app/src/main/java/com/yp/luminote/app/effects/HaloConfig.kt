@@ -2,6 +2,7 @@ package com.yp.luminote.app.effects
 
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
+import com.yp.luminote.app.data.settings.HaloEffectCatalog
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.data.settings.durationFor
@@ -24,6 +25,7 @@ data class HaloConfig(
     val palette: IntArray = intArrayOf()
 ) {
     fun sanitized(): HaloConfig {
+        val selection = HaloEffectCatalog.resolve(frame, motion)
         val sanitizedEffectSpeed =
             effectSpeed
                 .takeIf { it.isFinite() }
@@ -31,8 +33,10 @@ data class HaloConfig(
                 ?: DEFAULT_EFFECT_SPEED
 
         return copy(
+            frame = selection.frame,
+            motion = selection.motion,
             effectSpeed = sanitizedEffectSpeed,
-            durationSeconds = motion.durationFor(sanitizedEffectSpeed),
+            durationSeconds = selection.motion.durationFor(sanitizedEffectSpeed),
             gradientFlowSpeed =
                 gradientFlowSpeed
                     .takeIf { it.isFinite() }

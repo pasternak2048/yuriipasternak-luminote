@@ -694,7 +694,9 @@ class HaloOverlayService : Service() {
          * as one fresh cycle.
          */
         val needsAnimationRestart =
-            previous.repeatCount !=
+            previous.frame !=
+                    updated.frame ||
+                    previous.repeatCount !=
                     updated.repeatCount ||
                     previous.durationSeconds !=
                     updated.durationSeconds ||
@@ -711,10 +713,7 @@ class HaloOverlayService : Service() {
 
         if (
             wasAmbient != isAmbient ||
-            (
-                    !isAmbient &&
-                            needsAnimationRestart
-                    )
+                    needsAnimationRestart
         ) {
             startAnimation(
                 view,
