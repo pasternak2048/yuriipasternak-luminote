@@ -62,6 +62,9 @@ class HaloAccessibilityService : AccessibilityService() {
     private var queuedRequestToken =
         0L
 
+    private val queuedCompletionLease =
+        QueuedCompletionLease()
+
     private val removeOverlayTask =
         Runnable {
             removeOverlay()
@@ -159,6 +162,12 @@ class HaloAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(
             removeOverlayTask
         )
+
+        queuedCompletionLease.invalidate(
+            queuedRequestToken
+        )
+
+        queuedRequestToken++
 
         cancelQueuedWatchdog()
 
@@ -593,12 +602,18 @@ class HaloAccessibilityService : AccessibilityService() {
     }
 
     private fun removeOverlay() {
+        val queuedCompletion =
+            activeQueuedCompletion
+
+        val queuedTerminalClaimed =
+            queuedCompletion != null &&
+                    queuedCompletionLease.terminateForTeardown(
+                        queuedRequestToken
+                    )
+
         queuedRequestToken++
 
         cancelQueuedWatchdog()
-
-        val queuedCompletion =
-            activeQueuedCompletion
 
         activeQueuedCompletion =
             null
@@ -607,6 +622,10 @@ class HaloAccessibilityService : AccessibilityService() {
             ?.let { view ->
 
                 view.setOnFiniteAnimationCompletedListener(
+                    null
+                )
+
+                view.setOnFiniteAnimationStartedListener(
                     null
                 )
 
@@ -635,8 +654,16 @@ class HaloAccessibilityService : AccessibilityService() {
         previewMode =
             false
 
-        queuedCompletion
-            ?.invoke()
+        if (queuedTerminalClaimed) {
+            completeQueuedTerminal(queuedCompletion)
+        }
+    }
+
+    /** The only teardown exit for an already invalidated queued lease. */
+    private fun completeQueuedTerminal(
+        completion: (() -> Unit)?
+    ) {
+        completion?.invoke()
     }
 
     private fun readConfig(
@@ -750,6 +777,12 @@ class HaloAccessibilityService : AccessibilityService() {
             removeOverlayTask
         )
 
+        queuedCompletionLease.invalidate(
+            queuedRequestToken
+        )
+
+        queuedRequestToken++
+
         /*
          * Every queued playback owns a unique token.
          *
@@ -757,7 +790,10 @@ class HaloAccessibilityService : AccessibilityService() {
          * another request takes ownership.
          */
         val requestToken =
-            ++queuedRequestToken
+            queuedCompletionLease.begin()
+
+        queuedRequestToken =
+            requestToken
 
         cancelQueuedWatchdog()
 
@@ -778,6 +814,9 @@ class HaloAccessibilityService : AccessibilityService() {
             onFiniteAnimationCompleted
 
         var completed =
+            false
+
+        var watchdogTerminalClaimed =
             false
 
         val complete:
@@ -803,6 +842,14 @@ class HaloAccessibilityService : AccessibilityService() {
                     return@complete
                 }
 
+                if (!watchdogTerminalClaimed &&
+                    !queuedCompletionLease.completeNaturally(requestToken)) {
+                    return@complete
+                }
+
+                watchdogTerminalClaimed =
+                    false
+
                 completed =
                     true
 
@@ -823,6 +870,11 @@ class HaloAccessibilityService : AccessibilityService() {
 
                 overlayView
                     ?.setOnFiniteAnimationCompletedListener(
+                        null
+                    )
+
+                overlayView
+                    ?.setOnFiniteAnimationStartedListener(
                         null
                     )
 
@@ -902,23 +954,28 @@ class HaloAccessibilityService : AccessibilityService() {
                 )
 
                 view.setOnFiniteAnimationCompletedListener(
-                    {}
+                    complete
                 )
+
+                view.setOnFiniteAnimationStartedListener {
+                    queuedCompletionLease.onStarted(
+                        requestToken
+                    )
+
+                    scheduleQueuedCompletionFallback(
+                        requestToken,
+                        resolvedConfig,
+                        request,
+                        complete,
+                        onWatchdogClaimed = {
+                            watchdogTerminalClaimed = true
+                        }
+                    )
+                }
 
                 startAnimation(
                     view,
                     resolvedConfig
-                )
-
-                scheduleQueuedCompletionFallback(
-                    requestToken =
-                        requestToken,
-                    config =
-                        resolvedConfig,
-                    request =
-                        request,
-                    onCompleted =
-                        complete
                 )
 
                 return
@@ -999,8 +1056,24 @@ class HaloAccessibilityService : AccessibilityService() {
                 resolvedConfig
             ).apply {
                 setOnFiniteAnimationCompletedListener(
-                    {}
+                    complete
                 )
+
+                setOnFiniteAnimationStartedListener {
+                    queuedCompletionLease.onStarted(
+                        requestToken
+                    )
+
+                    scheduleQueuedCompletionFallback(
+                        requestToken,
+                        resolvedConfig,
+                        request,
+                        complete,
+                        onWatchdogClaimed = {
+                            watchdogTerminalClaimed = true
+                        }
+                    )
+                }
             }
 
         val params =
@@ -1063,16 +1136,6 @@ class HaloAccessibilityService : AccessibilityService() {
                 resolvedConfig
             )
 
-            scheduleQueuedCompletionFallback(
-                requestToken =
-                    requestToken,
-                config =
-                    resolvedConfig,
-                request =
-                    request,
-                onCompleted =
-                    complete
-            )
         }.onFailure {
             Log.e(
                 TAG,
@@ -1088,7 +1151,8 @@ class HaloAccessibilityService : AccessibilityService() {
         requestToken: Long,
         config: HaloConfig,
         request: HaloEffectRequest,
-        onCompleted: () -> Unit
+        onCompleted: () -> Unit,
+        onWatchdogClaimed: () -> Unit
     ) {
         if (
             config.notificationPlayback ==
@@ -1140,7 +1204,8 @@ class HaloAccessibilityService : AccessibilityService() {
          * token as the natural animation completion.
          */
         val watchdogDelay =
-            totalDuration
+            totalDuration +
+                    QUEUED_WATCHDOG_GRACE_MS
 
         lateinit var watchdog:
                 Runnable
@@ -1172,6 +1237,16 @@ class HaloAccessibilityService : AccessibilityService() {
 
                 queuedCompletionWatchdog =
                     null
+
+                if (
+                    !queuedCompletionLease.completeFromWatchdog(
+                        requestToken
+                    )
+                ) {
+                    return@Runnable
+                }
+
+                onWatchdogClaimed()
 
                 onCompleted()
             }
@@ -1286,6 +1361,9 @@ class HaloAccessibilityService : AccessibilityService() {
 
         private const val TAG =
             "HaloAccessibility"
+
+        private const val QUEUED_WATCHDOG_GRACE_MS =
+            2_000L
 
         /*
          * Recovery timeout only.

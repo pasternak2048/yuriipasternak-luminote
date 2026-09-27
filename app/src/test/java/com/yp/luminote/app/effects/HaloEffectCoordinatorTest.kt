@@ -11,7 +11,7 @@ class HaloEffectCoordinatorTest {
             HaloEffectCoordinator()
 
         val started =
-            mutableListOf<HaloEffectRequest>()
+            mutableListOf<HaloEffectDelivery>()
 
         coordinator.attachRenderer(Any()) { request ->
             started += request
@@ -33,7 +33,7 @@ class HaloEffectCoordinatorTest {
 
         assertEquals(
             listOf(first),
-            started
+            started.map(HaloEffectDelivery::request)
         )
     }
 
@@ -46,7 +46,7 @@ class HaloEffectCoordinatorTest {
             Any()
 
         val startedByFirstRenderer =
-            mutableListOf<HaloEffectRequest>()
+            mutableListOf<HaloEffectDelivery>()
 
         val request =
             request(
@@ -62,7 +62,7 @@ class HaloEffectCoordinatorTest {
         coordinator.detachRenderer(firstOwner)
 
         val startedByReplacementRenderer =
-            mutableListOf<HaloEffectRequest>()
+            mutableListOf<HaloEffectDelivery>()
 
         coordinator.attachRenderer(Any()) { started ->
             startedByReplacementRenderer += started
@@ -70,13 +70,55 @@ class HaloEffectCoordinatorTest {
 
         assertEquals(
             listOf(request),
-            startedByFirstRenderer
+            startedByFirstRenderer.map(HaloEffectDelivery::request)
         )
 
         assertEquals(
             listOf(request),
-            startedByReplacementRenderer
+            startedByReplacementRenderer.map(HaloEffectDelivery::request)
         )
+    }
+
+    @Test
+    fun `stale completion from detached delivery cannot complete its requeued request`() {
+        val coordinator = HaloEffectCoordinator()
+        val request = request("com.example.chat", "message")
+        val firstOwner = Any()
+        val deliveries = mutableListOf<HaloEffectDelivery>()
+
+        coordinator.attachRenderer(firstOwner) { deliveries += it }
+        coordinator.enqueue(request)
+        val stale = deliveries.single()
+        coordinator.detachRenderer(firstOwner)
+        coordinator.attachRenderer(Any()) { deliveries += it }
+        val replacement = deliveries.last()
+
+        coordinator.onRequestCompleted(stale)
+        assertEquals(replacement, deliveries.last())
+
+        coordinator.onRequestCompleted(replacement)
+    }
+
+    @Test
+    fun `only replacement delivery completion advances queued fifo request`() {
+        val coordinator = HaloEffectCoordinator()
+        val owner = Any()
+        val started = mutableListOf<HaloEffectDelivery>()
+        val first = request("com.example.first", "first")
+        val next = request("com.example.next", "next")
+        coordinator.attachRenderer(owner) { started += it }
+        coordinator.enqueue(first)
+        coordinator.enqueue(next)
+        val stale = started.single()
+        coordinator.detachRenderer(owner)
+        coordinator.attachRenderer(Any()) { started += it }
+        val replacement = started.last()
+
+        coordinator.onRequestCompleted(stale)
+        assertEquals(listOf(first, first), started.map(HaloEffectDelivery::request))
+
+        coordinator.onRequestCompleted(replacement)
+        assertEquals(listOf(first, first, next), started.map(HaloEffectDelivery::request))
     }
 
     @Test
@@ -85,7 +127,7 @@ class HaloEffectCoordinatorTest {
             HaloEffectCoordinator()
 
         val started =
-            mutableListOf<HaloEffectRequest>()
+            mutableListOf<HaloEffectDelivery>()
 
         coordinator.attachRenderer(Any()) { request ->
             started += request

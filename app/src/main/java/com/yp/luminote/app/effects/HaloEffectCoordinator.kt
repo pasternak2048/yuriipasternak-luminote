@@ -3,6 +3,12 @@ package com.yp.luminote.app.effects
 import android.util.Log
 import java.util.ArrayDeque
 
+/** A renderer attempt. Identity, not request equality, owns completion. */
+internal data class HaloEffectDelivery(
+    val request: HaloEffectRequest,
+    val lease: Long
+)
+
 /**
  * Serializes transient notification Halo effects.
  *
@@ -26,14 +32,17 @@ internal class HaloEffectCoordinator {
     private val pendingRequests =
         ArrayDeque<HaloEffectRequest>()
 
-    private var activeRequest:
-            HaloEffectRequest? = null
+    private var activeDelivery:
+            HaloEffectDelivery? = null
+
+    private var nextDeliveryLease =
+        0L
 
     private var rendererOwner:
             Any? = null
 
     private var onRequestStarted:
-            ((HaloEffectRequest) -> Unit)? = null
+            ((HaloEffectDelivery) -> Unit)? = null
 
     fun enqueue(
         request: HaloEffectRequest
@@ -45,12 +54,12 @@ internal class HaloEffectCoordinator {
             "enqueue " +
                     "package=${request.packageName}, " +
                     "key=${request.notificationKey}, " +
-                    "activeKey=${activeRequest?.notificationKey}, " +
+                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
 
         val active =
-            activeRequest
+            activeDelivery?.request
 
         if (
             active?.packageName ==
@@ -118,19 +127,18 @@ internal class HaloEffectCoordinator {
     }
 
     fun onRequestCompleted(
-        request: HaloEffectRequest
+        delivery: HaloEffectDelivery
     ) {
         if (
-            activeRequest !==
-            request
+            activeDelivery !== delivery
         ) {
             Log.d(
                 TAG,
                 "Ignoring stale completion: " +
-                        "package=${request.packageName}, " +
-                        "key=${request.notificationKey}, " +
-                        "activePackage=${activeRequest?.packageName}, " +
-                        "activeKey=${activeRequest?.notificationKey}"
+                        "package=${delivery.request.packageName}, " +
+                        "key=${delivery.request.notificationKey}, " +
+                        "activePackage=${activeDelivery?.request?.packageName}, " +
+                        "activeKey=${activeDelivery?.request?.notificationKey}"
             )
 
             return
@@ -139,12 +147,12 @@ internal class HaloEffectCoordinator {
         Log.d(
             TAG,
             "completed " +
-                    "package=${request.packageName}, " +
-                    "key=${request.notificationKey}, " +
+                    "package=${delivery.request.packageName}, " +
+                    "key=${delivery.request.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
 
-        activeRequest =
+        activeDelivery =
             null
 
         startNext()
@@ -153,7 +161,7 @@ internal class HaloEffectCoordinator {
     fun clear() {
         pendingRequests.clear()
 
-        activeRequest =
+        activeDelivery =
             null
 
         rendererOwner =
@@ -165,7 +173,7 @@ internal class HaloEffectCoordinator {
 
     fun attachRenderer(
         owner: Any,
-        onRequestStarted: (HaloEffectRequest) -> Unit
+        onRequestStarted: (HaloEffectDelivery) -> Unit
     ) {
         rendererOwner =
             owner
@@ -177,7 +185,7 @@ internal class HaloEffectCoordinator {
             TAG,
             "renderer attached: " +
                     "owner=${System.identityHashCode(owner)}, " +
-                    "activeKey=${activeRequest?.notificationKey}, " +
+                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
 
@@ -204,7 +212,7 @@ internal class HaloEffectCoordinator {
             TAG,
             "renderer detached: " +
                     "owner=${System.identityHashCode(owner)}, " +
-                    "activeKey=${activeRequest?.notificationKey}, " +
+                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
                     "pending=${pendingRequests.size}"
         )
 
@@ -214,9 +222,11 @@ internal class HaloEffectCoordinator {
         onRequestStarted =
             null
 
-        activeRequest?.let { request ->
-            activeRequest =
+        activeDelivery?.let { delivery ->
+            activeDelivery =
                 null
+
+            val request = delivery.request
 
             if (isExpired(request)) {
                 Log.d(
@@ -244,7 +254,7 @@ internal class HaloEffectCoordinator {
         discardExpiredRequests()
 
         if (
-            activeRequest != null
+            activeDelivery != null
         ) {
             return
         }
@@ -262,7 +272,7 @@ internal class HaloEffectCoordinator {
         request: HaloEffectRequest
     ) {
         if (
-            activeRequest != null
+            activeDelivery != null
         ) {
             pendingRequests.addLast(
                 request
@@ -273,7 +283,7 @@ internal class HaloEffectCoordinator {
                 "deferred start because another request is active: " +
                         "package=${request.packageName}, " +
                         "key=${request.notificationKey}, " +
-                        "activeKey=${activeRequest?.notificationKey}, " +
+                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
                         "pending=${pendingRequests.size}"
             )
 
@@ -299,8 +309,14 @@ internal class HaloEffectCoordinator {
             return
         }
 
-        activeRequest =
-            request
+        val delivery =
+            HaloEffectDelivery(
+                request = request,
+                lease = ++nextDeliveryLease
+            )
+
+        activeDelivery =
+            delivery
 
         Log.d(
             TAG,
@@ -310,14 +326,12 @@ internal class HaloEffectCoordinator {
                     "pending=${pendingRequests.size}"
         )
 
-        renderer(
-            request
-        )
+        renderer(delivery)
     }
 
     private fun startPendingIfIdle() {
         if (
-            activeRequest != null ||
+            activeDelivery != null ||
             pendingRequests.isEmpty()
         ) {
             return

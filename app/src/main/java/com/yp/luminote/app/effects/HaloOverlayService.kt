@@ -63,6 +63,16 @@ class HaloOverlayService : Service() {
     private var queuedWatchdogRequest:
             HaloEffectRequest? = null
 
+    /* A request object may be requeued after renderer recreation; each run is a new lease. */
+    private var queuedDeliveryToken =
+        0L
+
+    private val queuedCompletionLease =
+        QueuedCompletionLease()
+
+    private var activeCompletionLease:
+            Long? = null
+
     private val displayListener =
         object : DisplayManager.DisplayListener {
 
@@ -350,7 +360,8 @@ class HaloOverlayService : Service() {
         preview: Boolean,
         paletteColors: IntArray?,
         scheduleRemoval: Boolean = true,
-        onFiniteAnimationCompleted: (() -> Unit)? = null
+        onFiniteAnimationCompleted: (() -> Unit)? = null,
+        onFiniteAnimationStarted: (() -> Unit)? = null
     ) {
         val completeWithoutAnimation = {
             if (
@@ -388,6 +399,10 @@ class HaloOverlayService : Service() {
 
                 view.setOnFiniteAnimationCompletedListener(
                     onFiniteAnimationCompleted
+                )
+
+                view.setOnFiniteAnimationStartedListener(
+                    onFiniteAnimationStarted
                 )
 
                 startAnimation(
@@ -491,6 +506,10 @@ class HaloOverlayService : Service() {
 
         view.setOnFiniteAnimationCompletedListener(
             onFiniteAnimationCompleted
+        )
+
+        view.setOnFiniteAnimationStartedListener(
+            onFiniteAnimationStarted
         )
 
         val params =
@@ -866,6 +885,11 @@ class HaloOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        activeCompletionLease?.let(queuedCompletionLease::invalidate)
+
+        activeCompletionLease =
+            null
+
         cancelQueuedCompletionWatchdog()
 
         /*
@@ -969,8 +993,10 @@ class HaloOverlayService : Service() {
     }
 
     private fun startQueuedEffect(
-        request: HaloEffectRequest
+        delivery: HaloEffectDelivery
     ) {
+        val request =
+            delivery.request
         Log.d(
             TAG,
             "Starting queued effect: " +
@@ -983,7 +1009,7 @@ class HaloOverlayService : Service() {
                 request = request,
                 onFiniteAnimationCompleted = {
                     effectCoordinator.onRequestCompleted(
-                        request
+                        delivery
                     )
                 }
             )
@@ -1006,6 +1032,15 @@ class HaloOverlayService : Service() {
         queuedWatchdogRequest =
             request
 
+        val deliveryToken =
+            ++queuedDeliveryToken
+
+        val completionLease =
+            queuedCompletionLease.begin()
+
+        activeCompletionLease =
+            completionLease
+
         showOverlay(
             config = request.config,
             restart = true,
@@ -1013,20 +1048,42 @@ class HaloOverlayService : Service() {
             paletteColors =
                 request.paletteColors,
             scheduleRemoval = false,
-            onFiniteAnimationCompleted = {}
-        )
+            onFiniteAnimationCompleted = {
+                onQueuedEffectCompleted(
+                    request,
+                    deliveryToken,
+                    delivery,
+                    completionLease
+                )
+            },
+            onFiniteAnimationStarted = {
+                queuedCompletionLease.onStarted(
+                    completionLease
+                )
 
-        scheduleQueuedCompletionWatchdog(
-            request
+                scheduleQueuedCompletionWatchdog(
+                    request,
+                    deliveryToken,
+                    delivery,
+                    completionLease
+                )
+            }
         )
     }
 
     private fun onQueuedEffectCompleted(
-        request: HaloEffectRequest
+        request: HaloEffectRequest,
+        deliveryToken: Long,
+        delivery: HaloEffectDelivery,
+        completionLease: Long,
+        fromWatchdog: Boolean = false
     ) {
         if (
             queuedWatchdogRequest != null &&
-            queuedWatchdogRequest !== request
+            (
+                    queuedWatchdogRequest !== request ||
+                            deliveryToken != queuedDeliveryToken
+                    )
         ) {
             Log.d(
                 TAG,
@@ -1038,6 +1095,16 @@ class HaloOverlayService : Service() {
             return
         }
 
+        if (
+            !(if (fromWatchdog) {
+                queuedCompletionLease.completeFromWatchdog(completionLease)
+            } else {
+                queuedCompletionLease.completeNaturally(completionLease)
+            })
+        ) {
+            return
+        }
+
         Log.d(
             TAG,
             "Queued effect completed: " +
@@ -1045,20 +1112,28 @@ class HaloOverlayService : Service() {
                     "key=${request.notificationKey}"
         )
 
+        /* Invalidate callbacks before cancelling/removing the renderer. */
+        queuedDeliveryToken++
+
+        activeCompletionLease =
+            null
+        cancelQueuedCompletionWatchdog()
+
         handler.removeCallbacks(
             removeOverlayTask
         )
 
-        cancelQueuedCompletionWatchdog()
-
-        overlayView?.cancelAnimation()
+        overlayView?.let { view ->
+            view.setOnFiniteAnimationCompletedListener(null)
+            view.cancelAnimation()
+        }
 
         removeOverlay(
             immediately = true
         )
 
         effectCoordinator.onRequestCompleted(
-            request
+            delivery
         )
 
         if (
@@ -1069,7 +1144,10 @@ class HaloOverlayService : Service() {
     }
 
     private fun scheduleQueuedCompletionWatchdog(
-        request: HaloEffectRequest
+        request: HaloEffectRequest,
+        deliveryToken: Long,
+        delivery: HaloEffectDelivery,
+        completionLease: Long
     ) {
         val config =
             request.config
@@ -1106,7 +1184,8 @@ class HaloOverlayService : Service() {
                             (cycles - 1)
 
         val watchdogDelayMs =
-            expectedDurationMs
+            expectedDurationMs +
+                    QUEUED_WATCHDOG_GRACE_MS
 
         lateinit var watchdog:
                 Runnable
@@ -1115,13 +1194,18 @@ class HaloOverlayService : Service() {
             Runnable {
                 if (
                     queuedCompletionWatchdog !== watchdog ||
-                    queuedWatchdogRequest !== request
+                    queuedWatchdogRequest !== request ||
+                            deliveryToken != queuedDeliveryToken
                 ) {
                     return@Runnable
                 }
 
                 onQueuedEffectCompleted(
-                    request
+                    request,
+                    deliveryToken,
+                    delivery,
+                    completionLease,
+                    fromWatchdog = true
                 )
             }
 
@@ -1216,6 +1300,10 @@ class HaloOverlayService : Service() {
 
         private const val TAG =
             "HaloOverlay"
+
+        /* Recovery-only margin for delayed attachment or VSYNC delivery. */
+        private const val QUEUED_WATCHDOG_GRACE_MS =
+            2_000L
 
         private const val FOREGROUND_CHANNEL_ID =
             "halo_overlay"

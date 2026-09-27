@@ -55,6 +55,9 @@ internal class HaloView(
     private var onFiniteAnimationCompleted:
             (() -> Unit)? = null
 
+    private var onFiniteAnimationStarted:
+            (() -> Unit)? = null
+
     private var hardwareAccelerationLogged =
         false
 
@@ -107,6 +110,13 @@ internal class HaloView(
         listener: (() -> Unit)?
     ) {
         onFiniteAnimationCompleted =
+            listener
+    }
+
+    fun setOnFiniteAnimationStartedListener(
+        listener: (() -> Unit)?
+    ) {
+        onFiniteAnimationStarted =
             listener
     }
 
@@ -195,6 +205,8 @@ internal class HaloView(
                         request.motion
                 )
             )
+
+            onFiniteAnimationStarted?.invoke()
         }
     }
 
