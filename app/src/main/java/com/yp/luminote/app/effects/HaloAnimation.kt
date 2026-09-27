@@ -1,5 +1,8 @@
 package com.yp.luminote.app.effects
 
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.view.Choreographer
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
@@ -9,11 +12,48 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
-/** Test seam for deterministic VSYNC-driven finite animation tests. */
+/** Test seam for deterministic VSYNC-driven ambient animation tests. */
 internal interface HaloFrameScheduler {
     fun post(callback: Choreographer.FrameCallback)
 
     fun remove(callback: Choreographer.FrameCallback)
+}
+
+/** Test seam for finite frames that are independent from display VSYNC. */
+internal interface HaloFiniteFrameScheduler {
+    fun postDelayed(
+        runnable: Runnable,
+        delayMs: Long
+    )
+
+    fun removeCallbacks(
+        runnable: Runnable
+    )
+}
+
+internal class AndroidHaloFiniteFrameScheduler : HaloFiniteFrameScheduler {
+    private val handler =
+        Handler(
+            Looper.getMainLooper()
+        )
+
+    override fun postDelayed(
+        runnable: Runnable,
+        delayMs: Long
+    ) {
+        handler.postDelayed(
+            runnable,
+            delayMs
+        )
+    }
+
+    override fun removeCallbacks(
+        runnable: Runnable
+    ) {
+        handler.removeCallbacks(
+            runnable
+        )
+    }
 }
 
 internal class AndroidHaloFrameScheduler : HaloFrameScheduler {
@@ -37,7 +77,9 @@ internal class HaloAnimation(
     private val onFrame: (HaloAnimationState) -> Unit,
     private val shouldContinueRepeating: (() -> Boolean)? = null,
     private val onCompleted: () -> Unit = {},
-    private val frameScheduler: HaloFrameScheduler = AndroidHaloFrameScheduler()
+    private val frameScheduler: HaloFrameScheduler = AndroidHaloFrameScheduler(),
+    private val finiteFrameScheduler: HaloFiniteFrameScheduler = AndroidHaloFiniteFrameScheduler(),
+    private val elapsedRealtimeMs: () -> Long = SystemClock::elapsedRealtime
 ) : HaloAnimationEngine {
 
     private val fadeInInterpolator =
@@ -73,10 +115,7 @@ internal class HaloAnimation(
     private var fadeOutStartFraction =
         1f
 
-    private var finiteCycleStartedAtNanos =
-        0L
-
-    private var finiteRestartAtNanos =
+    private var finiteCycleStartedAtMs =
         0L
 
     private var ambientStartedAtNanos =
@@ -115,6 +154,12 @@ internal class HaloAnimation(
     private var frameCallback:
             Choreographer.FrameCallback? = null
 
+    private var finiteFrameRunnable:
+            Runnable? = null
+
+    private var finiteRestartRunnable:
+            Runnable? = null
+
     private fun createFrameCallback(
         frameGeneration: Long
     ): Choreographer.FrameCallback =
@@ -135,7 +180,7 @@ internal class HaloAnimation(
             if (ambient) {
                 runAmbientFrame(it, frameGeneration)
             } else {
-                runFiniteFrame(it, frameGeneration)
+                runFiniteFrame(frameGeneration)
             }
         }
 
@@ -355,14 +400,81 @@ internal class HaloAnimation(
             progress = 0f
         )
 
-        finiteCycleStartedAtNanos =
-            0L
+        finiteCycleStartedAtMs =
+            elapsedRealtimeMs()
 
-        postFrame()
+        scheduleFiniteFrame(
+            frameGeneration = generation,
+            delayMs = 0L
+        )
+    }
+
+    private fun scheduleFiniteFrame(
+        frameGeneration: Long,
+        delayMs: Long = FINITE_FRAME_DELAY_MS
+    ) {
+        removeFiniteFrameRunnable()
+
+        val runnable =
+            object : Runnable {
+                override fun run() {
+                    if (
+                        finiteFrameRunnable === this
+                    ) {
+                        finiteFrameRunnable =
+                            null
+                    }
+
+                    runFiniteFrame(
+                        frameGeneration
+                    )
+                }
+            }
+
+        finiteFrameRunnable =
+            runnable
+
+        finiteFrameScheduler.postDelayed(
+            runnable,
+            delayMs
+        )
+    }
+
+    private fun scheduleFiniteRestart(
+        restartGeneration: Long
+    ) {
+        removeFiniteRestartRunnable()
+
+        val runnable =
+            object : Runnable {
+                override fun run() {
+                    if (
+                        finiteRestartRunnable === this
+                    ) {
+                        finiteRestartRunnable =
+                            null
+                    }
+
+                    if (
+                        running &&
+                        !ambient &&
+                        generation == restartGeneration
+                    ) {
+                        startFiniteCycle()
+                    }
+                }
+            }
+
+        finiteRestartRunnable =
+            runnable
+
+        finiteFrameScheduler.postDelayed(
+            runnable,
+            intervalMs
+        )
     }
 
     private fun runFiniteFrame(
-        frameTimeNanos: Long,
         frameGeneration: Long
     ) {
         if (
@@ -373,46 +485,24 @@ internal class HaloAnimation(
             return
         }
 
-        if (
-            finiteRestartAtNanos > 0L
-        ) {
-            if (
-                frameTimeNanos < finiteRestartAtNanos
-            ) {
-                postFrame()
-
-                return
-            }
-
-            finiteRestartAtNanos = 0L
-            startFiniteCycle()
-
-            return
-        }
-
-        if (
-            finiteCycleStartedAtNanos == 0L
-        ) {
-            finiteCycleStartedAtNanos = frameTimeNanos
-        }
-
-        val elapsedNanos =
+        val elapsedMs =
             (
-                    frameTimeNanos -
-                            finiteCycleStartedAtNanos
+                    elapsedRealtimeMs() -
+                            finiteCycleStartedAtMs
                     )
-                .coerceAtLeast(0L)
+                .coerceAtLeast(
+                    0L
+                )
 
         val fraction =
             (
-                    elapsedNanos.toDouble() /
-                            (currentDurationMs * NANOS_PER_MILLISECOND).toDouble()
+                    elapsedMs.toFloat() /
+                            currentDurationMs.toFloat()
                     )
                 .coerceIn(
-                    0.0,
-                    1.0
+                    0f,
+                    1f
                 )
-                .toFloat()
 
         currentPhase =
             phaseOffset +
@@ -434,19 +524,17 @@ internal class HaloAnimation(
             fraction >=
             1f
         ) {
-            finishFiniteCycle(
-                frameTimeNanos
-            )
+            finishFiniteCycle()
 
             return
         }
 
-        postFrame()
+        scheduleFiniteFrame(
+            frameGeneration
+        )
     }
 
-    private fun finishFiniteCycle(
-        frameTimeNanos: Long
-    ) {
+    private fun finishFiniteCycle() {
         if (
             !running ||
             ambient
@@ -468,7 +556,7 @@ internal class HaloAnimation(
         phaseOffset +=
             1f
 
-        finiteCycleStartedAtNanos =
+        finiteCycleStartedAtMs =
             0L
 
         if (
@@ -520,11 +608,9 @@ internal class HaloAnimation(
             return
         }
 
-        finiteRestartAtNanos =
-            frameTimeNanos +
-                    intervalMs * NANOS_PER_MILLISECOND
-
-        postFrame()
+        scheduleFiniteRestart(
+            generation
+        )
     }
 
     private fun runAmbientFrame(
@@ -609,6 +695,10 @@ internal class HaloAnimation(
         remainingCycles =
             null
 
+        removeFiniteFrameRunnable()
+
+        removeFiniteRestartRunnable()
+
         removeFrameCallback()
 
         dispatchState(
@@ -678,6 +768,22 @@ internal class HaloAnimation(
 
         frameCallbackPosted =
             false
+    }
+
+    private fun removeFiniteFrameRunnable() {
+        finiteFrameRunnable
+            ?.let(finiteFrameScheduler::removeCallbacks)
+
+        finiteFrameRunnable =
+            null
+    }
+
+    private fun removeFiniteRestartRunnable() {
+        finiteRestartRunnable
+            ?.let(finiteFrameScheduler::removeCallbacks)
+
+        finiteRestartRunnable =
+            null
     }
 
     private fun alphaFor(
@@ -763,12 +869,13 @@ internal class HaloAnimation(
         remainingCycles =
             null
 
+        removeFiniteFrameRunnable()
+
+        removeFiniteRestartRunnable()
+
         removeFrameCallback()
 
-        finiteCycleStartedAtNanos =
-            0L
-
-        finiteRestartAtNanos =
+        finiteCycleStartedAtMs =
             0L
 
         ambientStartedAtNanos =
@@ -846,8 +953,8 @@ internal class HaloAnimation(
         private const val NANOS_PER_SECOND =
             1_000_000_000L
 
-        private const val NANOS_PER_MILLISECOND =
-            1_000_000L
+        private const val FINITE_FRAME_DELAY_MS =
+            8L
 
         private const val AMBIENT_ROTATION_DURATION_SECONDS =
             16.0
