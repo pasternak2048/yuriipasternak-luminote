@@ -8,16 +8,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import com.yp.luminote.app.data.settings.ThemeMode
 
 private val LuminoteLightColorScheme = lightColorScheme(
     primary = LuminoteLightPrimary,
-    onPrimary = LuminoteLightSurface,
+    onPrimary = Color.White,
+    primaryContainer = LuminoteLightPrimaryContainer,
+    onPrimaryContainer = LuminoteLightPrimaryDark,
 
-    secondary = LuminoteLightPrimary,
-    onSecondary = LuminoteLightSurface,
+    secondary = LuminoteLightPrimaryDark,
+    onSecondary = Color.White,
     secondaryContainer = LuminoteLightSurfaceVariant,
     onSecondaryContainer = LuminoteLightOnSurface,
 
@@ -32,18 +35,20 @@ private val LuminoteLightColorScheme = lightColorScheme(
 
     error = LuminoteError,
     onError = LuminoteLightSurface,
-    outline = Color(0xFF74747C),
-    outlineVariant = Color(0xFFC4C6CD),
+    outline = LuminoteLightOutline,
+    outlineVariant = LuminoteLightOutlineVariant,
     surfaceContainerHighest = LuminoteLightSurfaceVariant
 )
 
 private val LuminoteDarkColorScheme = darkColorScheme(
     primary = LuminoteDarkPrimary,
     onPrimary = LuminoteDarkBackground,
+    primaryContainer = LuminoteDarkPrimaryContainer,
+    onPrimaryContainer = LuminoteDarkPrimary,
 
-    secondary = LuminoteDarkPrimary,
+    secondary = LuminoteDarkPrimaryDark,
     onSecondary = LuminoteDarkBackground,
-    secondaryContainer = Color(0xFF303030),
+    secondaryContainer = LuminoteDarkSurfaceVariant,
     onSecondaryContainer = LuminoteDarkOnSurface,
 
     background = LuminoteDarkBackground,
@@ -58,7 +63,7 @@ private val LuminoteDarkColorScheme = darkColorScheme(
     error = LuminoteError,
     onError = LuminoteDarkBackground,
     outline = LuminoteDarkOutline,
-    outlineVariant = LuminoteDarkOutline,
+    outlineVariant = LuminoteDarkOutlineVariant,
     surfaceContainerHighest = LuminoteDarkSurfaceVariant
 )
 
@@ -80,6 +85,8 @@ fun LuminoteTheme(
 
     SideEffect {
         val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
+        window.statusBarColor = colorScheme.background.toArgb()
+        window.navigationBarColor = colorScheme.background.toArgb()
         WindowCompat.getInsetsController(window, view).apply {
             isAppearanceLightStatusBars = !darkTheme
             isAppearanceLightNavigationBars = !darkTheme

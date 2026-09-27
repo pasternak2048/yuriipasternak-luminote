@@ -112,15 +112,9 @@ fun AccessScreen(
                 onBackClick = onBackClick
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = stringResource(R.string.access_intro),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Column(
             modifier = Modifier

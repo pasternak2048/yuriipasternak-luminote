@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,8 +25,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -41,11 +44,14 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.yp.luminote.app.ui.components.LuminoteExternalLinkIcon
 import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 import com.yp.luminote.app.ui.components.LuminoteScreenHeader
+import com.yp.luminote.app.ui.components.LuminoteSelectionControl
+import com.yp.luminote.app.ui.components.LuminoteSelectionRow
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
@@ -58,23 +64,25 @@ import com.yp.luminote.app.update.UpdateViewModel
 fun AboutScreen(
     onBackClick: () -> Unit,
     onEasterEggClick: () -> Unit,
-    updateViewModel: UpdateViewModel = viewModel()
+    showUpdatesOnly: Boolean = false
 ) {
-    val uriHandler = LocalUriHandler.current
-    val context = LocalContext.current
-    val packageInfo = remember(context) {
-        context.packageManager.getPackageInfo(
-            context.packageName,
-            PackageManager.PackageInfoFlags.of(0)
+    if (showUpdatesOnly) {
+        UpdatesScreen(onBackClick = onBackClick)
+    } else {
+        AboutContent(
+            onBackClick = onBackClick,
+            onEasterEggClick = onEasterEggClick
         )
     }
-    val versionInfo = stringResource(
-        R.string.version_info,
-        packageInfo.versionName ?: stringResource(R.string.unknown),
-        packageInfo.longVersionCode
-    )
+}
+
+@Composable
+private fun UpdatesScreen(
+    onBackClick: () -> Unit,
+    updateViewModel: UpdateViewModel = viewModel()
+) {
+    val context = LocalContext.current
     val backDescription = stringResource(R.string.back)
-    var versionTapCount by remember { mutableIntStateOf(0) }
     val updateChannel by updateViewModel.channel.collectAsState()
     val updateState by updateViewModel.state.collectAsState()
     val updateNotificationsEnabled by
@@ -105,31 +113,90 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             LuminoteScreenHeader(
+                title = stringResource(R.string.updates),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .luminoteSafeHorizontalPadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            UpdateBlock(
+                showTitle = false,
+                channel = updateChannel,
+                state = updateState,
+                notificationsEnabled = updateNotificationsEnabled,
+                notificationsAllowed = notificationsAllowed,
+                onChannelSelected = updateViewModel::selectChannel,
+                onCheckClick = updateViewModel::checkForUpdate,
+                onDownloadClick = updateViewModel::download,
+                onEnableNotificationsClick = {
+                    updateViewModel.setNotificationsEnabled(true)
+                    if (!notificationsAllowed) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                },
+                onDisableNotificationsClick = { updateViewModel.setNotificationsEnabled(false) },
+                onInstallClick = { apk ->
+                    if (UpdateInstaller.canInstallPackages(context)) UpdateInstaller.install(context, apk)
+                    else UpdateInstaller.openInstallPermission(context)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutContent(
+    onBackClick: () -> Unit,
+    onEasterEggClick: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val packageInfo = remember(context) {
+        context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0)
+        )
+    }
+    val versionInfo = stringResource(
+        R.string.version_info,
+        packageInfo.versionName ?: stringResource(R.string.unknown),
+        packageInfo.longVersionCode
+    )
+    val backDescription = stringResource(R.string.back)
+    var versionTapCount by remember { mutableIntStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .luminoteSafeHorizontalPadding()
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            LuminoteScreenHeader(
                 title = stringResource(R.string.about),
                 backContentDescription = backDescription,
                 onBackClick = onBackClick
             )
 
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = stringResource(R.string.about_tagline),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
+            Spacer(modifier = Modifier.height(24.dp))
         }
-
-        Spacer(modifier = Modifier.height(32.dp))
 
         Column(
             modifier = Modifier
@@ -148,8 +215,7 @@ fun AboutScreen(
             AboutBlock(title = stringResource(R.string.created_by)) {
                 Text(
                     text = stringResource(R.string.author_name),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
@@ -185,33 +251,6 @@ fun AboutScreen(
                 )
             }
 
-            UpdateBlock(
-                channel = updateChannel,
-                state = updateState,
-                notificationsEnabled = updateNotificationsEnabled,
-                notificationsAllowed = notificationsAllowed,
-                onChannelSelected = updateViewModel::selectChannel,
-                onCheckClick = updateViewModel::checkForUpdate,
-                onDownloadClick = updateViewModel::download,
-                onEnableNotificationsClick = {
-                    updateViewModel.setNotificationsEnabled(true)
-                    if (!notificationsAllowed) {
-                        notificationPermissionLauncher.launch(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        )
-                    }
-                },
-                onDisableNotificationsClick = {
-                    updateViewModel.setNotificationsEnabled(false)
-                },
-                onInstallClick = { apk ->
-                    if (UpdateInstaller.canInstallPackages(context)) {
-                        UpdateInstaller.install(context, apk)
-                    } else {
-                        UpdateInstaller.openInstallPermission(context)
-                    }
-                }
-            )
         }
     }
 }
@@ -220,20 +259,22 @@ private const val EASTER_EGG_TAP_COUNT = 7
 
 @Composable
 private fun AboutBlock(
-    title: String,
+    title: String?,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
     LuminoteSettingsCard(modifier = modifier) {
         Column(modifier = Modifier.padding(20.dp)) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(10.dp))
-        content()
+            if (title != null) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+            }
+            content()
         }
     }
 }
@@ -266,6 +307,7 @@ private fun AboutLink(title: String, subtitle: String, onClick: () -> Unit) {
 
 @Composable
 private fun UpdateBlock(
+    showTitle: Boolean = true,
     channel: UpdateChannel,
     state: UpdateUiState,
     notificationsEnabled: Boolean,
@@ -277,7 +319,7 @@ private fun UpdateBlock(
     onDisableNotificationsClick: () -> Unit,
     onInstallClick: (java.io.File) -> Unit
 ) {
-    AboutBlock(title = stringResource(R.string.updates)) {
+    AboutBlock(title = if (showTitle) stringResource(R.string.updates) else null) {
         Text(
             text = stringResource(R.string.update_channel),
             style = MaterialTheme.typography.bodyMedium,
@@ -286,18 +328,18 @@ private fun UpdateBlock(
 
         Spacer(modifier = Modifier.height(10.dp))
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        Column(
+            modifier = Modifier.selectableGroup(),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             UpdateChannel.entries.forEach { option ->
-                FilterChip(
+                LuminoteSelectionRow(
+                    title = stringResource(option.labelRes),
                     selected = channel == option,
                     onClick = {
                         onChannelSelected(option)
                     },
-                    label = {
-                        Text(stringResource(option.labelRes))
-                    }
+                    control = LuminoteSelectionControl.Radio
                 )
             }
         }
@@ -317,6 +359,9 @@ private fun UpdateBlock(
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
                     onClick = {
                         onDownloadClick(state.update)
                     }
@@ -332,6 +377,9 @@ private fun UpdateBlock(
                 UpdateStatus(stringResource(R.string.update_ready_to_install, state.update.versionName))
                 Spacer(modifier = Modifier.height(12.dp))
                 Button(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
                     onClick = {
                         onInstallClick(state.apk)
                     }
@@ -346,24 +394,41 @@ private fun UpdateBlock(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Button(onClick = onCheckClick) {
+        OutlinedButton(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+            onClick = onCheckClick
+        ) {
             Text(stringResource(R.string.check_now))
         }
 
         if (notificationsEnabled && notificationsAllowed) {
             Spacer(modifier = Modifier.height(12.dp))
-            Button(onClick = onDisableNotificationsClick) {
+            TextButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                onClick = onDisableNotificationsClick
+            ) {
                 Text(stringResource(R.string.disable_update_notifications))
             }
         } else {
             Spacer(modifier = Modifier.height(12.dp))
-            Button(onClick = onEnableNotificationsClick) {
+            OutlinedButton(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
+                onClick = onEnableNotificationsClick
+            ) {
                 Text(
                     if (notificationsAllowed) {
                         stringResource(R.string.enable_update_notifications)
                     } else {
                         stringResource(R.string.allow_update_notifications)
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
                 )
             }
         }
