@@ -1,70 +1,178 @@
 package com.yp.luminote.app.effects
 
-import android.view.Choreographer
 import com.yp.luminote.app.data.settings.HaloMotion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class HaloAnimationTest {
 
     @Test
-    fun `finite completion is cadence independent at 60 90 and 120 hz`() {
-        listOf(16_666_667L, 11_111_111L, 8_333_333L).forEach { cadence ->
-            val scheduler = FakeScheduler()
-            var completions = 0
-            val animation = HaloAnimation({}, onCompleted = { completions++ }, frameScheduler = scheduler)
-            animation.start(request())
-            scheduler.runUntil(700_000_000L, cadence)
-            assertEquals(1, completions)
-            assertFalse(scheduler.hasFrame)
-        }
+    fun `finite frames start immediately then use eight millisecond cadence`() {
+        val scheduler =
+            FakeFiniteScheduler()
+        val animation =
+            HaloAnimation(
+                onFrame = {},
+                finiteFrameScheduler = scheduler,
+                elapsedRealtimeMs = scheduler::nowMs
+            )
+
+        animation.start(request())
+
+        assertEquals(listOf(0L), scheduler.postedDelays)
+
+        scheduler.runNext()
+
+        assertEquals(listOf(0L, 8L), scheduler.postedDelays)
     }
 
     @Test
-    fun `cancel before first frame and stale frame after restart do not complete`() {
-        val scheduler = FakeScheduler()
-        var completions = 0
-        val animation = HaloAnimation({}, onCompleted = { completions++ }, frameScheduler = scheduler)
+    fun `cancel removes only animation runnable and stale finite runnable cannot complete`() {
+        val scheduler =
+            FakeFiniteScheduler()
+        var completions =
+            0
+        val animation =
+            HaloAnimation(
+                onFrame = {},
+                onCompleted = { completions++ },
+                finiteFrameScheduler = scheduler,
+                elapsedRealtimeMs = scheduler::nowMs
+            )
+
         animation.start(request())
-        val stale = scheduler.take()
+
+        val staleRunnable =
+            scheduler.lastPostedRunnable()
+        val unrelatedRunnable =
+            Runnable {}
+
+        scheduler.postDelayed(unrelatedRunnable, 100L)
         animation.cancel()
-        stale.doFrame(1L)
+
+        assertTrue(scheduler.contains(unrelatedRunnable))
+
+        staleRunnable.run()
         animation.start(request())
-        stale.doFrame(700_000_000L)
-        scheduler.runUntil(700_000_000L, 16_666_667L)
+        scheduler.runUntil(700L)
+
         assertEquals(1, completions)
+        assertFalse(scheduler.hasAnimationWork())
     }
 
     @Test
-    fun `slow snake repeats complete without watchdog style stall`() {
-        val scheduler = FakeScheduler()
-        var completions = 0
-        val animation = HaloAnimation({}, onCompleted = { completions++ }, frameScheduler = scheduler)
-        animation.start(request(duration = 0.6f, interval = 0.2f, cycles = 3, motion = HaloMotion.SNAKE))
-        scheduler.runUntil(2_500_000_000L, 16_666_667L)
+    fun `finite repeats use delayed restart without a display frame callback`() {
+        val scheduler =
+            FakeFiniteScheduler()
+        var completions =
+            0
+        val animation =
+            HaloAnimation(
+                onFrame = {},
+                onCompleted = { completions++ },
+                finiteFrameScheduler = scheduler,
+                elapsedRealtimeMs = scheduler::nowMs
+            )
+
+        animation.start(
+            request(
+                interval = 0.1f,
+                cycles = 2,
+                motion = HaloMotion.SNAKE
+            )
+        )
+
+        scheduler.runUntil(1_500L)
+
         assertEquals(1, completions)
     }
 
-    private fun request(duration: Float = 0.6f, interval: Float = 0f, cycles: Int = 1, motion: HaloMotion = HaloMotion.PULSE) =
-        HaloAnimationRequest(duration, interval, cycles != 1, cycles, false, motion)
+    private fun request(
+        duration: Float = 0.6f,
+        interval: Float = 0f,
+        cycles: Int = 1,
+        motion: HaloMotion = HaloMotion.PULSE
+    ) = HaloAnimationRequest(
+        duration,
+        interval,
+        cycles != 1,
+        cycles,
+        false,
+        motion
+    )
 
-    private class FakeScheduler : HaloFrameScheduler {
-        private var callback: Choreographer.FrameCallback? = null
-        var hasFrame = false
+    private class FakeFiniteScheduler : HaloFiniteFrameScheduler {
+        private data class Scheduled(
+            val runnable: Runnable,
+            val dueAtMs: Long
+        )
+
+        private val scheduled =
+            mutableListOf<Scheduled>()
+
+        val postedDelays =
+            mutableListOf<Long>()
+
+        var nowMs =
+            0L
             private set
-        override fun post(callback: Choreographer.FrameCallback) { this.callback = callback; hasFrame = true }
-        override fun remove(callback: Choreographer.FrameCallback) { if (this.callback === callback) { this.callback = null; hasFrame = false } }
-        fun take(): Choreographer.FrameCallback = requireNotNull(callback)
-        fun runUntil(limit: Long, cadence: Long) {
-            var time = 0L
-            while (hasFrame && time <= limit) {
-                val next = take()
-                hasFrame = false
-                callback = null
-                next.doFrame(time)
-                time += cadence
+
+        override fun postDelayed(
+            runnable: Runnable,
+            delayMs: Long
+        ) {
+            postedDelays += delayMs
+            scheduled += Scheduled(runnable, nowMs + delayMs)
+        }
+
+        override fun removeCallbacks(
+            runnable: Runnable
+        ) {
+            scheduled.removeAll {
+                it.runnable === runnable
             }
         }
+
+        fun lastPostedRunnable(): Runnable =
+            requireNotNull(scheduled.lastOrNull()).runnable
+
+        fun contains(
+            runnable: Runnable
+        ): Boolean = scheduled.any {
+            it.runnable === runnable
+        }
+
+        fun runUntil(
+            limitMs: Long
+        ) {
+            while (true) {
+                val next =
+                    scheduled.minByOrNull {
+                        it.dueAtMs
+                    } ?: return
+
+                if (next.dueAtMs > limitMs) {
+                    return
+                }
+
+                runNext()
+            }
+        }
+
+        fun runNext() {
+            val next =
+                scheduled.minByOrNull {
+                    it.dueAtMs
+                } ?: return
+
+            scheduled.remove(next)
+            nowMs = next.dueAtMs
+            next.runnable.run()
+        }
+
+        fun hasAnimationWork(): Boolean =
+            scheduled.isNotEmpty()
     }
 }
