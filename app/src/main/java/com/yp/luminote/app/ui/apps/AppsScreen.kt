@@ -205,21 +205,6 @@ fun AppsScreen(
                 onBackClick = onBackClick
             )
 
-            Spacer(
-                modifier =
-                    Modifier.height(10.dp)
-            )
-
-            Text(
-                text =
-                    stringResource(R.string.apps_intro),
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge,
-                color =
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         Spacer(

@@ -44,6 +44,7 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.yp.luminote.app.ui.components.LuminoteExternalLinkIcon
@@ -63,24 +64,25 @@ import com.yp.luminote.app.update.UpdateViewModel
 fun AboutScreen(
     onBackClick: () -> Unit,
     onEasterEggClick: () -> Unit,
-    showUpdatesOnly: Boolean = false,
-    updateViewModel: UpdateViewModel = viewModel()
+    showUpdatesOnly: Boolean = false
 ) {
-    val uriHandler = LocalUriHandler.current
-    val context = LocalContext.current
-    val packageInfo = remember(context) {
-        context.packageManager.getPackageInfo(
-            context.packageName,
-            PackageManager.PackageInfoFlags.of(0)
+    if (showUpdatesOnly) {
+        UpdatesScreen(onBackClick = onBackClick)
+    } else {
+        AboutContent(
+            onBackClick = onBackClick,
+            onEasterEggClick = onEasterEggClick
         )
     }
-    val versionInfo = stringResource(
-        R.string.version_info,
-        packageInfo.versionName ?: stringResource(R.string.unknown),
-        packageInfo.longVersionCode
-    )
+}
+
+@Composable
+private fun UpdatesScreen(
+    onBackClick: () -> Unit,
+    updateViewModel: UpdateViewModel = viewModel()
+) {
+    val context = LocalContext.current
     val backDescription = stringResource(R.string.back)
-    var versionTapCount by remember { mutableIntStateOf(0) }
     val updateChannel by updateViewModel.channel.collectAsState()
     val updateState by updateViewModel.state.collectAsState()
     val updateNotificationsEnabled by
@@ -111,7 +113,7 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             LuminoteScreenHeader(
-                title = stringResource(if (showUpdatesOnly) R.string.updates else R.string.about),
+                title = stringResource(R.string.updates),
                 backContentDescription = backDescription,
                 onBackClick = onBackClick
             )
@@ -126,27 +128,82 @@ fun AboutScreen(
                 .luminoteSafeHorizontalPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            if (showUpdatesOnly) {
-                UpdateBlock(
-                    showTitle = false,
-                    channel = updateChannel,
-                    state = updateState,
-                    notificationsEnabled = updateNotificationsEnabled,
-                    notificationsAllowed = notificationsAllowed,
-                    onChannelSelected = updateViewModel::selectChannel,
-                    onCheckClick = updateViewModel::checkForUpdate,
-                    onDownloadClick = updateViewModel::download,
-                    onEnableNotificationsClick = {
-                        updateViewModel.setNotificationsEnabled(true)
-                        if (!notificationsAllowed) notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    },
-                    onDisableNotificationsClick = { updateViewModel.setNotificationsEnabled(false) },
-                    onInstallClick = { apk ->
-                        if (UpdateInstaller.canInstallPackages(context)) UpdateInstaller.install(context, apk)
-                        else UpdateInstaller.openInstallPermission(context)
+            UpdateBlock(
+                showTitle = false,
+                channel = updateChannel,
+                state = updateState,
+                notificationsEnabled = updateNotificationsEnabled,
+                notificationsAllowed = notificationsAllowed,
+                onChannelSelected = updateViewModel::selectChannel,
+                onCheckClick = updateViewModel::checkForUpdate,
+                onDownloadClick = updateViewModel::download,
+                onEnableNotificationsClick = {
+                    updateViewModel.setNotificationsEnabled(true)
+                    if (!notificationsAllowed) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
-                )
-            } else {
+                },
+                onDisableNotificationsClick = { updateViewModel.setNotificationsEnabled(false) },
+                onInstallClick = { apk ->
+                    if (UpdateInstaller.canInstallPackages(context)) UpdateInstaller.install(context, apk)
+                    else UpdateInstaller.openInstallPermission(context)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AboutContent(
+    onBackClick: () -> Unit,
+    onEasterEggClick: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val packageInfo = remember(context) {
+        context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.PackageInfoFlags.of(0)
+        )
+    }
+    val versionInfo = stringResource(
+        R.string.version_info,
+        packageInfo.versionName ?: stringResource(R.string.unknown),
+        packageInfo.longVersionCode
+    )
+    val backDescription = stringResource(R.string.back)
+    var versionTapCount by remember { mutableIntStateOf(0) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .luminoteSafeHorizontalPadding()
+        ) {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            LuminoteScreenHeader(
+                title = stringResource(R.string.about),
+                backContentDescription = backDescription,
+                onBackClick = onBackClick
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .luminoteSafeHorizontalPadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
             AboutBlock(title = stringResource(R.string.about_luminote)) {
                 Text(
                     text = stringResource(R.string.about_description),
@@ -194,34 +251,6 @@ fun AboutScreen(
                 )
             }
 
-            UpdateBlock(
-                channel = updateChannel,
-                state = updateState,
-                notificationsEnabled = updateNotificationsEnabled,
-                notificationsAllowed = notificationsAllowed,
-                onChannelSelected = updateViewModel::selectChannel,
-                onCheckClick = updateViewModel::checkForUpdate,
-                onDownloadClick = updateViewModel::download,
-                onEnableNotificationsClick = {
-                    updateViewModel.setNotificationsEnabled(true)
-                    if (!notificationsAllowed) {
-                        notificationPermissionLauncher.launch(
-                            Manifest.permission.POST_NOTIFICATIONS
-                        )
-                    }
-                },
-                onDisableNotificationsClick = {
-                    updateViewModel.setNotificationsEnabled(false)
-                },
-                onInstallClick = { apk ->
-                    if (UpdateInstaller.canInstallPackages(context)) {
-                        UpdateInstaller.install(context, apk)
-                    } else {
-                        UpdateInstaller.openInstallPermission(context)
-                    }
-                }
-            )
-            }
         }
     }
 }
@@ -397,7 +426,9 @@ private fun UpdateBlock(
                         stringResource(R.string.enable_update_notifications)
                     } else {
                         stringResource(R.string.allow_update_notifications)
-                    }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Center
                 )
             }
         }

@@ -71,7 +71,6 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.app_name), style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
-                Text(stringResource(R.string.home_tagline), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             IconButton(onClick = onSettingsClick, modifier = Modifier.size(48.dp)) {
                 Icon(Icons.Outlined.Settings, stringResource(R.string.settings_content_description), tint = MaterialTheme.colorScheme.onBackground)
@@ -81,11 +80,11 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
         Column(contentModifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             HomeModeSelector(settings.haloMode, onModeSelected)
             when (settings.haloMode) {
-                HaloMode.NOTIFICATIONS -> { HomeAction(stringResource(R.string.luminote_halo), stringResource(R.string.home_halo_description), Icons.Outlined.Tune, onHaloClick); HomeAction(stringResource(R.string.apps), stringResource(R.string.home_apps_description), Icons.Outlined.Apps, onAppsClick) }
-                HaloMode.AMBIENT -> HomeAction(stringResource(R.string.ambient_halo), stringResource(R.string.home_ambient_description), Icons.Outlined.Notifications, onAmbientClick)
+                HaloMode.NOTIFICATIONS -> { HomeAction(stringResource(R.string.luminote_halo), Icons.Outlined.Tune, onHaloClick); HomeAction(stringResource(R.string.apps), Icons.Outlined.Apps, onAppsClick) }
+                HaloMode.AMBIENT -> HomeAction(stringResource(R.string.ambient_halo), Icons.Outlined.Notifications, onAmbientClick)
                 HaloMode.OFF -> Unit
             }
-            HomeAction(stringResource(R.string.access), stringResource(R.string.home_access_description), Icons.Outlined.Security, onAccessClick)
+            HomeAction(stringResource(R.string.access), Icons.Outlined.Security, onAccessClick)
             Spacer(Modifier.height(12.dp))
         }
     }
@@ -99,12 +98,6 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                stringResource(R.string.mode_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(Modifier.height(12.dp))
             Column(Modifier.selectableGroup()) {
@@ -125,6 +118,6 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
     )
 }
 
-@Composable private fun HomeAction(title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
-    LuminoteNavigationRow(title, subtitle, icon, onClick)
+@Composable private fun HomeAction(title: String, icon: ImageVector, onClick: () -> Unit) {
+    LuminoteNavigationRow(title = title, icon = icon, onClick = onClick)
 }

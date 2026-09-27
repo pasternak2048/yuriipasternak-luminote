@@ -2,10 +2,7 @@
 <resources>
     <string name="back">Назад</string>
     <string name="language">Мова</string>
-    <string name="home_language_description">Виберіть мову для Luminote</string>
-    <string name="language_intro">Виберіть мову, якою працюватиме Luminote.</string>
     <string name="language_system_default">Системна мова</string>
-    <string name="language_system_default_description">Використовувати системну мову телефона.</string>
     <string name="language_english">Англійська</string>
     <string name="language_polish">Польська</string>
     <string name="language_ukrainian">Українська</string>
@@ -20,8 +17,6 @@
     <string name="applications">Застосунки</string>
     <string name="ambient_halo">Постійне підсвічування</string>
     <string name="luminote_halo">Підсвічування Luminote</string>
-    <string name="home_tagline">Підсвічування для сповіщень і стиль екрана</string>
-    <string name="about_tagline">Підсвічування для сповіщень і стиль екрана.</string>
     <string name="about_luminote">Про Luminote</string>
     <string name="about_description">Luminote додає підсвічування навколо екрана для сповіщень і необов’язковий постійний ефект. Воно повторює форму екрана й не заважає вам.</string>
     <string name="created_by">Автор</string>
@@ -31,9 +26,9 @@
     <string name="unknown">Невідомо</string>
     <string name="updates">Оновлення</string>
     <string name="update_channel">Канал</string>
-    <string name="update_channel_stable">Стабільний</string>
-    <string name="update_channel_qa">Тестовий</string>
-    <string name="update_channel_dev">Для розробки</string>
+    <string name="update_channel_stable">Stable</string>
+    <string name="update_channel_qa">QA</string>
+    <string name="update_channel_dev">Dev</string>
     <string name="checking_updates">Перевіряємо оновлення…</string>
     <string name="no_update_available">Новішого оновлення каналу «%1$s» немає.</string>
     <string name="update_available">Доступна версія %1$s.</string>
@@ -51,7 +46,6 @@
     <string name="update_notification_text">Канал «%1$s» • Торкніться, щоб оновити</string>
     <string name="update_notification_channel_name">Оновлення застосунку</string>
     <string name="update_notification_channel_description">Сповіщення, коли готове оновлення Luminote.</string>
-    <string name="access_intro">Виберіть, що Luminote може використовувати для підсвічування краю екрана.</string>
     <string name="display_over_other_apps">Показ поверх інших застосунків</string>
     <string name="display_over_other_apps_description">Дозволяє Luminote показувати підсвічування поверх застосунку, яким ви користуєтеся. Коли підсвічування активне, його модуль відтворення працює як служба переднього плану з постійним сповіщенням.</string>
     <string name="notification_access">Доступ до сповіщень</string>
@@ -69,13 +63,10 @@
     <string name="test_halo">Перевірити підсвічування</string>
     <string name="allowed">Дозволено</string>
     <string name="required">Потрібно</string>
-    <string name="ambient_intro">Залишайте власне підсвічування вздовж краю екрана, поки він увімкнений.</string>
-    <string name="customize_notification_lighting">Виберіть вигляд підсвічування для сповіщень.</string>
     <string name="colors">Кольори</string>
     <string name="animation">Анімація</string>
     <string name="appearance">Вигляд</string>
     <string name="theme">Тема</string>
-    <string name="theme_description">Виберіть вигляд Luminote.</string>
     <string name="theme_system_default">Системна</string>
     <string name="theme_light">Світла</string>
     <string name="theme_dark">Темна</string>
@@ -97,7 +88,6 @@
     <string name="repeat_after">Повторити через</string>
     <string name="stops_when_alerts_dismissed">Зупиняється, коли всі відповідні сповіщення закрито.</string>
     <string name="repeat_notification_effect">Повторювати ефект сповіщень</string>
-    <string name="repeat_notification_effect_description">Повторювати ефект для непрочитаних сповіщень.</string>
     <string name="preview_halo">Переглянути підсвічування</string>
     <string name="turn_off_ambient_to_preview">Вимкніть постійне підсвічування для перегляду</string>
     <plurals name="times">
@@ -109,7 +99,6 @@
     <string name="seconds">%1$s с</string>
     <string name="multiplier">%1$s×</string>
     <string name="percentage">%1$d%%</string>
-    <string name="apps_intro">Виберіть застосунки, які можуть вмикати підсвічування.</string>
     <plurals name="selected_apps">
         <item quantity="one">Вибрано %d</item>
         <item quantity="few">Вибрано %d</item>
@@ -126,34 +115,17 @@
     <string name="no_apps_found">Застосунків не знайдено</string>
     <string name="mode">Режим</string>
     <string name="working_mode">Режим роботи</string>
-    <string name="mode_description">Виберіть, коли Luminote використовує край екрана.</string>
     <string name="alerts">Сповіщення</string>
     <string name="ambient">Постійне</string>
     <string name="off">Вимкнено</string>
-    <string name="home_halo_description">Ефекти сповіщень і вигляд</string>
-    <string name="home_apps_description">Виберіть застосунки, які можуть вмикати підсвічування</string>
-    <string name="home_ambient_description">Залишити власний ефект уздовж краю екрана</string>
-    <string name="home_access_description">Доступ для сповіщень і ефектів краю екрана</string>
-    <string name="home_about_description">Luminote, його автор і вихідний код</string>
     <string name="easter_egg_line_one">Деякі вогні ніколи не згасають.</string>
     <string name="easter_egg_line_two">Жартую.</string>
     <string name="frame_edge">Контур екрана</string>
-    <string name="frame_edge_description">Повторює форму екрана</string>
     <string name="motion_pulse">Пульсація</string>
-    <string name="motion_pulse_description">Проста пульсація вздовж краю</string>
-    <string name="motion_pulse_ambient_description">М’яко світиться вздовж краю</string>
     <string name="motion_snake">Змійка</string>
-    <string name="motion_snake_description">Сегмент світла рухається вздовж краю</string>
-    <string name="motion_snake_ambient_description">Безперервно рухається вздовж краю</string>
     <string name="motion_corner_pulse">Пульсація кутів</string>
-    <string name="motion_corner_pulse_description">Світло рухається між чотирма кутами</string>
-    <string name="motion_corner_pulse_ambient_description">М’яко переводить увагу між кутами</string>
     <string name="motion_rain">Дощ</string>
-    <string name="motion_rain_description">Світло спадає вздовж обох країв</string>
-    <string name="motion_rain_ambient_description">Створює м’який дощ уздовж країв</string>
     <string name="motion_ripple_edge">Хвилі по краю</string>
-    <string name="motion_ripple_edge_description">Дві хвилі рухаються навколо контуру</string>
-    <string name="motion_ripple_edge_ambient_description">М’які хвилі рухаються вздовж краю</string>
     <string name="color_swatch">Колір %1$s</string>
     <string name="gradient_color">Градієнтний колір</string>
     <string name="selected_state">Вибрано</string>
@@ -161,7 +133,5 @@
     <string name="expanded_state">Розгорнуто</string>
     <string name="collapsed_state">Згорнуто</string>
     <string name="settings">Налаштування</string>
-    <string name="settings_appearance_description">Тема й візуальні параметри</string>
-    <string name="settings_updates_description">Канал та сповіщення про оновлення</string>
     <string name="settings_content_description">Відкрити налаштування</string>
 </resources>

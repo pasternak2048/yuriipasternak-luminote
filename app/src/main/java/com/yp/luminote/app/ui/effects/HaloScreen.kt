@@ -116,20 +116,6 @@ fun HaloScreen(
                 onBackClick = onBackClick
             )
 
-            Spacer(
-                modifier =
-                    Modifier.height(10.dp)
-            )
-
-            Text(
-                text =
-                    stringResource(R.string.customize_notification_lighting),
-                style =
-                    MaterialTheme
-                        .typography
-                        .bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         /*
@@ -483,7 +469,6 @@ private fun TimingGroup(
 
         if (settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
             Spacer(modifier = Modifier.height(16.dp))
-            Text(stringResource(settings.haloMotion.definition.ambientDescriptionRes), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(stringResource(R.string.stops_when_alerts_dismissed), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
@@ -495,7 +480,6 @@ private fun RepeatHaloSetting(enabled: Boolean, onEnabledChange: (Boolean) -> Un
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
             Text(stringResource(R.string.repeat_notification_effect), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-            Text(stringResource(R.string.repeat_notification_effect_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }

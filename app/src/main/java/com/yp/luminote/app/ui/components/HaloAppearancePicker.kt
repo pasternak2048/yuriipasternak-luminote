@@ -33,10 +33,8 @@ fun HaloAppearancePicker(
             Text(stringResource(R.string.frame), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
             Column(modifier = Modifier.fillMaxWidth().selectableGroup()) {
                 HaloFrame.entries.forEach { candidate ->
-                    val definition = candidate.definition
                     LuminoteSelectionRow(
-                        title = stringResource(definition.titleRes),
-                        description = stringResource(definition.descriptionRes),
+                        title = stringResource(candidate.definition.titleRes),
                         selected = frame == candidate,
                         // CLASSIC is currently the only supported frame. Keep this a radio
                         // group so future frame options use the same accessible contract.
@@ -53,10 +51,8 @@ fun HaloAppearancePicker(
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 availableMotions.forEach { candidate ->
-                    val definition = candidate.definition
                     LuminoteSelectionRow(
-                        title = stringResource(definition.titleRes),
-                        description = stringResource(definition.descriptionRes),
+                        title = stringResource(candidate.definition.titleRes),
                         selected = motion == candidate,
                         onClick = { onMotionSelected(candidate) },
                         control = LuminoteSelectionControl.Radio

@@ -33,10 +33,10 @@ import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 @Composable
 fun SettingsScreen(onBackClick: () -> Unit, onAppearanceClick: () -> Unit, onLanguageClick: () -> Unit, onUpdatesClick: () -> Unit, onAboutClick: () -> Unit) {
     SettingsPage(title = stringResource(R.string.settings), onBackClick = onBackClick) {
-        SettingsItem(stringResource(R.string.appearance), stringResource(R.string.settings_appearance_description), Icons.Outlined.Palette, onAppearanceClick)
-        SettingsItem(stringResource(R.string.language), stringResource(R.string.home_language_description), Icons.Outlined.Language, onLanguageClick)
-        SettingsItem(stringResource(R.string.updates), stringResource(R.string.settings_updates_description), Icons.Outlined.SystemUpdate, onUpdatesClick)
-        SettingsItem(stringResource(R.string.about), stringResource(R.string.home_about_description), Icons.Outlined.Info, onAboutClick)
+        SettingsItem(stringResource(R.string.appearance), Icons.Outlined.Palette, onAppearanceClick)
+        SettingsItem(stringResource(R.string.language), Icons.Outlined.Language, onLanguageClick)
+        SettingsItem(stringResource(R.string.updates), Icons.Outlined.SystemUpdate, onUpdatesClick)
+        SettingsItem(stringResource(R.string.about), Icons.Outlined.Info, onAboutClick)
     }
 }
 
@@ -47,8 +47,6 @@ fun AppearanceScreen(onBackClick: () -> Unit, viewModel: LuminoteSettingsViewMod
         LuminoteSettingsCard {
             Column(Modifier.padding(20.dp)) {
                 Text(stringResource(R.string.theme), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-                Spacer(Modifier.height(4.dp))
-                Text(stringResource(R.string.theme_description), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.height(12.dp))
                 Column(Modifier.selectableGroup()) {
                     ThemeMode.entries.forEach { option ->
@@ -80,6 +78,6 @@ private fun SettingsPage(title: String, onBackClick: () -> Unit, content: @Compo
 }
 
 @Composable
-private fun SettingsItem(title: String, subtitle: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
-    LuminoteNavigationRow(title, subtitle, icon, onClick)
+private fun SettingsItem(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+    LuminoteNavigationRow(title = title, icon = icon, onClick = onClick)
 }

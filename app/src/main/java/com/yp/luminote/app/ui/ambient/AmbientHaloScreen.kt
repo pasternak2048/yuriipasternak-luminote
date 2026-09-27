@@ -97,12 +97,6 @@ fun AmbientHaloScreen(
                 onBackClick = onBackClick,
                 backButtonSize = uiMetrics.backButtonSize
             )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = stringResource(R.string.ambient_intro),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
 
         Spacer(modifier = Modifier.height(uiMetrics.sectionSpacing))

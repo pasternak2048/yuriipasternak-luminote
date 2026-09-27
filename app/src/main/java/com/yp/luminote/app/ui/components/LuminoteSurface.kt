@@ -168,7 +168,7 @@ fun LuminoteSelectionRow(
 @Composable
 fun LuminoteNavigationRow(
     title: String,
-    subtitle: String,
+    subtitle: String? = null,
     icon: ImageVector,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -176,7 +176,7 @@ fun LuminoteNavigationRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 72.dp)
+            .heightIn(min = if (subtitle == null) 56.dp else 72.dp)
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -189,7 +189,9 @@ fun LuminoteNavigationRow(
         )
         Column(modifier = Modifier.weight(1f).padding(start = 16.dp, end = 12.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            subtitle?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         LuminoteForwardIcon(MaterialTheme.colorScheme.onSurfaceVariant)
     }

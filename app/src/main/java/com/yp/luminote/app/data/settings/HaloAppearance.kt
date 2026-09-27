@@ -18,16 +18,13 @@ enum class HaloMotion {
 data class HaloFrameDefinition(
     val frame: HaloFrame,
     @get:StringRes val titleRes: Int,
-    @get:StringRes val descriptionRes: Int,
     val supportedMotions: List<HaloMotion>
 )
 
 data class HaloMotionDefinition(
     val motion: HaloMotion,
     @get:StringRes val titleRes: Int,
-    @get:StringRes val descriptionRes: Int,
-    val baseDurationSeconds: Float,
-    @get:StringRes val ambientDescriptionRes: Int
+    val baseDurationSeconds: Float
 )
 
 /** Single source of truth for selectable frames, animations and their capabilities. */
@@ -36,7 +33,6 @@ object HaloEffectCatalog {
         HaloFrameDefinition(
             frame = HaloFrame.CLASSIC,
             titleRes = R.string.frame_edge,
-            descriptionRes = R.string.frame_edge_description,
             supportedMotions = listOf(HaloMotion.PULSE, HaloMotion.SNAKE, HaloMotion.CORNER_PULSE, HaloMotion.RAIN, HaloMotion.RIPPLE_EDGE)
         )
     )
@@ -45,37 +41,27 @@ object HaloEffectCatalog {
         HaloMotionDefinition(
             motion = HaloMotion.PULSE,
             titleRes = R.string.motion_pulse,
-            descriptionRes = R.string.motion_pulse_description,
-            baseDurationSeconds = 2.5f,
-            ambientDescriptionRes = R.string.motion_pulse_ambient_description
+            baseDurationSeconds = 2.5f
         ),
         HaloMotionDefinition(
             motion = HaloMotion.SNAKE,
             titleRes = R.string.motion_snake,
-            descriptionRes = R.string.motion_snake_description,
-            baseDurationSeconds = 2.5f,
-            ambientDescriptionRes = R.string.motion_snake_ambient_description
+            baseDurationSeconds = 2.5f
         ),
         HaloMotionDefinition(
             motion = HaloMotion.CORNER_PULSE,
             titleRes = R.string.motion_corner_pulse,
-            descriptionRes = R.string.motion_corner_pulse_description,
-            baseDurationSeconds = 2.8f,
-            ambientDescriptionRes = R.string.motion_corner_pulse_ambient_description
+            baseDurationSeconds = 2.8f
         ),
         HaloMotionDefinition(
             motion = HaloMotion.RAIN,
             titleRes = R.string.motion_rain,
-            descriptionRes = R.string.motion_rain_description,
-            baseDurationSeconds = 2.6f,
-            ambientDescriptionRes = R.string.motion_rain_ambient_description
+            baseDurationSeconds = 2.6f
         ),
         HaloMotionDefinition(
             motion = HaloMotion.RIPPLE_EDGE,
             titleRes = R.string.motion_ripple_edge,
-            descriptionRes = R.string.motion_ripple_edge_description,
-            baseDurationSeconds = 2.8f,
-            ambientDescriptionRes = R.string.motion_ripple_edge_ambient_description
+            baseDurationSeconds = 2.8f
         )
     )
 

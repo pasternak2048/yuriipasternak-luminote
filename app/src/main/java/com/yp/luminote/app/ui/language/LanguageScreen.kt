@@ -15,7 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,15 +69,7 @@ fun LanguageScreen(
             onBackClick = onBackClick
         )
 
-        Spacer(modifier = Modifier.height(18.dp))
-
-        Text(
-            text = stringResource(R.string.language_intro),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         LuminoteSettingsCard {
             Column(
@@ -89,7 +80,6 @@ fun LanguageScreen(
             ) {
                 LanguageOption(
                     title = stringResource(R.string.language_system_default),
-                    description = stringResource(R.string.language_system_default_description),
                     selected = selectedLanguage == AppLanguage.SYSTEM_DEFAULT,
                     onClick = {
                         localeManager.applicationLocales = LocaleList.getEmptyLocaleList()
@@ -132,12 +122,10 @@ fun LanguageScreen(
 private fun LanguageOption(
     title: String,
     selected: Boolean,
-    onClick: () -> Unit,
-    description: String? = null
+    onClick: () -> Unit
 ) {
     LuminoteSelectionRow(
         title = title,
-        description = description,
         selected = selected,
         onClick = onClick,
         control = LuminoteSelectionControl.Radio
