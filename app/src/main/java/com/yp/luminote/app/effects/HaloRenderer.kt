@@ -74,6 +74,10 @@ internal class HaloRenderer(
                 renderStrokeWidth
         }
 
+    /** Separate multi-head surface; conventional motions keep their established renderer path. */
+    private val forceBlades =
+        ForceBladesRenderer(outline)
+
     fun update(
         config: HaloConfig
     ) {
@@ -122,6 +126,17 @@ internal class HaloRenderer(
                 )
 
         if (baseAlpha == 0) {
+            return
+        }
+
+        if (config.motion.isForceBlade) {
+            forceBlades.draw(
+                canvas = canvas,
+                motion = config.motion,
+                phase = effectPhase,
+                alpha = baseAlpha,
+                strokeWidth = renderStrokeWidth
+            )
             return
         }
 
@@ -271,6 +286,10 @@ internal class HaloRenderer(
                     paint,
                     phase
                 )
+
+            HaloMotion.AZURE_BLADE,
+            HaloMotion.CRIMSON_BLADE,
+            HaloMotion.FORCE_CLASH -> Unit
         }
     }
 
@@ -1239,3 +1258,8 @@ internal class HaloRenderer(
             -0x1000000
     }
 }
+
+private val HaloMotion.isForceBlade: Boolean
+    get() = this == HaloMotion.AZURE_BLADE ||
+        this == HaloMotion.CRIMSON_BLADE ||
+        this == HaloMotion.FORCE_CLASH
