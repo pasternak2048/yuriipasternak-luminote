@@ -126,6 +126,9 @@
     <string name="motion_corner_pulse">Pulsowanie narożników</string>
     <string name="motion_rain">Deszcz</string>
     <string name="motion_ripple_edge">Falująca krawędź</string>
+    <string name="motion_azure_blade">Jasna strona</string>
+    <string name="motion_crimson_blade">Ciemna strona</string>
+    <string name="motion_force_clash">Pojedynek losów</string>
     <string name="color_swatch">Kolor %1$s</string>
     <string name="gradient_color">Kolor gradientu</string>
     <string name="selected_state">Wybrano</string>

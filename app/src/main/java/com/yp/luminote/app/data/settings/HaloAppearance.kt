@@ -12,7 +12,10 @@ enum class HaloMotion {
     SNAKE,
     CORNER_PULSE,
     RAIN,
-    RIPPLE_EDGE
+    RIPPLE_EDGE,
+    AZURE_BLADE,
+    CRIMSON_BLADE,
+    FORCE_CLASH
 }
 
 data class HaloFrameDefinition(
@@ -33,7 +36,16 @@ object HaloEffectCatalog {
         HaloFrameDefinition(
             frame = HaloFrame.CLASSIC,
             titleRes = R.string.frame_edge,
-            supportedMotions = listOf(HaloMotion.PULSE, HaloMotion.SNAKE, HaloMotion.CORNER_PULSE, HaloMotion.RAIN, HaloMotion.RIPPLE_EDGE)
+            supportedMotions = listOf(
+                HaloMotion.PULSE,
+                HaloMotion.SNAKE,
+                HaloMotion.CORNER_PULSE,
+                HaloMotion.RAIN,
+                HaloMotion.RIPPLE_EDGE,
+                HaloMotion.AZURE_BLADE,
+                HaloMotion.CRIMSON_BLADE,
+                HaloMotion.FORCE_CLASH
+            )
         )
     )
 
@@ -62,6 +74,21 @@ object HaloEffectCatalog {
             motion = HaloMotion.RIPPLE_EDGE,
             titleRes = R.string.motion_ripple_edge,
             baseDurationSeconds = 2.8f
+        ),
+        HaloMotionDefinition(
+            motion = HaloMotion.AZURE_BLADE,
+            titleRes = R.string.motion_azure_blade,
+            baseDurationSeconds = 3.4f
+        ),
+        HaloMotionDefinition(
+            motion = HaloMotion.CRIMSON_BLADE,
+            titleRes = R.string.motion_crimson_blade,
+            baseDurationSeconds = 3.0f
+        ),
+        HaloMotionDefinition(
+            motion = HaloMotion.FORCE_CLASH,
+            titleRes = R.string.motion_force_clash,
+            baseDurationSeconds = 3.6f
         )
     )
 

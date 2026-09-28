@@ -124,6 +124,9 @@
     <string name="motion_corner_pulse">Corner pulse</string>
     <string name="motion_rain">Rain</string>
     <string name="motion_ripple_edge">Ripple edge</string>
+    <string name="motion_azure_blade">Light Side</string>
+    <string name="motion_crimson_blade">Dark Side</string>
+    <string name="motion_force_clash">Duel of the Fates</string>
     <string name="color_swatch">Color %1$s</string>
     <string name="gradient_color">Gradient color</string>
     <string name="selected_state">Selected</string>
