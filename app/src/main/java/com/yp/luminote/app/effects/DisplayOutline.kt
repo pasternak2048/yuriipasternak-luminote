@@ -59,7 +59,6 @@ internal class DisplayOutline(private val density: Float) {
      * transform. Corner-shape and per-corner deformation are intentionally not applied: their
      * replacement geometry distorted physical corners on devices with real RoundedCorner data.
      */
-    @Suppress("UNUSED_PARAMETER")
     fun centerlinePath(
         strokeWidth: Float,
         edgeCalibrationPx: Float = 0f,
@@ -92,7 +91,7 @@ internal class DisplayOutline(private val density: Float) {
             cornerShape
                 .takeIf { it.isFinite() }
                 ?.coerceIn(0f, 1f)
-                ?: 0.5f
+                ?: DEFAULT_CORNER_SHAPE
 
         val envelope =
             extraEnvelopePx
@@ -100,10 +99,43 @@ internal class DisplayOutline(private val density: Float) {
                 ?.coerceAtLeast(0f)
                 ?: 0f
 
-        val inset = halfStroke + edgeOffset + envelope
+        /*
+         * edgeCalibrationPx already contains the automatic optical inset supplied
+         * by the renderer. Remove it here so we can distinguish the automatic
+         * baseline from the user's calibration delta.
+         */
+        val userEdgeCalibrationPx = edgeOffset - opticalInsetPx
+
+        val hasCornerCalibration =
+            abs(cornerOffset) > CALIBRATION_EPSILON_PX
+
+        val hasCornerShapeCalibration =
+            abs(shape - DEFAULT_CORNER_SHAPE) > CALIBRATION_EPSILON
+
+        /*
+         * IMPORTANT:
+         *
+         * With neutral corner calibration we preserve the exact established
+         * physical-display rendering path.
+         *
+         * Edge calibration remains a simple additional inset/outset on top of
+         * that automatically detected display geometry.
+         */
+        if (!hasCornerCalibration && !hasCornerShapeCalibration) {
+            return strokePath(
+                halfStroke +
+                        opticalInsetPx +
+                        userEdgeCalibrationPx +
+                        envelope
+            )
+        }
 
         return buildCalibratedCenterline(
-            insetPx = inset,
+            insetPx =
+                halfStroke +
+                        opticalInsetPx +
+                        userEdgeCalibrationPx +
+                        envelope,
             cornerCalibrationPx = cornerOffset,
             cornerShape = shape
         )
@@ -122,10 +154,16 @@ internal class DisplayOutline(private val density: Float) {
         val bottom = height.toFloat() - insetPx
 
         if (right <= left || bottom <= top) {
-            return Path(displayPath)
+            return strokePath(insetPx)
         }
 
-        val sourceRadii =
+        /*
+         * The detected physical corner geometry remains the baseline.
+         *
+         * Only when Android cannot provide valid RoundedCorner data do we use
+         * the existing fallback radius.
+         */
+        val physicalRadii =
             cornerRadii ?: FloatArray(4) {
                 minOf(width, height) * CORNER_RADIUS_FRACTION
             }
@@ -136,106 +174,203 @@ internal class DisplayOutline(private val density: Float) {
                 (bottom - top) / 2f
             ).coerceAtLeast(0f)
 
-        fun calibratedRadius(sourceRadius: Float): Float =
-            (
-                    sourceRadius -
-                            insetPx +
+        fun resolveCornerExtent(physicalRadius: Float): Float {
+            val automaticRadius =
+                physicalRadius - insetPx
+
+            return (
+                    automaticRadius +
                             cornerCalibrationPx
                     ).coerceIn(
                     0f,
                     maxCornerExtent
                 )
+        }
 
-        val topLeftRadius = calibratedRadius(sourceRadii[0])
-        val topRightRadius = calibratedRadius(sourceRadii[1])
-        val bottomRightRadius = calibratedRadius(sourceRadii[2])
-        val bottomLeftRadius = calibratedRadius(sourceRadii[3])
+        val topLeft = resolveCornerExtent(physicalRadii[0])
+        val topRight = resolveCornerExtent(physicalRadii[1])
+        val bottomRight = resolveCornerExtent(physicalRadii[2])
+        val bottomLeft = resolveCornerExtent(physicalRadii[3])
 
-        /*
-         * 0.55228475 is the standard cubic Bézier approximation of a quarter circle.
-         *
-         * Corner Shape changes only the Bézier handle length.
-         * The corner start/end points remain fixed, so changing shape does NOT
-         * change the length of the adjoining straight sections.
-         *
-         * 0.5 = neutral / circular-looking default.
-         */
         val bezierFactor =
-            lerp(
-                CORNER_SHAPE_MIN_FACTOR,
-                CORNER_SHAPE_MAX_FACTOR,
-                cornerShape.coerceIn(0f, 1f)
-            )
+            resolveCornerBezierFactor(cornerShape)
 
         return Path().apply {
-            // Start on the top edge, immediately after the top-left corner.
+            /*
+             * Top-left -> top-right
+             */
             moveTo(
-                left + topLeftRadius,
+                left + topLeft,
                 top
             )
 
-            // Top edge -> top-right corner.
             lineTo(
-                right - topRightRadius,
+                right - topRight,
                 top
             )
 
-            cubicTo(
-                right - topRightRadius + topRightRadius * bezierFactor,
-                top,
-                right,
-                top + topRightRadius - topRightRadius * bezierFactor,
-                right,
-                top + topRightRadius
+            appendTopRightCorner(
+                right = right,
+                top = top,
+                radius = topRight,
+                factor = bezierFactor
             )
 
-            // Right edge -> bottom-right corner.
+            /*
+             * Top-right -> bottom-right
+             */
             lineTo(
                 right,
-                bottom - bottomRightRadius
+                bottom - bottomRight
             )
 
-            cubicTo(
-                right,
-                bottom - bottomRightRadius + bottomRightRadius * bezierFactor,
-                right - bottomRightRadius + bottomRightRadius * bezierFactor,
-                bottom,
-                right - bottomRightRadius,
+            appendBottomRightCorner(
+                right = right,
+                bottom = bottom,
+                radius = bottomRight,
+                factor = bezierFactor
+            )
+
+            /*
+             * Bottom-right -> bottom-left
+             */
+            lineTo(
+                left + bottomLeft,
                 bottom
             )
 
-            // Bottom edge -> bottom-left corner.
-            lineTo(
-                left + bottomLeftRadius,
-                bottom
+            appendBottomLeftCorner(
+                left = left,
+                bottom = bottom,
+                radius = bottomLeft,
+                factor = bezierFactor
             )
 
-            cubicTo(
-                left + bottomLeftRadius - bottomLeftRadius * bezierFactor,
-                bottom,
-                left,
-                bottom - bottomLeftRadius + bottomLeftRadius * bezierFactor,
-                left,
-                bottom - bottomLeftRadius
-            )
-
-            // Left edge -> top-left corner.
+            /*
+             * Bottom-left -> top-left
+             */
             lineTo(
                 left,
-                top + topLeftRadius
+                top + topLeft
             )
 
-            cubicTo(
-                left,
-                top + topLeftRadius - topLeftRadius * bezierFactor,
-                left + topLeftRadius - topLeftRadius * bezierFactor,
-                top,
-                left + topLeftRadius,
-                top
+            appendTopLeftCorner(
+                left = left,
+                top = top,
+                radius = topLeft,
+                factor = bezierFactor
             )
 
             close()
         }
+    }
+
+    private fun Path.appendTopRightCorner(
+        right: Float,
+        top: Float,
+        radius: Float,
+        factor: Float
+    ) {
+        if (radius <= 0f) {
+            lineTo(right, top)
+            return
+        }
+
+        val handle = radius * factor
+
+        cubicTo(
+            right - radius + handle,
+            top,
+            right,
+            top + radius - handle,
+            right,
+            top + radius
+        )
+    }
+
+    private fun Path.appendBottomRightCorner(
+        right: Float,
+        bottom: Float,
+        radius: Float,
+        factor: Float
+    ) {
+        if (radius <= 0f) {
+            lineTo(right, bottom)
+            return
+        }
+
+        val handle = radius * factor
+
+        cubicTo(
+            right,
+            bottom - radius + handle,
+            right - radius + handle,
+            bottom,
+            right - radius,
+            bottom
+        )
+    }
+
+    private fun Path.appendBottomLeftCorner(
+        left: Float,
+        bottom: Float,
+        radius: Float,
+        factor: Float
+    ) {
+        if (radius <= 0f) {
+            lineTo(left, bottom)
+            return
+        }
+
+        val handle = radius * factor
+
+        cubicTo(
+            left + radius - handle,
+            bottom,
+            left,
+            bottom - radius + handle,
+            left,
+            bottom - radius
+        )
+    }
+
+    private fun Path.appendTopLeftCorner(
+        left: Float,
+        top: Float,
+        radius: Float,
+        factor: Float
+    ) {
+        if (radius <= 0f) {
+            lineTo(left, top)
+            return
+        }
+
+        val handle = radius * factor
+
+        cubicTo(
+            left,
+            top + radius - handle,
+            left + radius - handle,
+            top,
+            left + radius,
+            top
+        )
+    }
+
+    private fun resolveCornerBezierFactor(
+        cornerShape: Float
+    ): Float {
+        val normalized =
+            cornerShape
+                .takeIf { it.isFinite() }
+                ?.coerceIn(0f, 1f)
+                ?: DEFAULT_CORNER_SHAPE
+
+        return lerp(
+            CORNER_SHAPE_MIN_FACTOR,
+            CORNER_SHAPE_MAX_FACTOR,
+            normalized
+        )
     }
 
     private fun rebuildDisplayPath() {
@@ -360,12 +495,20 @@ internal class DisplayOutline(private val density: Float) {
     companion object {
         private const val CORNER_RADIUS_FRACTION = 0.035f
         private const val MAX_CORNER_RADIUS_FRACTION = 0.25f
+
+        private const val DEFAULT_CORNER_SHAPE = 0.5f
+
         private const val QUARTER_CIRCLE_BEZIER_FACTOR = 0.55228475f
         private const val CORNER_SHAPE_RANGE = 0.18f
+
         private const val CORNER_SHAPE_MIN_FACTOR =
             QUARTER_CIRCLE_BEZIER_FACTOR - CORNER_SHAPE_RANGE
+
         private const val CORNER_SHAPE_MAX_FACTOR =
             QUARTER_CIRCLE_BEZIER_FACTOR + CORNER_SHAPE_RANGE
+
+        private const val CALIBRATION_EPSILON = 0.0001f
+        private const val CALIBRATION_EPSILON_PX = 0.01f
 
         fun isInViewCoordinates(
             path: Path,
@@ -375,10 +518,11 @@ internal class DisplayOutline(private val density: Float) {
         ): Boolean {
             val bounds = RectF()
             path.computeBounds(bounds, true)
+
             return abs(bounds.left) <= tolerancePx &&
-                abs(bounds.top) <= tolerancePx &&
-                abs(bounds.right - width) <= tolerancePx &&
-                abs(bounds.bottom - height) <= tolerancePx
+                    abs(bounds.top) <= tolerancePx &&
+                    abs(bounds.right - width) <= tolerancePx &&
+                    abs(bounds.bottom - height) <= tolerancePx
         }
     }
 }
