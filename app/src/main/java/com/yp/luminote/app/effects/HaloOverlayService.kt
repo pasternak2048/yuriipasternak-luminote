@@ -230,12 +230,15 @@ class HaloOverlayService : Service() {
         if (intent?.getBooleanExtra(EXTRA_STOP_CALIBRATION, false) == true) {
             if (CalibrationPreviewSession.isCurrent(commandCalibrationToken)) {
                 CalibrationPreviewSession.stop(commandCalibrationToken)
+
+                calibrationToken = null
                 pendingCalibrationIntent = null
                 lastCalibrationIntent = null
-                if (!effectCoordinator.isBusy() && previewMode) {
-                    removeOverlay(); stopSelf()
-                }
+
+                removeOverlay()
+                stopSelf()
             }
+
             return START_NOT_STICKY
         }
         if (commandCalibrationToken != null && !CalibrationPreviewSession.isCurrent(commandCalibrationToken)) return START_NOT_STICKY
@@ -269,9 +272,14 @@ class HaloOverlayService : Service() {
             notificationKey != null
         ) {
             if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
-                pendingCalibrationIntent = lastCalibrationIntent
-                removeOverlay()
+                Log.d(
+                    TAG,
+                    "Notification ignored by renderer while display calibration is active"
+                )
+
+                return START_NOT_STICKY
             }
+
             val request =
                 HaloEffectRequest(
                     packageName = packageName,

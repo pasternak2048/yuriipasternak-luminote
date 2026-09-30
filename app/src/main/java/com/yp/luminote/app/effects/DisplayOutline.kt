@@ -67,13 +67,176 @@ internal class DisplayOutline(private val density: Float) {
         cornerShape: Float = 0.5f,
         extraEnvelopePx: Float = 0f
     ): Path {
-        val halfStroke = strokeWidth.takeIf { it.isFinite() }?.coerceAtLeast(0f)?.div(2f) ?: 0f
-        val edgeOffset = edgeCalibrationPx.takeIf { it.isFinite() } ?: 0f
-        val envelope = extraEnvelopePx.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
-        return strokePath(halfStroke + edgeOffset + envelope)
+        if (width <= 0 || height <= 0) {
+            return Path()
+        }
+
+        val halfStroke =
+            strokeWidth
+                .takeIf { it.isFinite() }
+                ?.coerceAtLeast(0f)
+                ?.div(2f)
+                ?: 0f
+
+        val edgeOffset =
+            edgeCalibrationPx
+                .takeIf { it.isFinite() }
+                ?: 0f
+
+        val cornerOffset =
+            cornerCalibrationPx
+                .takeIf { it.isFinite() }
+                ?: 0f
+
+        val shape =
+            cornerShape
+                .takeIf { it.isFinite() }
+                ?.coerceIn(0f, 1f)
+                ?: 0.5f
+
+        val envelope =
+            extraEnvelopePx
+                .takeIf { it.isFinite() }
+                ?.coerceAtLeast(0f)
+                ?: 0f
+
+        val inset = halfStroke + edgeOffset + envelope
+
+        return buildCalibratedCenterline(
+            insetPx = inset,
+            cornerCalibrationPx = cornerOffset,
+            cornerShape = shape
+        )
     }
 
     fun dpToPx(dp: Float): Float = dp * density
+
+    private fun buildCalibratedCenterline(
+        insetPx: Float,
+        cornerCalibrationPx: Float,
+        cornerShape: Float
+    ): Path {
+        val left = insetPx
+        val top = insetPx
+        val right = width.toFloat() - insetPx
+        val bottom = height.toFloat() - insetPx
+
+        if (right <= left || bottom <= top) {
+            return Path(displayPath)
+        }
+
+        val sourceRadii =
+            cornerRadii ?: FloatArray(4) {
+                minOf(width, height) * CORNER_RADIUS_FRACTION
+            }
+
+        val maxCornerExtent =
+            minOf(
+                (right - left) / 2f,
+                (bottom - top) / 2f
+            ).coerceAtLeast(0f)
+
+        fun calibratedRadius(sourceRadius: Float): Float =
+            (
+                    sourceRadius -
+                            insetPx +
+                            cornerCalibrationPx
+                    ).coerceIn(
+                    0f,
+                    maxCornerExtent
+                )
+
+        val topLeftRadius = calibratedRadius(sourceRadii[0])
+        val topRightRadius = calibratedRadius(sourceRadii[1])
+        val bottomRightRadius = calibratedRadius(sourceRadii[2])
+        val bottomLeftRadius = calibratedRadius(sourceRadii[3])
+
+        /*
+         * 0.55228475 is the standard cubic Bézier approximation of a quarter circle.
+         *
+         * Corner Shape changes only the Bézier handle length.
+         * The corner start/end points remain fixed, so changing shape does NOT
+         * change the length of the adjoining straight sections.
+         *
+         * 0.5 = neutral / circular-looking default.
+         */
+        val bezierFactor =
+            lerp(
+                CORNER_SHAPE_MIN_FACTOR,
+                CORNER_SHAPE_MAX_FACTOR,
+                cornerShape.coerceIn(0f, 1f)
+            )
+
+        return Path().apply {
+            // Start on the top edge, immediately after the top-left corner.
+            moveTo(
+                left + topLeftRadius,
+                top
+            )
+
+            // Top edge -> top-right corner.
+            lineTo(
+                right - topRightRadius,
+                top
+            )
+
+            cubicTo(
+                right - topRightRadius + topRightRadius * bezierFactor,
+                top,
+                right,
+                top + topRightRadius - topRightRadius * bezierFactor,
+                right,
+                top + topRightRadius
+            )
+
+            // Right edge -> bottom-right corner.
+            lineTo(
+                right,
+                bottom - bottomRightRadius
+            )
+
+            cubicTo(
+                right,
+                bottom - bottomRightRadius + bottomRightRadius * bezierFactor,
+                right - bottomRightRadius + bottomRightRadius * bezierFactor,
+                bottom,
+                right - bottomRightRadius,
+                bottom
+            )
+
+            // Bottom edge -> bottom-left corner.
+            lineTo(
+                left + bottomLeftRadius,
+                bottom
+            )
+
+            cubicTo(
+                left + bottomLeftRadius - bottomLeftRadius * bezierFactor,
+                bottom,
+                left,
+                bottom - bottomLeftRadius + bottomLeftRadius * bezierFactor,
+                left,
+                bottom - bottomLeftRadius
+            )
+
+            // Left edge -> top-left corner.
+            lineTo(
+                left,
+                top + topLeftRadius
+            )
+
+            cubicTo(
+                left,
+                top + topLeftRadius - topLeftRadius * bezierFactor,
+                left + topLeftRadius - topLeftRadius * bezierFactor,
+                top,
+                left + topLeftRadius,
+                top
+            )
+
+            close()
+        }
+    }
 
     private fun rebuildDisplayPath() {
         if (width <= 0 || height <= 0) return
@@ -187,9 +350,22 @@ internal class DisplayOutline(private val density: Float) {
         )
     }
 
+    private fun lerp(
+        start: Float,
+        end: Float,
+        fraction: Float
+    ): Float =
+        start + (end - start) * fraction
+
     companion object {
         private const val CORNER_RADIUS_FRACTION = 0.035f
         private const val MAX_CORNER_RADIUS_FRACTION = 0.25f
+        private const val QUARTER_CIRCLE_BEZIER_FACTOR = 0.55228475f
+        private const val CORNER_SHAPE_RANGE = 0.18f
+        private const val CORNER_SHAPE_MIN_FACTOR =
+            QUARTER_CIRCLE_BEZIER_FACTOR - CORNER_SHAPE_RANGE
+        private const val CORNER_SHAPE_MAX_FACTOR =
+            QUARTER_CIRCLE_BEZIER_FACTOR + CORNER_SHAPE_RANGE
 
         fun isInViewCoordinates(
             path: Path,
