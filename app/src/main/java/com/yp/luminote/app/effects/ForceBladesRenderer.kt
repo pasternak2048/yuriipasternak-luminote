@@ -18,8 +18,7 @@ internal class ForceBladesRenderer(
     private val outline: DisplayOutline
 ) {
     private var surface: EdgePathGeometry? = null
-    private var surfaceVersion = -1
-    private var surfaceInset = Float.NaN
+    private var surfaceKey: SurfaceKey? = null
     private val azureHead = EnergyBladeHead(BladePalette.AZURE)
     private val crimsonHead = EnergyBladeHead(BladePalette.CRIMSON)
     // Duel owns four fronts. They share cached surface resources, but their progress is independent.
@@ -36,9 +35,17 @@ internal class ForceBladesRenderer(
         motion: HaloMotion,
         phase: Float,
         alpha: Int,
-        strokeWidth: Float
+        strokeWidth: Float,
+        edgeCalibrationPx: Float,
+        cornerCalibrationPx: Float,
+        cornerShape: Float
     ) {
-        val geometry = geometryFor(strokeWidth) ?: return
+        val geometry = geometryFor(
+            strokeWidth,
+            outline.opticalInsetPx + edgeCalibrationPx,
+            cornerCalibrationPx,
+            cornerShape
+        ) ?: return
         val save = canvas.save()
         try {
             // Bloom is allowed inward, never beyond the physical display shape.
@@ -54,15 +61,30 @@ internal class ForceBladesRenderer(
         }
     }
 
-    private fun geometryFor(strokeWidth: Float): EdgePathGeometry? {
-        val inset = strokeWidth / 2f + outline.opticalInsetPx + MAX_BLOOM_INSET_PX
-        if (surfaceVersion != outline.version || surfaceInset != inset) {
-            surface = EdgePathGeometry(outline.strokePath(inset))
-            surfaceVersion = outline.version
-            surfaceInset = inset
+    private fun geometryFor(strokeWidth: Float, edgeCalibrationPx: Float, cornerCalibrationPx: Float, cornerShape: Float): EdgePathGeometry? {
+        val key = SurfaceKey(outline.version, strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape)
+        if (surfaceKey != key) {
+            surface = EdgePathGeometry(
+                outline.centerlinePath(
+                    strokeWidth = strokeWidth,
+                    edgeCalibrationPx = edgeCalibrationPx,
+                    cornerCalibrationPx = cornerCalibrationPx,
+                    cornerShape = cornerShape,
+                    extraEnvelopePx = MAX_BLOOM_INSET_PX
+                )
+            )
+            surfaceKey = key
         }
         return surface?.takeIf { it.length > 0f }
     }
+
+    private data class SurfaceKey(
+        val outlineVersion: Int,
+        val strokeWidth: Float,
+        val edgeCalibrationPx: Float,
+        val cornerCalibrationPx: Float,
+        val cornerShape: Float
+    )
 
     private fun drawAzure(canvas: Canvas, surface: EdgePathGeometry, phase: Float, alpha: Int) {
         val t = phase.coerceIn(0f, 1f)
@@ -150,6 +172,7 @@ internal class ForceBladesRenderer(
     }
 
     private companion object {
+        /** Preserved original Force-Blades bloom containment margin. */
         const val MAX_BLOOM_INSET_PX = 18f
         const val AZURE_ORIGIN = 0.08f
         const val CRIMSON_ORIGIN = 0.58f

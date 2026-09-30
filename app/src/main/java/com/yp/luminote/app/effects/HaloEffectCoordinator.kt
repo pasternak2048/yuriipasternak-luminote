@@ -171,6 +171,9 @@ internal class HaloEffectCoordinator {
             null
     }
 
+    /** Main-thread ownership query used to defer calibration without disturbing FIFO playback. */
+    fun isBusy(): Boolean = activeDelivery != null || pendingRequests.isNotEmpty()
+
     fun attachRenderer(
         owner: Any,
         onRequestStarted: (HaloEffectDelivery) -> Unit

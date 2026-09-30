@@ -137,4 +137,11 @@
     <string name="collapsed_state">Zwinięto</string>
     <string name="settings">Ustawienia</string>
     <string name="settings_content_description">Otwórz ustawienia</string>
+    <string name="reset">Resetuj</string>
+    <string name="done">Gotowe</string>
+    <string name="display_calibration">Kalibracja ekranu</string>
+    <string name="display_calibration_description">Dopasuj światło do krawędzi ekranu. Wartości ujemne przesuwają je na zewnątrz, dodatnie do środka.</string>
+    <string name="edge_calibration">Pozycja krawędzi</string>
+    <string name="corner_calibration">Zaokrąglenie rogów</string>
+    <string name="corner_shape">Kształt rogów</string>
 </resources>

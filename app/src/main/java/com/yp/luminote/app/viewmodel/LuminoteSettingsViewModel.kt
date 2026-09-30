@@ -17,6 +17,8 @@ import com.yp.luminote.app.data.settings.MIN_HALO_VALUE
 import com.yp.luminote.app.data.settings.NotificationSource
 import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.data.settings.ThemeMode
+import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
+import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -390,6 +392,17 @@ class LuminoteSettingsViewModel(
                         0.5f,
                         2.5f
                     )
+            )
+        }
+    }
+
+    /** Draft values are local until Apply, so Reset/Back cannot persist partial calibration. */
+    fun applyDisplayCalibration(edgeDp: Float, cornerDp: Float, cornerShape: Float) {
+        updateSettings {
+            copy(
+                displayEdgeCalibrationDp = sanitizeDisplayCalibration(edgeDp),
+                displayCornerCalibrationDp = sanitizeDisplayCalibration(cornerDp),
+                displayCornerShape = sanitizeDisplayCornerShape(cornerShape)
             )
         }
     }

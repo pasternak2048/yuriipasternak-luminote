@@ -137,4 +137,11 @@
     <string name="collapsed_state">Згорнуто</string>
     <string name="settings">Налаштування</string>
     <string name="settings_content_description">Відкрити налаштування</string>
+    <string name="reset">Скинути</string>
+    <string name="done">Готово</string>
+    <string name="display_calibration">Калібрування екрана</string>
+    <string name="display_calibration_description">Налаштуйте світіння за краєм екрана. Від’ємні значення зміщують його назовні, додатні — всередину.</string>
+    <string name="edge_calibration">Положення краю</string>
+    <string name="corner_calibration">Заокруглення кутів</string>
+    <string name="corner_shape">Форма кутів</string>
 </resources>

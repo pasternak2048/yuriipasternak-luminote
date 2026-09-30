@@ -66,6 +66,19 @@ class HaloConfigTest {
     }
 
     @Test
+    fun `sanitized config bounds display calibration and corner shape`() {
+        val config = HaloConfig(
+            edgeCalibrationDp = Float.POSITIVE_INFINITY,
+            cornerCalibrationDp = -100f,
+            cornerShape = Float.NaN
+        ).sanitized()
+
+        assertEquals(0f, config.edgeCalibrationDp)
+        assertEquals(-24f, config.cornerCalibrationDp)
+        assertEquals(0.5f, config.cornerShape)
+    }
+
+    @Test
     fun `default gradient palette returns an independent copy`() {
         val firstPalette = HaloConfig.defaultGradientPalette()
         val expectedPalette = firstPalette.copyOf()
