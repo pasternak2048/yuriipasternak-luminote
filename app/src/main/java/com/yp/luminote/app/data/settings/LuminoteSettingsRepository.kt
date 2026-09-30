@@ -154,6 +154,10 @@ class LuminoteSettingsRepository(
             floatPreferencesKey(
                 "ambient_gradient_flow_speed"
             )
+
+        val displayEdgeCalibrationDp = floatPreferencesKey("display_edge_calibration_dp")
+        val displayCornerCalibrationDp = floatPreferencesKey("display_corner_calibration_dp")
+        val displayCornerShape = floatPreferencesKey("display_corner_shape")
     }
 
     val settings: Flow<LuminoteSettings> =
@@ -445,7 +449,10 @@ class LuminoteSettingsRepository(
                                 0.5f,
                                 2.5f
                             )
-                            ?: defaultSettings.ambientGradientFlowSpeed
+                            ?: defaultSettings.ambientGradientFlowSpeed,
+                    displayEdgeCalibrationDp = sanitizeDisplayCalibration(preferences[Keys.displayEdgeCalibrationDp] ?: 0f),
+                    displayCornerCalibrationDp = sanitizeDisplayCalibration(preferences[Keys.displayCornerCalibrationDp] ?: 0f),
+                    displayCornerShape = sanitizeDisplayCornerShape(preferences[Keys.displayCornerShape] ?: DEFAULT_DISPLAY_CORNER_SHAPE)
                 )
             }
             .distinctUntilChanged()
@@ -556,6 +563,10 @@ class LuminoteSettingsRepository(
 
             preferences[Keys.ambientGradientFlowSpeed] =
                 settings.ambientGradientFlowSpeed
+
+            preferences[Keys.displayEdgeCalibrationDp] = sanitizeDisplayCalibration(settings.displayEdgeCalibrationDp)
+            preferences[Keys.displayCornerCalibrationDp] = sanitizeDisplayCalibration(settings.displayCornerCalibrationDp)
+            preferences[Keys.displayCornerShape] = sanitizeDisplayCornerShape(settings.displayCornerShape)
         }
     }
 }

@@ -65,6 +65,7 @@ import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 @Composable
 fun HaloScreen(
     onBackClick: () -> Unit,
+    onDisplayCalibrationClick: () -> Unit,
     windowSizeClass: LuminoteWindowSizeClass,
     viewModel: LuminoteSettingsViewModel
 ) {
@@ -166,7 +167,8 @@ fun HaloScreen(
 
         TestEffectButton(
             context = context,
-            settings = settings
+            settings = settings,
+            onDisplayCalibrationClick = onDisplayCalibrationClick
         )
     }
 }
@@ -502,7 +504,8 @@ private fun PlaybackChoice(
 @Composable
 private fun TestEffectButton(
     context: android.content.Context,
-    settings: LuminoteSettings
+    settings: LuminoteSettings,
+    onDisplayCalibrationClick: () -> Unit
 ) {
     val previewAppColor = MaterialTheme.colorScheme.primary.toArgb()
     Column(
@@ -516,6 +519,11 @@ private fun TestEffectButton(
                     bottom = 16.dp
                 )
     ) {
+
+        Button(onClick = onDisplayCalibrationClick, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.display_calibration))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
 
         Button(
             onClick = {

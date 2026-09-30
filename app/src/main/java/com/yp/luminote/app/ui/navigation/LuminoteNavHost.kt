@@ -17,6 +17,7 @@ import com.yp.luminote.app.ui.ambient.AmbientHaloScreen
 import com.yp.luminote.app.ui.apps.AppsScreen
 import com.yp.luminote.app.ui.easteregg.EasterEggScreen
 import com.yp.luminote.app.ui.effects.HaloScreen
+import com.yp.luminote.app.ui.effects.DisplayCalibrationScreen
 import com.yp.luminote.app.ui.home.HomeScreen
 import com.yp.luminote.app.ui.language.LanguageScreen
 import com.yp.luminote.app.ui.settings.AppearanceScreen
@@ -35,6 +36,7 @@ object LuminoteRoutes {
     const val SETTINGS = "settings"
     const val APPEARANCE = "appearance"
     const val UPDATES = "updates"
+    const val DISPLAY_CALIBRATION = "display_calibration"
 }
 
 @Composable
@@ -165,11 +167,16 @@ fun LuminoteNavHost(
                 onBackClick = {
                     navController.popBackStack()
                 },
+                onDisplayCalibrationClick = { navController.navigate(LuminoteRoutes.DISPLAY_CALIBRATION) },
                 windowSizeClass =
                     windowSizeClass,
                 viewModel =
                     settingsViewModel
             )
+        }
+
+        composable(LuminoteRoutes.DISPLAY_CALIBRATION) {
+            DisplayCalibrationScreen(onBackClick = { navController.popBackStack() }, viewModel = settingsViewModel)
         }
 
         composable(

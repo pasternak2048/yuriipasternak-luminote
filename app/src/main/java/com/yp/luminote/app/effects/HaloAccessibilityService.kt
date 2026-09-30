@@ -53,6 +53,12 @@ class HaloAccessibilityService : AccessibilityService() {
     private var previewMode =
         false
 
+    private var calibrationToken: String? = null
+
+    private var pendingCalibrationIntent: Intent? = null
+
+    private var lastCalibrationIntent: Intent? = null
+
     private var activeQueuedCompletion:
             (() -> Unit)? = null
 
@@ -187,6 +193,33 @@ class HaloAccessibilityService : AccessibilityService() {
         onFiniteAnimationCompleted:
         (() -> Unit)? = null
     ) {
+        val commandCalibrationToken = intent?.getStringExtra(HaloOverlayService.EXTRA_CALIBRATION_TOKEN)
+        if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_CALIBRATION, false) == true) {
+            if (CalibrationPreviewSession.isCurrent(commandCalibrationToken)) {
+                CalibrationPreviewSession.stop(commandCalibrationToken)
+                pendingCalibrationIntent = null
+                lastCalibrationIntent = null
+                if (activeQueuedCompletion == null && previewMode) removeOverlay()
+            }
+            return
+        }
+        if (commandCalibrationToken != null && !CalibrationPreviewSession.isCurrent(commandCalibrationToken)) return
+        if (commandCalibrationToken != null && activeConfig?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE && !CalibrationPreviewSession.isCurrent(calibrationToken)) {
+            CalibrationPreviewSession.stop(commandCalibrationToken)
+            return
+        }
+        if (commandCalibrationToken != null && activeQueuedCompletion != null) {
+            pendingCalibrationIntent = intent
+            return
+        }
+        if (commandCalibrationToken != null) {
+            calibrationToken = commandCalibrationToken
+            lastCalibrationIntent = intent
+        }
+        if (commandCalibrationToken == null && CalibrationPreviewSession.isCurrent(calibrationToken) &&
+            intent?.getStringExtra(HaloOverlayService.EXTRA_NOTIFICATION_PLAYBACK) == NotificationPlayback.KEEP_VISIBLE.name) {
+            return
+        }
         if (
             intent?.getBooleanExtra(
                 HaloOverlayService.EXTRA_STOP_REPEATING,
@@ -209,6 +242,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 false
             ) == true
         ) {
+            if (CalibrationPreviewSession.isCurrent(calibrationToken)) return
             if (
                 activeQueuedCompletion ==
                 null &&
@@ -230,6 +264,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 false
             ) == true
         ) {
+            if (CalibrationPreviewCommandPolicy.ignoreTokenlessPreviewStop(calibrationToken)) return
             if (
                 activeQueuedCompletion ==
                 null &&
@@ -303,6 +338,12 @@ class HaloAccessibilityService : AccessibilityService() {
 
         overlayView
             ?.let { view ->
+
+                if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
+                    activeConfig = resolvedConfig
+                    view.update(resolvedConfig)
+                    return
+                }
 
                 if (restart) {
                     previewMode =
@@ -436,14 +477,12 @@ class HaloAccessibilityService : AccessibilityService() {
                 params
             )
 
-            startAnimation(
-                view,
-                resolvedConfig
-            )
-
-            scheduleRemoval(
-                resolvedConfig
-            )
+            if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
+                view.showStaticFrame()
+            } else {
+                startAnimation(view, resolvedConfig)
+                scheduleRemoval(resolvedConfig)
+            }
         }.onFailure {
             Log.e(
                 TAG,
@@ -703,6 +742,10 @@ class HaloAccessibilityService : AccessibilityService() {
                     defaults.thickness
                 ) ?: defaults.thickness,
 
+            edgeCalibrationDp = intent?.getFloatExtra(HaloOverlayService.EXTRA_EDGE_CALIBRATION_DP, defaults.edgeCalibrationDp) ?: defaults.edgeCalibrationDp,
+            cornerCalibrationDp = intent?.getFloatExtra(HaloOverlayService.EXTRA_CORNER_CALIBRATION_DP, defaults.cornerCalibrationDp) ?: defaults.cornerCalibrationDp,
+            cornerShape = intent?.getFloatExtra(HaloOverlayService.EXTRA_CORNER_SHAPE, defaults.cornerShape) ?: defaults.cornerShape,
+
             frame =
                 intent?.getStringExtra(
                     HaloOverlayService.EXTRA_FRAME
@@ -773,6 +816,9 @@ class HaloAccessibilityService : AccessibilityService() {
         request: HaloEffectRequest,
         onFiniteAnimationCompleted: () -> Unit
     ) {
+        if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
+            pendingCalibrationIntent = lastCalibrationIntent
+        }
         handler.removeCallbacks(
             removeOverlayTask
         )
@@ -908,6 +954,13 @@ class HaloAccessibilityService : AccessibilityService() {
 
                 completion
                     ?.invoke()
+
+                handler.post {
+                    pendingCalibrationIntent?.takeIf { activeQueuedCompletion == null }?.let { pending ->
+                        pendingCalibrationIntent = null
+                        handleCommand(pending)
+                    }
+                }
             }
 
         val palette =

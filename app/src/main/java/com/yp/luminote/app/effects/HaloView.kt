@@ -37,6 +37,8 @@ internal class HaloView(
     private var ambientPaused =
         false
 
+    private var staticFrameMode = false
+
     private var ambientEffectSpeed =
         config.effectSpeed.coerceIn(
             MIN_EFFECT_SPEED,
@@ -126,6 +128,7 @@ internal class HaloView(
         count: Int,
         motion: HaloMotion
     ) {
+        staticFrameMode = false
         stopAmbientEffect()
 
         val request =
@@ -238,6 +241,16 @@ internal class HaloView(
 
     }
 
+    /** Calibration has no timer, finite callback, or motion envelope. */
+    fun showStaticFrame() {
+        animationStartToken++
+        pendingFiniteAnimation = null
+        ambientPaused = false
+        animationEngine.cancel()
+        staticFrameMode = true
+        invalidate()
+    }
+
     override fun onSizeChanged(
         w: Int,
         h: Int,
@@ -300,6 +313,10 @@ internal class HaloView(
             canvas
         )
 
+        if (staticFrameMode) {
+            renderer.drawStaticFrame(canvas)
+            return
+        }
         renderer.draw(
             canvas =
                 canvas,
@@ -316,6 +333,7 @@ internal class HaloView(
         effectSpeed: Float,
         motion: HaloMotion
     ) {
+        staticFrameMode = false
         animationStartToken++
 
         pendingFiniteAnimation =

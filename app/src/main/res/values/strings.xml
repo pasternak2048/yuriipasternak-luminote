@@ -135,4 +135,11 @@
     <string name="collapsed_state">Collapsed</string>
     <string name="settings">Settings</string>
     <string name="settings_content_description">Open settings</string>
+    <string name="reset">Reset</string>
+    <string name="done">Done</string>
+    <string name="display_calibration">Display calibration</string>
+    <string name="display_calibration_description">Adjust the light to your display edge. Negative values extend outward; positive values move inward.</string>
+    <string name="edge_calibration">Edge position</string>
+    <string name="corner_calibration">Corner roundness</string>
+    <string name="corner_shape">Corner shape</string>
 </resources>

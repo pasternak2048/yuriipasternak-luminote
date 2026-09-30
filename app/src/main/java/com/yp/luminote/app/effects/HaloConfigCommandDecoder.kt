@@ -56,6 +56,10 @@ internal object HaloConfigCommandDecoder {
                         }.getOrNull()
                     }
                     ?: defaults.notificationPlayback
+            ,
+            edgeCalibrationDp = command.edgeCalibrationDp ?: defaults.edgeCalibrationDp,
+            cornerCalibrationDp = command.cornerCalibrationDp ?: defaults.cornerCalibrationDp
+            , cornerShape = command.cornerShape ?: defaults.cornerShape
         ).sanitized()
 }
 
@@ -71,4 +75,7 @@ internal data class RawHaloConfigCommand(
     val gradientFlowSpeed: Float? = null,
     val colorModeName: String? = null,
     val notificationPlaybackName: String? = null
+    , val edgeCalibrationDp: Float? = null,
+    val cornerCalibrationDp: Float? = null
+    , val cornerShape: Float? = null
 )

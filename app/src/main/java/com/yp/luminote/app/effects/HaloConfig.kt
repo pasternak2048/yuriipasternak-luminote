@@ -5,6 +5,8 @@ import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.data.settings.durationFor
+import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
+import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
 
 /** Immutable rendering parameters shared by every halo entry point. */
 data class HaloConfig(
@@ -20,6 +22,9 @@ data class HaloConfig(
     val gradientFlowSpeed: Float = 1f,
     val colorMode: HaloColorMode = HaloColorMode.SOLID,
     val notificationPlayback: NotificationPlayback = NotificationPlayback.ONCE,
+    val edgeCalibrationDp: Float = 0f,
+    val cornerCalibrationDp: Float = 0f,
+    val cornerShape: Float = 0.5f,
     /** Colors used by a gradient treatment. */
     val palette: IntArray = intArrayOf()
 ) {
@@ -63,6 +68,9 @@ data class HaloConfig(
                     .takeIf { it.isFinite() }
                     ?.coerceIn(MIN_NORMALIZED_VALUE, MAX_NORMALIZED_VALUE)
                     ?: DEFAULT_THICKNESS,
+            edgeCalibrationDp = sanitizeDisplayCalibration(edgeCalibrationDp),
+            cornerCalibrationDp = sanitizeDisplayCalibration(cornerCalibrationDp),
+            cornerShape = sanitizeDisplayCornerShape(cornerShape),
             palette = palette.distinct().toIntArray()
         )
     }

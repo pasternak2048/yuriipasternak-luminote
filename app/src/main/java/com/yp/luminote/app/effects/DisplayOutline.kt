@@ -11,7 +11,7 @@ import kotlin.math.abs
  * Owns the validated display outline and derived paths in overlay coordinates.
  * Paths are read-only to callers. All updates happen on the UI thread.
  */
-internal class DisplayOutline(density: Float) {
+internal class DisplayOutline(private val density: Float) {
     private val displayPath = Path()
     private var windowDisplayShapePath: Path? = null
     private var cornerRadii: FloatArray? = null
@@ -54,11 +54,29 @@ internal class DisplayOutline(density: Float) {
     fun strokePath(insetPx: Float): Path =
         strokePathCache.getOrPut(insetPx) { buildStrokePath(insetPx) }
 
-    private fun rebuildDisplayPath() {
+    /**
+     * Keeps the calibration command contract while using the established rounded-outline
+     * transform. Corner-shape and per-corner deformation are intentionally not applied: their
+     * replacement geometry distorted physical corners on devices with real RoundedCorner data.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    fun centerlinePath(
+        strokeWidth: Float,
+        edgeCalibrationPx: Float = 0f,
+        cornerCalibrationPx: Float = 0f,
+        cornerShape: Float = 0.5f,
+        extraEnvelopePx: Float = 0f
+    ): Path {
+        val halfStroke = strokeWidth.takeIf { it.isFinite() }?.coerceAtLeast(0f)?.div(2f) ?: 0f
+        val edgeOffset = edgeCalibrationPx.takeIf { it.isFinite() } ?: 0f
+        val envelope = extraEnvelopePx.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 0f
+        return strokePath(halfStroke + edgeOffset + envelope)
+    }
 
-        if (width <= 0 || height <= 0) {
-            return
-        }
+    fun dpToPx(dp: Float): Float = dp * density
+
+    private fun rebuildDisplayPath() {
+        if (width <= 0 || height <= 0) return
 
         geometryVersion++
         clearRenderCaches()
@@ -93,9 +111,7 @@ internal class DisplayOutline(density: Float) {
         displayPath.addPath(roundedRectPath(insetPx = 0f, cornerRadii = null))
     }
 
-    private fun buildStrokePath(
-        insetPx: Float
-    ): Path {
+    private fun buildStrokePath(insetPx: Float): Path {
         val bounds = RectF()
         displayPath.computeBounds(bounds, true)
         if (bounds.width() <= insetPx * 2f || bounds.height() <= insetPx * 2f) {

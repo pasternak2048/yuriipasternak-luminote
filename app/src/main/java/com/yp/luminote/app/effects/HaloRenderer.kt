@@ -38,8 +38,7 @@ internal class HaloRenderer(
     private var cachedOutlineVersion =
         -1
 
-    private var cachedStyleStrokeWidth =
-        Float.NaN
+    private var cachedStyleKey: ConventionalPathCacheKey? = null
 
     private var cachedStylePath:
             Path? = null
@@ -87,8 +86,10 @@ internal class HaloRenderer(
         val geometryChanged =
             this.config.thickness !=
                     next.thickness ||
-                    this.config.frame !=
-                    next.frame
+                    this.config.frame != next.frame ||
+                    this.config.edgeCalibrationDp != next.edgeCalibrationDp ||
+                    this.config.cornerCalibrationDp != next.cornerCalibrationDp
+                    || this.config.cornerShape != next.cornerShape
 
         this.config =
             next
@@ -135,7 +136,10 @@ internal class HaloRenderer(
                 motion = config.motion,
                 phase = effectPhase,
                 alpha = baseAlpha,
-                strokeWidth = renderStrokeWidth
+                strokeWidth = renderStrokeWidth,
+                edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp),
+                cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
+                , cornerShape = config.cornerShape
             )
             return
         }
@@ -173,6 +177,23 @@ internal class HaloRenderer(
             canvas.restoreToCount(
                 saveCount
             )
+        }
+    }
+
+    /** Complete calibrated frame used by the static calibration preview. */
+    fun drawStaticFrame(canvas: Canvas) {
+        if (config.intensity <= 0f) return
+        if (cachedOutlineVersion != outline.version) {
+            clearStylePathCache()
+            cachedOutlineVersion = outline.version
+        }
+        val saveCount = canvas.save()
+        try {
+            canvas.clipPath(outline.path)
+            preparePaint((255f * config.intensity).roundToInt().coerceIn(0, 255), 0f, 0f)
+            canvas.drawPath(stylePathForCurrentConfig(), corePaint)
+        } finally {
+            canvas.restoreToCount(saveCount)
         }
     }
 
@@ -233,16 +254,21 @@ internal class HaloRenderer(
         paint: Paint,
         phase: Float
     ) {
+        val key = ConventionalPathCacheKey(
+            outlineVersion = outline.version,
+            strokeWidth = renderStrokeWidth,
+            edgeCalibrationDp = config.edgeCalibrationDp,
+            cornerCalibrationDp = config.cornerCalibrationDp
+            , cornerShape = config.cornerShape
+        )
         val path =
             cachedStylePath
                 ?.takeIf {
-                    cachedStyleStrokeWidth ==
-                            renderStrokeWidth
+                    cachedStyleKey == key
                 }
                 ?: buildStylePath()
                     .also { generatedPath ->
-                        cachedStyleStrokeWidth =
-                            renderStrokeWidth
+                        cachedStyleKey = key
 
                         cachedStylePath =
                             generatedPath
@@ -290,6 +316,14 @@ internal class HaloRenderer(
             HaloMotion.AZURE_BLADE,
             HaloMotion.CRIMSON_BLADE,
             HaloMotion.FORCE_CLASH -> Unit
+        }
+    }
+
+    private fun stylePathForCurrentConfig(): Path {
+        val key = ConventionalPathCacheKey(outline.version, renderStrokeWidth, config.edgeCalibrationDp, config.cornerCalibrationDp, config.cornerShape)
+        return cachedStylePath?.takeIf { cachedStyleKey == key } ?: buildStylePath().also {
+            cachedStyleKey = key
+            cachedStylePath = it
         }
     }
 
@@ -804,29 +838,14 @@ internal class HaloRenderer(
         return nearestFraction
     }
 
-    /**
-     * Builds a single canonical centerline for every Halo motion.
-     *
-     * The complete rendered stroke must remain inside the display contour.
-     *
-     * Therefore:
-     *
-     * centerlineInset =
-     *     renderStrokeWidth / 2 + opticalSafetyGap
-     *
-     * opticalInsetPx is density based in DisplayOutline (2dp in the current
-     * geometry implementation), so this rule contains no device-specific
-     * dimensions.
-     */
+    /** The DisplayOutline owns the physical centreline and its zero-default calibration. */
     private fun buildStylePath(): Path {
-        val centerlineInset =
-            renderStrokeWidth /
-                    2f +
-                    outline.opticalInsetPx
-
         val strokePath =
-            outline.strokePath(
-                centerlineInset
+            outline.centerlinePath(
+                renderStrokeWidth,
+                outline.opticalInsetPx + outline.dpToPx(config.edgeCalibrationDp),
+                outline.dpToPx(config.cornerCalibrationDp)
+                , config.cornerShape
             )
 
         return when (config.frame) {
@@ -869,8 +888,7 @@ internal class HaloRenderer(
         strokeWidth
 
     private fun clearStylePathCache() {
-        cachedStyleStrokeWidth =
-            Float.NaN
+        cachedStyleKey = null
 
         cachedStylePath =
             null
@@ -1258,6 +1276,15 @@ internal class HaloRenderer(
             -0x1000000
     }
 }
+
+/** Cache identity for conventional (non-Force-Blades) paths. */
+internal data class ConventionalPathCacheKey(
+    val outlineVersion: Int,
+    val strokeWidth: Float,
+    val edgeCalibrationDp: Float,
+    val cornerCalibrationDp: Float
+    , val cornerShape: Float = 0.5f
+)
 
 private val HaloMotion.isForceBlade: Boolean
     get() = this == HaloMotion.AZURE_BLADE ||

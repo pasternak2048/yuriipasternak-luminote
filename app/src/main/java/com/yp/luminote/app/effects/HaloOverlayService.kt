@@ -45,6 +45,12 @@ class HaloOverlayService : Service() {
     private var previewMode =
         false
 
+    private var calibrationToken: String? = null
+
+    private var pendingCalibrationIntent: Intent? = null
+
+    private var lastCalibrationIntent: Intent? = null
+
     private var activeConfig:
             HaloConfig? = null
 
@@ -159,6 +165,10 @@ class HaloOverlayService : Service() {
 
         if (
             !isNotificationEffect &&
+            !CalibrationPreviewCommandPolicy.bypassAccessibilityRoute(
+                intent?.getStringExtra(EXTRA_CALIBRATION_TOKEN),
+                intent?.getBooleanExtra(EXTRA_STOP_CALIBRATION, false) == true
+            ) &&
             HaloAccessibilityService.dispatch(intent)
         ) {
             removeOverlay()
@@ -185,6 +195,7 @@ class HaloOverlayService : Service() {
                 false
             ) == true
         ) {
+            if (CalibrationPreviewSession.isCurrent(calibrationToken)) return START_NOT_STICKY
             if (
                 activeConfig?.notificationPlayback ==
                 NotificationPlayback.KEEP_VISIBLE ||
@@ -203,6 +214,7 @@ class HaloOverlayService : Service() {
                 false
             ) == true
         ) {
+            if (CalibrationPreviewCommandPolicy.ignoreTokenlessPreviewStop(calibrationToken)) return START_NOT_STICKY
             if (
                 previewMode ||
                 overlayView == null
@@ -211,6 +223,36 @@ class HaloOverlayService : Service() {
                 stopSelf()
             }
 
+            return START_NOT_STICKY
+        }
+
+        val commandCalibrationToken = intent?.getStringExtra(EXTRA_CALIBRATION_TOKEN)
+        if (intent?.getBooleanExtra(EXTRA_STOP_CALIBRATION, false) == true) {
+            if (CalibrationPreviewSession.isCurrent(commandCalibrationToken)) {
+                CalibrationPreviewSession.stop(commandCalibrationToken)
+                pendingCalibrationIntent = null
+                lastCalibrationIntent = null
+                if (!effectCoordinator.isBusy() && previewMode) {
+                    removeOverlay(); stopSelf()
+                }
+            }
+            return START_NOT_STICKY
+        }
+        if (commandCalibrationToken != null && !CalibrationPreviewSession.isCurrent(commandCalibrationToken)) return START_NOT_STICKY
+        if (commandCalibrationToken != null && activeConfig?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE && !CalibrationPreviewSession.isCurrent(calibrationToken)) {
+            CalibrationPreviewSession.stop(commandCalibrationToken)
+            return START_NOT_STICKY
+        }
+        if (commandCalibrationToken != null && effectCoordinator.isBusy()) {
+            pendingCalibrationIntent = intent
+            return START_NOT_STICKY
+        }
+        if (commandCalibrationToken != null) {
+            calibrationToken = commandCalibrationToken
+            lastCalibrationIntent = intent
+        }
+        // Settings/ambient emissions are tokenless and must never replace a calibration owner.
+        if (commandCalibrationToken == null && CalibrationPreviewSession.isCurrent(calibrationToken) && intent?.let(::isPersistentAmbientIntent) == true) {
             return START_NOT_STICKY
         }
 
@@ -226,6 +268,10 @@ class HaloOverlayService : Service() {
             packageName != null &&
             notificationKey != null
         ) {
+            if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
+                pendingCalibrationIntent = lastCalibrationIntent
+                removeOverlay()
+            }
             val request =
                 HaloEffectRequest(
                     packageName = packageName,
@@ -348,7 +394,10 @@ class HaloOverlayService : Service() {
                     notificationPlaybackName =
                         intent?.getStringExtra(
                             EXTRA_NOTIFICATION_PLAYBACK
-                        )
+                        ),
+                    edgeCalibrationDp = intent?.getFloatExtra(EXTRA_EDGE_CALIBRATION_DP, defaults.edgeCalibrationDp),
+                    cornerCalibrationDp = intent?.getFloatExtra(EXTRA_CORNER_CALIBRATION_DP, defaults.cornerCalibrationDp),
+                    cornerShape = intent?.getFloatExtra(EXTRA_CORNER_SHAPE, defaults.cornerShape)
                 ),
             defaults = defaults
         )
@@ -375,6 +424,11 @@ class HaloOverlayService : Service() {
         }
 
         overlayView?.let { view ->
+            if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
+                activeConfig = configurePalette(config, paletteColors)
+                view.update(activeConfig!!)
+                return
+            }
             /*
              * A running overlay represents the whole notification burst.
              * Restarting its animator for every new notification makes the
@@ -557,13 +611,14 @@ class HaloOverlayService : Service() {
                 params
             )
 
-            startAnimation(
-                view,
-                resolvedConfig
-            )
+            if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
+                view.showStaticFrame()
+            } else {
+                startAnimation(view, resolvedConfig)
+            }
 
             if (
-                resolvedConfig.repeatCount > 0 &&
+                !CalibrationPreviewSession.isCurrent(calibrationToken) && resolvedConfig.repeatCount > 0 &&
                 scheduleRemoval
             ) {
                 scheduleRemoval(
@@ -1136,6 +1191,13 @@ class HaloOverlayService : Service() {
             delivery
         )
 
+        handler.post {
+            pendingCalibrationIntent?.takeIf { !effectCoordinator.isBusy() }?.let { pending ->
+                pendingCalibrationIntent = null
+                onStartCommand(pending, 0, 0)
+            }
+        }
+
         if (
             overlayView == null
         ) {
@@ -1292,6 +1354,12 @@ class HaloOverlayService : Service() {
         const val EXTRA_NOTIFICATION_PLAYBACK =
             "extra_notification_playback"
 
+        const val EXTRA_EDGE_CALIBRATION_DP = "extra_display_edge_calibration_dp"
+        const val EXTRA_CORNER_CALIBRATION_DP = "extra_display_corner_calibration_dp"
+        const val EXTRA_CORNER_SHAPE = "extra_display_corner_shape"
+        const val EXTRA_CALIBRATION_TOKEN = "extra_calibration_token"
+        const val EXTRA_STOP_CALIBRATION = "extra_stop_calibration"
+
         const val EXTRA_PACKAGE_NAME =
             "extra_notification_package_name"
 
@@ -1368,6 +1436,10 @@ class HaloOverlayService : Service() {
                     EXTRA_THICKNESS,
                     settings.haloThickness
                 )
+
+                putExtra(EXTRA_EDGE_CALIBRATION_DP, settings.displayEdgeCalibrationDp)
+                putExtra(EXTRA_CORNER_CALIBRATION_DP, settings.displayCornerCalibrationDp)
+                putExtra(EXTRA_CORNER_SHAPE, settings.displayCornerShape)
 
                 putExtra(
                     EXTRA_FRAME,
@@ -1455,6 +1527,10 @@ class HaloOverlayService : Service() {
 
             if (
                 !isNotificationEffect &&
+                !CalibrationPreviewCommandPolicy.bypassAccessibilityRoute(
+                    intent.getStringExtra(EXTRA_CALIBRATION_TOKEN),
+                    intent.getBooleanExtra(EXTRA_STOP_CALIBRATION, false)
+                ) &&
                 HaloAccessibilityService.dispatch(
                     intent
                 )
@@ -1598,6 +1674,16 @@ class HaloOverlayService : Service() {
                     true
                 )
             }
+
+        fun createCalibrationIntent(context: Context, settings: LuminoteSettings, token: String, start: Boolean): Intent =
+            createIntent(context, settings, restart = start).apply {
+                putExtra(EXTRA_CALIBRATION_TOKEN, token)
+                putExtra(EXTRA_PREVIEW, true)
+            }
+
+        fun createStopCalibrationIntent(context: Context, token: String): Intent = Intent(context, HaloOverlayService::class.java).apply {
+            putExtra(EXTRA_STOP_CALIBRATION, true); putExtra(EXTRA_CALIBRATION_TOKEN, token)
+        }
 
         /**
          * Ambient Halo is a persistent visual customisation, not a reminder.
