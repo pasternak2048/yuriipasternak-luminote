@@ -6,6 +6,9 @@ internal object CalibrationPreviewCommandPolicy {
         CalibrationPreviewSession.isCurrent(calibrationToken)
 
     /** Calibration is an in-app foreground preview, never an accessibility/lock-screen overlay. */
-    fun bypassAccessibilityRoute(calibrationToken: String?, stopCalibration: Boolean): Boolean =
-        calibrationToken != null || stopCalibration
+    fun bypassAccessibilityRoute(
+        calibrationToken: String?,
+        stopCalibration: Boolean,
+        pauseCalibration: Boolean = false
+    ): Boolean = calibrationToken != null || stopCalibration || pauseCalibration
 }

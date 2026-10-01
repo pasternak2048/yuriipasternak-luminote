@@ -144,4 +144,10 @@
     <string name="edge_calibration">Положення краю</string>
     <string name="corner_calibration">Заокруглення кутів</string>
     <string name="corner_shape">Форма кутів</string>
+    <string name="calibration_decrease_one_px">− 1 пікс.</string>
+    <string name="calibration_increase_one_px">+ 1 пікс.</string>
+    <string name="calibration_ruler_legend">1 поділка = 1 пікс.</string>
+    <string name="calibration_registration_zero">0 пікс.</string>
+    <string name="calibration_registration_in">ВСЕРЕДИНУ +%1$s пікс.</string>
+    <string name="calibration_registration_out">НАЗОВНІ −%1$s пікс.</string>
 </resources>

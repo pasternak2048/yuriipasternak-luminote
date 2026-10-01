@@ -142,4 +142,10 @@
     <string name="edge_calibration">Edge position</string>
     <string name="corner_calibration">Corner roundness</string>
     <string name="corner_shape">Corner shape</string>
+    <string name="calibration_decrease_one_px">− 1 px</string>
+    <string name="calibration_increase_one_px">+ 1 px</string>
+    <string name="calibration_ruler_legend">1 tick = 1 px</string>
+    <string name="calibration_registration_zero">0 px</string>
+    <string name="calibration_registration_in">IN +%1$s px</string>
+    <string name="calibration_registration_out">OUT −%1$s px</string>
 </resources>

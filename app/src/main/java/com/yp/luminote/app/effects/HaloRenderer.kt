@@ -191,9 +191,108 @@ internal class HaloRenderer(
         try {
             canvas.clipPath(outline.path)
             preparePaint((255f * config.intensity).roundToInt().coerceIn(0, 255), 0f, 0f)
-            canvas.drawPath(stylePathForCurrentConfig(), corePaint)
+            canvas.drawPath(staticPreviewPathForCurrentConfig(), corePaint)
         } finally {
             canvas.restoreToCount(saveCount)
+        }
+    }
+
+    /** Calibration-only witnesses; never called by the animated renderer. */
+    fun drawCalibrationDiagnostics(canvas: Canvas, rulerLegend: String, registrationLabel: String) {
+        if (outline.path.isEmpty) return
+
+        val runtimeCentrelinePaint = createPaint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1f
+            color = 0xFFFFD54F.toInt()
+        }
+        val rulerPaint = createPaint().apply {
+            style = Paint.Style.STROKE
+            strokeWidth = 1f
+            color = 0x99FFFFFF.toInt()
+        }
+
+        val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
+        val rulerDepth = CalibrationDiagnostics.rulerDepthPx(edgeCalibrationPx)
+        val saveCount = canvas.save()
+        try {
+            // Match static-frame clipping so OUT never becomes a fabricated outer frame.
+            canvas.clipPath(outline.path)
+            canvas.drawPath(staticPreviewPathForCurrentConfig(), runtimeCentrelinePaint)
+            var offset = 0f
+            while (offset <= rulerDepth) {
+                rulerPaint.strokeWidth = if (offset.toInt() % 5 == 0) 2f else 1f
+                canvas.drawLine(offset, 0f, offset, rulerDepth, rulerPaint)
+                canvas.drawLine(canvas.width - offset, 0f, canvas.width - offset, rulerDepth, rulerPaint)
+                canvas.drawLine(offset, canvas.height.toFloat(), offset, canvas.height - rulerDepth, rulerPaint)
+                canvas.drawLine(canvas.width - offset, canvas.height.toFloat(), canvas.width - offset, canvas.height - rulerDepth, rulerPaint)
+                offset += 1f
+            }
+        } finally {
+            canvas.restoreToCount(saveCount)
+        }
+
+        val registration = CalibrationDiagnostics.registration(edgeCalibrationPx)
+        drawRegistrationWitness(
+            canvas,
+            registration,
+            "$rulerLegend · $registrationLabel",
+            edgeCalibrationPx,
+            rulerDepth,
+            rulerPaint
+        )
+    }
+
+    fun calibrationEdgePx(): Float = outline.dpToPx(config.edgeCalibrationDp)
+
+    private fun drawRegistrationWitness(
+        canvas: Canvas,
+        registration: CalibrationDiagnostics.Registration,
+        label: String,
+        edgeCalibrationPx: Float,
+        rulerDepth: Float,
+        paint: Paint
+    ) {
+        val midX = canvas.width / 2f
+        val edgeY = 0f
+        val labelPaint = Paint(paint).apply {
+            style = Paint.Style.FILL
+            color = 0xFFFFFFFF.toInt()
+            textSize = outline.dpToPx(12f).coerceAtLeast(16f)
+            textAlign = Paint.Align.CENTER
+        }
+        val labelBaseline = labelPaint.textSize + 5f
+        val labelWidth = labelPaint.measureText(label)
+        val labelBackground = Paint(labelPaint).apply {
+            color = 0xD9000000.toInt()
+        }
+        canvas.drawRoundRect(
+            RectF(
+                midX - labelWidth / 2f - 6f,
+                0f,
+                midX + labelWidth / 2f + 6f,
+                labelBaseline + 4f
+            ),
+            4f,
+            4f,
+            labelBackground
+        )
+        canvas.drawText(label, midX, labelBaseline, labelPaint)
+        when (registration) {
+            CalibrationDiagnostics.Registration.ZERO -> {
+                canvas.drawCircle(midX, edgeY, 2f, paint)
+            }
+            CalibrationDiagnostics.Registration.IN -> {
+                val markerY = CalibrationDiagnostics.rulerMarkerPx(edgeCalibrationPx).coerceIn(0f, rulerDepth)
+                canvas.drawLine(midX, edgeY, midX, markerY, paint)
+                canvas.drawLine(midX, markerY, midX - 3f, markerY - 4f, paint)
+                canvas.drawLine(midX, markerY, midX + 3f, markerY - 4f, paint)
+            }
+            // The display boundary is the outward reference; do not draw a fictional outer frame.
+            CalibrationDiagnostics.Registration.OUT -> {
+                canvas.drawLine(midX - 4f, edgeY + 4f, midX, edgeY, paint)
+                canvas.drawLine(midX, edgeY, midX + 4f, edgeY + 4f, paint)
+            }
         }
     }
 
@@ -319,13 +418,17 @@ internal class HaloRenderer(
         }
     }
 
-    private fun stylePathForCurrentConfig(): Path {
+    internal fun stylePathForCurrentConfig(): Path {
         val key = ConventionalPathCacheKey(outline.version, renderStrokeWidth, config.edgeCalibrationDp, config.cornerCalibrationDp, config.cornerShape)
         return cachedStylePath?.takeIf { cachedStyleKey == key } ?: buildStylePath().also {
             cachedStyleKey = key
             cachedStylePath = it
         }
     }
+
+    /** Static calibration intentionally reuses the normal runtime contour. */
+    internal fun staticPreviewPathForCurrentConfig(): Path =
+        stylePathForCurrentConfig()
 
     private fun drawSnakePath(
         canvas: Canvas,

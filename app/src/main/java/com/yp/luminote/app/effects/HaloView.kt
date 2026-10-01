@@ -6,7 +6,9 @@ import android.graphics.Canvas
 import android.util.Log
 import android.view.View
 import android.view.WindowInsets
+import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.HaloMotion
+import java.util.Locale
 
 /**
  * Bridges the overlay window lifecycle to geometry, animation and rendering.
@@ -315,6 +317,13 @@ internal class HaloView(
 
         if (staticFrameMode) {
             renderer.drawStaticFrame(canvas)
+            if (CalibrationDiagnostics.shouldRender(staticFrameMode, width, height)) {
+                renderer.drawCalibrationDiagnostics(
+                    canvas,
+                    resources.getString(R.string.calibration_ruler_legend),
+                    localizedCalibrationRegistrationLabel(renderer.calibrationEdgePx())
+                )
+            }
             return
         }
         renderer.draw(
@@ -327,6 +336,19 @@ internal class HaloView(
             gradientPhase =
                 animationState.gradientPhase
         )
+    }
+
+    private fun localizedCalibrationRegistrationLabel(edgeCalibrationPx: Float): String {
+        val magnitude = String.format(
+            resources.configuration.locales[0],
+            "%.1f",
+            CalibrationDiagnostics.registrationMagnitudePx(edgeCalibrationPx)
+        )
+        return when (CalibrationDiagnostics.registration(edgeCalibrationPx)) {
+            CalibrationDiagnostics.Registration.ZERO -> resources.getString(R.string.calibration_registration_zero)
+            CalibrationDiagnostics.Registration.IN -> resources.getString(R.string.calibration_registration_in, magnitude)
+            CalibrationDiagnostics.Registration.OUT -> resources.getString(R.string.calibration_registration_out, magnitude)
+        }
     }
 
     fun startAmbientEffect(

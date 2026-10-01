@@ -36,8 +36,8 @@ internal class DisplayOutline(private val density: Float) {
         rebuildDisplayPath()
     }
 
-    @Suppress("UNUSED_PARAMETER")
     fun updateDisplayShape(path: Path) {
+        windowDisplayShapePath = Path(path)
         rebuildDisplayPath()
     }
 
