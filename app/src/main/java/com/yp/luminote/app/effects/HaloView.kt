@@ -50,6 +50,8 @@ internal class HaloView(
     private var ambientMotion =
         config.motion
 
+    private var renderMode = config.renderMode
+
     private var pendingFiniteAnimation:
             FiniteAnimation? = null
 
@@ -90,6 +92,7 @@ internal class HaloView(
         renderer.update(
             config
         )
+        renderMode = config.renderMode
 
         ambientEffectSpeed =
             config.effectSpeed.coerceIn(
@@ -135,7 +138,7 @@ internal class HaloView(
 
         val request =
             FiniteAnimation(
-                duration = duration,
+                duration = if (renderMode == HaloRenderMode.LIGHT_IMPULSE) 1f else duration,
                 interval = interval,
                 count = count,
                 motion = motion

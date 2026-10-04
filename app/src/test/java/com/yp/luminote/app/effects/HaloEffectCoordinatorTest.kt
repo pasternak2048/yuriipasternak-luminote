@@ -154,6 +154,113 @@ class HaloEffectCoordinatorTest {
         )
     }
 
+    @Test
+    fun `normal notification waits for terminal reminder cycle completion`() {
+        val coordinator = HaloEffectCoordinator()
+        val started = mutableListOf<HaloEffectDelivery>()
+        coordinator.attachRenderer(Any()) { started += it }
+        val reminder = request("com.yp.luminote.reminder", "cycle").copy(
+            config = HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE),
+            reminderColors = intArrayOf(0xFF0066CC.toInt(), 0xFFFF3366.toInt())
+        )
+        val normal = request("com.example.chat", "message")
+
+        coordinator.enqueue(reminder)
+        coordinator.enqueue(normal)
+
+        assertEquals(listOf(reminder), started.map(HaloEffectDelivery::request))
+        // The overlay owns both reminder colours under this one delivery lease.
+        coordinator.onRequestCompleted(started.single())
+        assertEquals(listOf(reminder, normal), started.map(HaloEffectDelivery::request))
+    }
+
+    @Test
+    fun `normal notification queued behind a long reminder is rebased before fifo start`() {
+        val coordinator = HaloEffectCoordinator()
+        val started = mutableListOf<HaloEffectDelivery>()
+        coordinator.attachRenderer(Any()) { started += it }
+        val reminder = request("com.yp.luminote.reminder", "cycle").copy(
+            config = HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE),
+            reminderColors = intArrayOf(0xFF0066CC.toInt())
+        )
+        val expiredNormal = request("com.example.chat", "message").copy(enqueuedAt = 0L)
+
+        coordinator.enqueue(reminder)
+        coordinator.enqueue(expiredNormal)
+        coordinator.onRequestCompleted(started.single())
+
+        assertEquals(listOf(reminder, expiredNormal), started.map(HaloEffectDelivery::request))
+    }
+
+    @Test
+    fun `global off clears active normal lease and pending fifo`() {
+        val coordinator = HaloEffectCoordinator()
+        val started = mutableListOf<HaloEffectDelivery>()
+        coordinator.attachRenderer(Any()) { started += it }
+        coordinator.enqueue(request("com.example.first", "first"))
+        coordinator.enqueue(request("com.example.second", "second"))
+
+        coordinator.clear()
+        coordinator.onRequestCompleted(started.single())
+
+        assertEquals(1, started.size)
+        assertEquals(false, coordinator.isBusy())
+    }
+
+    @Test
+    fun `global off clears active all color reminder lease`() {
+        val coordinator = HaloEffectCoordinator()
+        val started = mutableListOf<HaloEffectDelivery>()
+        coordinator.attachRenderer(Any()) { started += it }
+        val reminder = request("com.yp.luminote.reminder", "cycle").copy(
+            config = HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE),
+            reminderColors = intArrayOf(0xFF0066CC.toInt(), 0xFFFF3366.toInt())
+        )
+        coordinator.enqueue(reminder)
+
+        coordinator.clear()
+        coordinator.onRequestCompleted(started.single())
+
+        assertEquals(1, started.size)
+        assertEquals(false, coordinator.isBusy())
+    }
+
+    @Test
+    fun `accessibility route defers reminder to completion owning coordinator delivery`() {
+        assertEquals(true, HaloAccessibilityService.requiresCoordinatorOwnedReminderDelivery(
+            lightImpulse = true,
+            reminderColors = intArrayOf(0xFF0066CC.toInt())
+        ))
+        assertEquals(false, HaloAccessibilityService.requiresCoordinatorOwnedReminderDelivery(
+            lightImpulse = false,
+            reminderColors = null
+        ))
+
+        val coordinator = HaloEffectCoordinator()
+        val started = mutableListOf<HaloEffectDelivery>()
+        coordinator.attachRenderer(Any()) { started += it }
+        val reminder = request("com.yp.luminote.reminder", "cycle").copy(
+            config = HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE),
+            reminderColors = intArrayOf(0xFF0066CC.toInt(), 0xFFFF3366.toInt())
+        )
+        coordinator.enqueue(reminder)
+        coordinator.onRequestCompleted(started.single())
+
+        assertEquals(false, coordinator.isBusy())
+    }
+
+    @Test
+    fun `static calibration recognizes a reminder as a dropped coordinator delivery`() {
+        assertEquals(true, HaloOverlayService.isReminderIntent(
+            lightImpulse = true,
+            reminderColors = intArrayOf(0xFF0066CC.toInt())
+        ))
+        assertEquals(false, HaloOverlayService.isReminderIntent(
+            lightImpulse = false,
+            reminderColors = null
+        ))
+    }
+
     private fun request(
         packageName: String,
         notificationKey: String

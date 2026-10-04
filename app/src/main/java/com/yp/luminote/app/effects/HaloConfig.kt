@@ -3,17 +3,17 @@ package com.yp.luminote.app.effects
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.data.settings.durationFor
 import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
 import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
+
+enum class HaloRenderMode { NORMAL, LIGHT_IMPULSE, AMBIENT }
 
 /** Immutable rendering parameters shared by every halo entry point. */
 data class HaloConfig(
     val color: Int = 0xFF3E91FF.toInt(),
     val durationSeconds: Float = 2.5f,
     val intervalSeconds: Float = 1f,
-    val repeatCount: Int = 1,
     val intensity: Float = 0.7f,
     val thickness: Float = 0.5f,
     val frame: HaloFrame = HaloFrame.CLASSIC,
@@ -21,12 +21,12 @@ data class HaloConfig(
     val effectSpeed: Float = 1f,
     val gradientFlowSpeed: Float = 1f,
     val colorMode: HaloColorMode = HaloColorMode.SOLID,
-    val notificationPlayback: NotificationPlayback = NotificationPlayback.ONCE,
     val edgeCalibrationDp: Float = 0f,
     val cornerCalibrationDp: Float = 0f,
     val cornerShape: Float = 0.5f,
     /** Colors used by a gradient treatment. */
-    val palette: IntArray = intArrayOf()
+    val palette: IntArray = intArrayOf(),
+    val renderMode: HaloRenderMode = HaloRenderMode.NORMAL
 ) {
     fun sanitized(): HaloConfig {
         val sanitizedEffectSpeed =
@@ -51,13 +51,6 @@ data class HaloConfig(
                     .takeIf { it.isFinite() }
                     ?.coerceAtLeast(MIN_INTERVAL_SECONDS)
                     ?: DEFAULT_INTERVAL_SECONDS,
-            repeatCount =
-                repeatCount
-                    .takeIf {
-                        it == CONTINUOUS_REPEAT_COUNT ||
-                            it in MIN_REPEAT_COUNT..MAX_REPEAT_COUNT
-                    }
-                    ?: DEFAULT_REPEAT_COUNT,
             intensity =
                 intensity
                     .takeIf { it.isFinite() }
@@ -86,11 +79,6 @@ data class HaloConfig(
 
         private const val MIN_INTERVAL_SECONDS = 0f
         private const val DEFAULT_INTERVAL_SECONDS = 1f
-
-        private const val CONTINUOUS_REPEAT_COUNT = -1
-        private const val MIN_REPEAT_COUNT = 1
-        private const val MAX_REPEAT_COUNT = 5
-        private const val DEFAULT_REPEAT_COUNT = 1
 
         private const val MIN_NORMALIZED_VALUE = 0f
         private const val MAX_NORMALIZED_VALUE = 1f

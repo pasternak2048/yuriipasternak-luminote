@@ -11,4 +11,4 @@ Modes: SINGLE=own scope; PARALLEL=assigned boundary/locked contract; COLLABORATE
 
 Prefer supplied files/diff; expand inspection only as needed. Honor active A#/D#/rollback constraints. Inspect final diff and run relevant available checks; never claim unexecuted validation.
 
-Return `DEV CHANGED: VALIDATED: UNVERIFIED: STATUS:`. Add `BUDGET: EXCEEDED`, `CONFIDENCE: LOW`, limitations or escalation reason only when applicable.
+Return `DEV CHANGED: VALIDATED: UNVERIFIED: STATUS:`. Add `BUDGET: EXCEEDED`, `CONFIDENCE: LOW`, limitations, or `ESCALATION: <trigger> -> <required decision/capability>` only when applicable.

@@ -24,7 +24,7 @@ import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import com.yp.luminote.app.data.settings.LuminoteSettings
-import com.yp.luminote.app.data.settings.NotificationPlayback
+import com.yp.luminote.app.notification.HaloReminderRuntime
 import kotlin.math.max
 
 /** Owns only the overlay window, incoming configuration and service lifetime. */
@@ -96,6 +96,10 @@ class HaloOverlayService : Service() {
     private var activeCompletionLease:
             Long? = null
 
+    /* A reminder keeps one coordinator lease while its per-app impulses advance. */
+    private var activeReminderDelivery: HaloEffectDelivery? = null
+    private var activeReminderColorIndex = 0
+
     private val displayListener =
         object : DisplayManager.DisplayListener {
 
@@ -146,6 +150,11 @@ class HaloOverlayService : Service() {
         startId: Int
     ): Int {
         if (!foregroundStarted) {
+            if (isReminderIntent(intent)) {
+                HaloReminderRuntime.onReminderPlaybackCancelled(
+                    recoverWithFreshInterval = true
+                )
+            }
             stopSelf(startId)
 
             return START_NOT_STICKY
@@ -180,6 +189,18 @@ class HaloOverlayService : Service() {
             packageName != null &&
                     notificationKey != null
 
+        if (intent?.getBooleanExtra(EXTRA_STOP_ALL, false) == true) {
+            cancelQueuedEffectsForGlobalStop()
+            HaloReminderRuntime.onReminderPlaybackCancelled(
+                recoverWithFreshInterval = false
+            )
+            HaloAccessibilityService.dispatch(intent)
+            removeOverlay(immediately = true)
+            stopSelf()
+
+            return START_NOT_STICKY
+        }
+
         if (
             !isNotificationEffect &&
             !CalibrationPreviewCommandPolicy.bypassAccessibilityRoute(
@@ -197,28 +218,12 @@ class HaloOverlayService : Service() {
 
         if (
             intent?.getBooleanExtra(
-                EXTRA_STOP_REPEATING,
-                false
-            ) == true
-        ) {
-            removeOverlay()
-            stopSelf()
-
-            return START_NOT_STICKY
-        }
-
-        if (
-            intent?.getBooleanExtra(
                 EXTRA_STOP_AMBIENT,
                 false
             ) == true
         ) {
             if (hasCurrentStaticCalibration()) return START_NOT_STICKY
-            if (
-                activeConfig?.notificationPlayback ==
-                NotificationPlayback.KEEP_VISIBLE ||
-                overlayView == null
-            ) {
+            if (activeConfig?.renderMode == HaloRenderMode.AMBIENT || overlayView == null) {
                 removeOverlay()
                 stopSelf()
             }
@@ -301,11 +306,18 @@ class HaloOverlayService : Service() {
                 EXTRA_PALETTE_COLORS
             )
 
+        val reminderColors = intent?.getIntArrayExtra(EXTRA_REMINDER_COLORS) ?: intArrayOf()
+
         if (
             packageName != null &&
             notificationKey != null
         ) {
             if (hasCurrentStaticCalibration()) {
+                if (isReminderIntent(intent)) {
+                    HaloReminderRuntime.onReminderPlaybackCancelled(
+                        recoverWithFreshInterval = true
+                    )
+                }
                 Log.d(
                     TAG,
                     "Notification ignored by renderer while display calibration is active"
@@ -319,7 +331,8 @@ class HaloOverlayService : Service() {
                     packageName = packageName,
                     notificationKey = notificationKey,
                     config = config,
-                    paletteColors = paletteColors
+                    paletteColors = paletteColors,
+                    reminderColors = reminderColors
                 )
 
             Log.d(
@@ -396,11 +409,6 @@ class HaloOverlayService : Service() {
                             EXTRA_INTERVAL,
                             defaults.intervalSeconds
                         ),
-                    repeatCount =
-                        intent?.getIntExtra(
-                            EXTRA_REPEAT_COUNT,
-                            defaults.repeatCount
-                        ),
                     intensity =
                         intent?.getFloatExtra(
                             EXTRA_INTENSITY,
@@ -433,7 +441,7 @@ class HaloOverlayService : Service() {
                         intent?.getStringExtra(
                             EXTRA_COLOR_MODE
                         ),
-                    notificationPlaybackName =
+                    legacyNotificationPlaybackName =
                         intent?.getStringExtra(
                             EXTRA_NOTIFICATION_PLAYBACK
                         ),
@@ -442,6 +450,12 @@ class HaloOverlayService : Service() {
                     cornerShape = intent?.getFloatExtra(EXTRA_CORNER_SHAPE, defaults.cornerShape)
                 ),
             defaults = defaults
+        ).copy(
+            renderMode = when {
+                intent?.getBooleanExtra(EXTRA_AMBIENT, false) == true -> HaloRenderMode.AMBIENT
+                intent?.getBooleanExtra(EXTRA_LIGHT_IMPULSE, false) == true -> HaloRenderMode.LIGHT_IMPULSE
+                else -> HaloRenderMode.NORMAL
+            }
         )
     }
 
@@ -507,10 +521,7 @@ class HaloOverlayService : Service() {
                     resolvedConfig
                 )
 
-                if (
-                    resolvedConfig.repeatCount > 0 &&
-                    scheduleRemoval
-                ) {
+                if (resolvedConfig.renderMode != HaloRenderMode.AMBIENT && scheduleRemoval) {
                     scheduleRemoval(
                         resolvedConfig
                     )
@@ -519,10 +530,7 @@ class HaloOverlayService : Service() {
                 paletteColors != null &&
                 activeConfig != null
             ) {
-                if (
-                    activeConfig?.repeatCount ==
-                    -1
-                ) {
+                if (activeConfig?.renderMode == HaloRenderMode.AMBIENT) {
                     updatePersistentConfig(
                         view,
                         config,
@@ -660,10 +668,7 @@ class HaloOverlayService : Service() {
                 startAnimation(view, resolvedConfig)
             }
 
-            if (
-                !hasCurrentStaticCalibration() && resolvedConfig.repeatCount > 0 &&
-                scheduleRemoval
-            ) {
+            if (!hasCurrentStaticCalibration() && resolvedConfig.renderMode != HaloRenderMode.AMBIENT && scheduleRemoval) {
                 scheduleRemoval(
                     resolvedConfig
                 )
@@ -792,9 +797,7 @@ class HaloOverlayService : Service() {
          * as one fresh cycle.
          */
         val needsAnimationRestart =
-            previous.repeatCount !=
-                    updated.repeatCount ||
-                    previous.durationSeconds !=
+            previous.durationSeconds !=
                     updated.durationSeconds ||
                     previous.effectSpeed !=
                     updated.effectSpeed ||
@@ -802,10 +805,8 @@ class HaloOverlayService : Service() {
                     updated.intervalSeconds ||
                     previous.motion !=
                     updated.motion ||
-                    previous.colorMode !=
-                    updated.colorMode ||
-                    previous.notificationPlayback !=
-                    updated.notificationPlayback
+                    previous.colorMode != updated.colorMode ||
+                    previous.renderMode != updated.renderMode
 
         if (
             wasAmbient != isAmbient ||
@@ -843,8 +844,7 @@ class HaloOverlayService : Service() {
                 config.durationSeconds,
             interval =
                 config.intervalSeconds,
-            count =
-                config.repeatCount,
+            count = 1,
             motion =
                 config.motion
         )
@@ -853,9 +853,7 @@ class HaloOverlayService : Service() {
     private fun shouldRunAmbientLoop(
         config: HaloConfig
     ): Boolean =
-        config.notificationPlayback ==
-                NotificationPlayback.KEEP_VISIBLE &&
-                config.repeatCount == -1
+        config.renderMode == HaloRenderMode.AMBIENT
 
     private fun updateOverlayBounds() {
         val view =
@@ -924,14 +922,7 @@ class HaloOverlayService : Service() {
                     ).toLong()
                 .coerceAtLeast(0L)
 
-        val totalDurationMs =
-            durationMs *
-                    config.repeatCount +
-                    intervalMs *
-                    (
-                            config.repeatCount -
-                                    1
-                            )
+        val totalDurationMs = durationMs
 
         handler.postDelayed(
             removeOverlayTask,
@@ -1093,8 +1084,18 @@ class HaloOverlayService : Service() {
     private fun startQueuedEffect(
         delivery: HaloEffectDelivery
     ) {
-        val request =
-            delivery.request
+        val cycleRequest = delivery.request
+        if (cycleRequest.reminderColors.isNotEmpty() && activeReminderDelivery !== delivery) {
+            activeReminderDelivery = delivery
+            activeReminderColorIndex = 0
+        }
+        val request = if (cycleRequest.reminderColors.isNotEmpty()) {
+            cycleRequest.copy(
+                config = cycleRequest.config.copy(
+                    color = cycleRequest.reminderColors[activeReminderColorIndex]
+                )
+            )
+        } else cycleRequest
         Log.d(
             TAG,
             "Starting queued effect: " +
@@ -1106,9 +1107,7 @@ class HaloOverlayService : Service() {
             HaloAccessibilityService.dispatchQueuedEffect(
                 request = request,
                 onFiniteAnimationCompleted = {
-                    effectCoordinator.onRequestCompleted(
-                        delivery
-                    )
+                    onAccessibilityQueuedEffectCompleted(delivery, request)
                 }
             )
         ) {
@@ -1166,6 +1165,26 @@ class HaloOverlayService : Service() {
                     completionLease
                 )
             }
+        )
+    }
+
+    private fun onAccessibilityQueuedEffectCompleted(
+        delivery: HaloEffectDelivery,
+        request: HaloEffectRequest
+    ) {
+        if (request.reminderColors.isNotEmpty() && activeReminderColorIndex < request.reminderColors.lastIndex) {
+            activeReminderColorIndex++
+            startQueuedEffect(delivery)
+            return
+        }
+        if (activeReminderDelivery === delivery) {
+            activeReminderDelivery = null
+            activeReminderColorIndex = 0
+        }
+        effectCoordinator.onRequestCompleted(delivery)
+        HaloReminderRuntime.onPlaybackCompleted(
+            reminder = request.config.renderMode == HaloRenderMode.LIGHT_IMPULSE,
+            coordinatorDrained = !effectCoordinator.isBusy()
         )
     }
 
@@ -1230,8 +1249,23 @@ class HaloOverlayService : Service() {
             immediately = true
         )
 
-        effectCoordinator.onRequestCompleted(
-            delivery
+        if (request.reminderColors.isNotEmpty() &&
+            activeReminderColorIndex < request.reminderColors.lastIndex) {
+            activeReminderColorIndex++
+            startQueuedEffect(delivery)
+            return
+        }
+
+        if (activeReminderDelivery === delivery) {
+            activeReminderDelivery = null
+            activeReminderColorIndex = 0
+        }
+
+        effectCoordinator.onRequestCompleted(delivery)
+
+        HaloReminderRuntime.onPlaybackCompleted(
+            reminder = request.config.renderMode == HaloRenderMode.LIGHT_IMPULSE,
+            coordinatorDrained = !effectCoordinator.isBusy()
         )
 
         handler.post {
@@ -1248,6 +1282,22 @@ class HaloOverlayService : Service() {
         }
     }
 
+    /** Global Off invalidates the current lease before removing either renderer route. */
+    private fun cancelQueuedEffectsForGlobalStop() {
+        activeCompletionLease?.let(queuedCompletionLease::invalidate)
+        activeCompletionLease = null
+        queuedDeliveryToken++
+        cancelQueuedCompletionWatchdog()
+        activeReminderDelivery = null
+        activeReminderColorIndex = 0
+        overlayView?.let { view ->
+            view.setOnFiniteAnimationCompletedListener(null)
+            view.setOnFiniteAnimationStartedListener(null)
+            view.cancelAnimation()
+        }
+        effectCoordinator.clear()
+    }
+
     private fun scheduleQueuedCompletionWatchdog(
         request: HaloEffectRequest,
         deliveryToken: Long,
@@ -1256,13 +1306,6 @@ class HaloOverlayService : Service() {
     ) {
         val config =
             request.config
-
-        if (
-            config.notificationPlayback ==
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
-            return
-        }
 
         val cycleDurationMs =
             max(
@@ -1280,13 +1323,7 @@ class HaloOverlayService : Service() {
                     ).toLong()
                 .coerceAtLeast(0L)
 
-        val cycles =
-            config.repeatCount.coerceAtLeast(1)
-
-        val expectedDurationMs =
-            cycleDurationMs * cycles +
-                    intervalMs *
-                            (cycles - 1)
+        val expectedDurationMs = cycleDurationMs
 
         val watchdogDelayMs =
             expectedDurationMs +
@@ -1349,11 +1386,14 @@ class HaloOverlayService : Service() {
         const val EXTRA_INTERVAL =
             "extra_halo_interval"
 
-        const val EXTRA_REPEAT_COUNT =
-            "extra_halo_repeat_count"
 
         const val EXTRA_PALETTE_COLORS =
             "extra_halo_palette_colors"
+
+        const val EXTRA_REMINDER_COLORS = "extra_reminder_colors"
+
+        const val EXTRA_LIGHT_IMPULSE = "extra_light_impulse"
+        const val EXTRA_AMBIENT = "extra_halo_ambient"
 
         const val EXTRA_RESTART =
             "extra_restart_halo"
@@ -1364,8 +1404,7 @@ class HaloOverlayService : Service() {
         const val EXTRA_STOP_PREVIEW =
             "extra_stop_preview_halo"
 
-        const val EXTRA_STOP_REPEATING =
-            "extra_stop_repeating_halo"
+        const val EXTRA_STOP_ALL = "extra_stop_all_halo"
 
         const val EXTRA_STOP_AMBIENT =
             "extra_stop_ambient_halo"
@@ -1435,6 +1474,24 @@ class HaloOverlayService : Service() {
         private val effectCoordinator =
             HaloEffectCoordinator()
 
+        internal fun isTransientPlaybackBusy(): Boolean = effectCoordinator.isBusy()
+
+        /** Used by the accessibility route when it receives Global Off directly. */
+        internal fun cancelTransientPlaybackForGlobalStop() {
+            effectCoordinator.clear()
+        }
+
+        internal fun isReminderIntent(intent: Intent?): Boolean =
+            isReminderIntent(
+                lightImpulse = intent?.getBooleanExtra(EXTRA_LIGHT_IMPULSE, false) == true,
+                reminderColors = intent?.getIntArrayExtra(EXTRA_REMINDER_COLORS)
+            )
+
+        internal fun isReminderIntent(
+            lightImpulse: Boolean,
+            reminderColors: IntArray?
+        ): Boolean = lightImpulse && reminderColors?.isNotEmpty() == true
+
         fun createIntent(
             context: Context,
             settings: LuminoteSettings,
@@ -1455,22 +1512,6 @@ class HaloOverlayService : Service() {
                 putExtra(
                     EXTRA_INTERVAL,
                     settings.haloInterval
-                )
-
-                putExtra(
-                    EXTRA_REPEAT_COUNT,
-                    when (
-                        settings.notificationPlayback
-                    ) {
-                        NotificationPlayback.ONCE ->
-                            1
-
-                        NotificationPlayback.REPEAT ->
-                            settings.haloRepeatCount
-
-                        NotificationPlayback.KEEP_VISIBLE ->
-                            -1
-                    }
                 )
 
                 putExtra(
@@ -1519,11 +1560,6 @@ class HaloOverlayService : Service() {
                     }
                 )
 
-                putExtra(
-                    EXTRA_NOTIFICATION_PLAYBACK,
-                    settings.notificationPlayback.name
-                )
-
                 paletteColors?.let {
                     putExtra(
                         EXTRA_PALETTE_COLORS,
@@ -1553,11 +1589,22 @@ class HaloOverlayService : Service() {
                 }
             }
 
+        fun createReminderIntent(context: Context, settings: LuminoteSettings, packageName: String, colors: IntArray): Intent =
+            createIntent(
+                context = context,
+                settings = settings.copy(haloColor = colors.first()),
+                packageName = packageName,
+                notificationKey = "reminder-${android.os.SystemClock.elapsedRealtime()}"
+            ).apply {
+                putExtra(EXTRA_LIGHT_IMPULSE, true)
+                putExtra(EXTRA_REMINDER_COLORS, colors)
+            }
+
         /** Starts the overlay from a notification callback while the app is backgrounded. */
         fun start(
             context: Context,
             intent: Intent
-        ) {
+        ): Boolean {
             /*
              * Accessibility overlays are the lock-screen/AoD renderer. Route
              * there before attempting an FGS start, which Android may reject
@@ -1591,7 +1638,7 @@ class HaloOverlayService : Service() {
                         null
                 }
 
-                return
+                return true
             }
 
             if (
@@ -1607,6 +1654,7 @@ class HaloOverlayService : Service() {
                 context.startForegroundService(
                     intent
                 )
+                return true
             } catch (
                 exception: IllegalStateException
             ) {
@@ -1615,6 +1663,7 @@ class HaloOverlayService : Service() {
                     "System rejected background start for halo service",
                     exception
                 )
+                return false
             } catch (
                 exception: SecurityException
             ) {
@@ -1623,6 +1672,7 @@ class HaloOverlayService : Service() {
                     "Missing permission to start halo foreground service",
                     exception
                 )
+                return false
             }
         }
 
@@ -1658,12 +1708,9 @@ class HaloOverlayService : Service() {
         private fun isPersistentAmbientIntent(
             intent: Intent
         ): Boolean =
-            intent.getStringExtra(
-                EXTRA_NOTIFICATION_PLAYBACK
-            ) ==
-                    NotificationPlayback.KEEP_VISIBLE.name
+            intent.getBooleanExtra(EXTRA_AMBIENT, false)
 
-        fun createStopRepeatingIntent(
+        fun createStopAllIntent(
             context: Context
         ): Intent =
             Intent(
@@ -1671,7 +1718,7 @@ class HaloOverlayService : Service() {
                 HaloOverlayService::class.java
             ).apply {
                 putExtra(
-                    EXTRA_STOP_REPEATING,
+                    EXTRA_STOP_ALL,
                     true
                 )
             }
@@ -1774,8 +1821,6 @@ class HaloOverlayService : Service() {
                         settings.ambientEffectSpeed,
                     gradientFlowSpeed =
                         settings.ambientGradientFlowSpeed,
-                    notificationPlayback =
-                        NotificationPlayback.KEEP_VISIBLE
                 )
 
             val palette =
@@ -1795,7 +1840,7 @@ class HaloOverlayService : Service() {
                 settings = ambientSettings,
                 paletteColors = palette,
                 restart = true
-            )
+            ).apply { putExtra(EXTRA_AMBIENT, true) }
         }
     }
 }

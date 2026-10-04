@@ -82,6 +82,8 @@
     <string name="edge_width">Szerokość krawędzi</string>
     <string name="effect_speed">Szybkość efektu</string>
     <string name="reminders">Przypomnienia</string>
+    <string name="enable_reminders">Włącz przypomnienia</string>
+    <string name="reminder_interval">Interwał przypomnienia</string>
     <string name="repeat">Powtarzaj</string>
     <string name="keep_visible">Pozostaw widoczne</string>
     <string name="reminder_pulses">Pulsacje przypomnienia</string>

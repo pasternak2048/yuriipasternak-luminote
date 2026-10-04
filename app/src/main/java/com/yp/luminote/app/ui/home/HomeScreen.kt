@@ -55,7 +55,8 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
         viewModel.setHaloMode(mode)
         when (mode) {
             HaloMode.AMBIENT -> HaloOverlayService.start(context, HaloOverlayService.createAmbientIntent(context, settings.copy(haloMode = HaloMode.AMBIENT)))
-            HaloMode.NOTIFICATIONS, HaloMode.OFF -> HaloOverlayService.start(context, HaloOverlayService.createStopRepeatingIntent(context))
+            HaloMode.NOTIFICATIONS -> HaloOverlayService.start(context, HaloOverlayService.createStopAmbientIntent(context))
+            HaloMode.OFF -> HaloOverlayService.start(context, HaloOverlayService.createStopAllIntent(context))
         }
     }
     if (!settingsLoaded) {

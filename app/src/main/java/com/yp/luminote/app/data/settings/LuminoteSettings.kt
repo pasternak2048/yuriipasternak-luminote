@@ -4,6 +4,10 @@ const val MIN_HALO_VALUE = 0f
 const val MAX_HALO_VALUE = 1f
 const val MIN_HALO_INTERVAL_SECONDS = 0f
 const val MAX_HALO_INTERVAL_SECONDS = 10f
+const val MIN_REMINDER_INTERVAL_SECONDS = 10
+const val MAX_REMINDER_INTERVAL_SECONDS = 120
+fun sanitizeReminderIntervalSeconds(value: Int): Int =
+    value.coerceIn(MIN_REMINDER_INTERVAL_SECONDS, MAX_REMINDER_INTERVAL_SECONDS)
 /** Display geometry correction in dp. Negative edge values move the line outside the display. */
 const val MIN_DISPLAY_CALIBRATION_DP = -24f
 const val MAX_DISPLAY_CALIBRATION_DP = 24f
@@ -25,12 +29,6 @@ fun sanitizeDisplayCornerShape(value: Float): Float =
 enum class NotificationSource {
     ALL_APPS,
     SELECTED_APPS
-}
-
-enum class NotificationPlayback {
-    ONCE,
-    REPEAT,
-    KEEP_VISIBLE
 }
 
 enum class ThemeMode {
@@ -72,11 +70,10 @@ data class LuminoteSettings(
     val haloInterval: Float =
         1.0f,
 
-    /** Number of replay cycles used only when notificationPlayback is REPEAT. */
-    val haloRepeatCount: Int =
-        1,
+    /** A lightweight, app-coloured reminder, independent of notification playback. */
+    val remindersEnabled: Boolean = false,
 
-    val notificationPlayback: NotificationPlayback = NotificationPlayback.ONCE,
+    val reminderIntervalSeconds: Int = 30,
 
     val haloFrame: HaloFrame = HaloFrame.CLASSIC,
 
