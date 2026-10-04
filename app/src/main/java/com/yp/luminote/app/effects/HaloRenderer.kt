@@ -11,7 +11,6 @@ import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -26,13 +25,121 @@ internal fun lightImpulsePhase(progress: Float): LightImpulsePhase = when {
     else -> LightImpulsePhase.FADE
 }
 
-private const val LIGHT_IGNITION_END = 0.12f
-private const val LIGHT_TRAVEL_END = 0.78f
-private const val LIGHT_CONVERGE_END = 0.90f
-private const val LIGHT_HALO_TAIL_FRACTION = 0.13f
-private const val LIGHT_CORE_TAIL_FRACTION = 0.040f
-private const val LIGHT_CORNER_BLOOM_RANGE_FRACTION = 0.045f
-private const val LIGHT_CORNER_BLOOM_RADIUS_FRACTION = 0.035f
+internal const val LIGHT_IMPULSE_DURATION_SECONDS = 2.2f
+private const val LIGHT_IGNITION_END = 0.09f
+private const val LIGHT_TRAVEL_END = 0.80f
+private const val LIGHT_CONVERGE_END = 0.88f
+private const val LIGHT_TAIL_FRACTION = 0.24f
+private const val LIGHT_CORE_FRACTION = 0.022f
+private const val LIGHT_TAIL_SAMPLES = 24
+private const val LIGHT_CORE_SAMPLES = 18
+private const val LIGHT_BLOOM_SAMPLES = 24
+
+internal fun lightImpulseTravelProgress(progress: Float): Float =
+    lightImpulseSmoothStep(
+        (progress - LIGHT_IGNITION_END) /
+                (LIGHT_TRAVEL_END - LIGHT_IGNITION_END)
+    )
+
+/** Carries the single source through the exact ignition-to-split boundary. */
+internal fun lightImpulseOriginGlow(progress: Float): Float = when {
+    progress <= LIGHT_IGNITION_END -> lightImpulseSmoothStep(progress / LIGHT_IGNITION_END)
+    progress < LIGHT_TRAVEL_END -> {
+        val release = (1f - lightImpulseTravelProgress(progress) * 6f).coerceIn(0f, 1f)
+        release * release
+    }
+    else -> 0f
+}
+
+/** Builds the reunion point before the cores arrive, avoiding a phase-boundary flash. */
+internal fun lightImpulseBottomBloom(progress: Float): Float = when {
+    progress < LIGHT_TRAVEL_END -> {
+        val readiness = lightImpulseSmoothStep(
+            (lightImpulseTravelProgress(progress) - 0.80f) / 0.20f
+        )
+        0.45f * readiness
+    }
+    progress < LIGHT_CONVERGE_END -> 0.45f + 0.55f * lightImpulseSmoothStep(
+        (progress - LIGHT_TRAVEL_END) / (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
+    )
+    else -> 0f
+}
+
+internal fun lightImpulseBottomBloomRadiusFraction(progress: Float): Float = when {
+    progress < LIGHT_TRAVEL_END -> 0.012f + 0.006f * (lightImpulseBottomBloom(progress) / 0.45f)
+    progress < LIGHT_CONVERGE_END -> 0.018f + 0.022f * lightImpulseSmoothStep(
+        (progress - LIGHT_TRAVEL_END) / (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
+    )
+    else -> 0.040f
+}
+
+internal fun lightImpulseIgnitionDurationMs(): Long =
+    (LIGHT_IMPULSE_DURATION_SECONDS * LIGHT_IGNITION_END * 1_000f).roundToInt().toLong()
+
+private fun lightImpulseSmoothStep(value: Float): Float {
+    val t = value.coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
+}
+
+/** Positions on the calibrated centreline used by the one source-to-reunion event. */
+internal data class LightImpulseEndpoints(
+    val topFraction: Float,
+    val bottomFraction: Float,
+    val forwardDistance: Float,
+    val reverseDistance: Float
+)
+
+internal fun lightImpulseEndpoints(
+    measure: PathMeasure,
+    length: Float,
+    bounds: RectF
+): LightImpulseEndpoints {
+    val topFraction = nearestPathFraction(measure, length, bounds.centerX(), bounds.top)
+    val bottomFraction = nearestPathFraction(measure, length, bounds.centerX(), bounds.bottom)
+    return lightImpulseEndpoints(topFraction, bottomFraction, length)
+}
+
+internal fun lightImpulseEndpoints(
+    topFraction: Float,
+    bottomFraction: Float,
+    length: Float
+): LightImpulseEndpoints {
+    if (length <= 0f) {
+        return LightImpulseEndpoints(0f, 0f, 0f, 0f)
+    }
+    val forwardDistance = ((bottomFraction - topFraction) * length + length) % length
+    return LightImpulseEndpoints(
+        topFraction = topFraction,
+        bottomFraction = bottomFraction,
+        forwardDistance = forwardDistance,
+        reverseDistance = length - forwardDistance
+    )
+}
+
+private fun nearestPathFraction(
+    measure: PathMeasure,
+    length: Float,
+    targetX: Float,
+    targetY: Float
+): Float {
+    val position = FloatArray(2)
+    var nearestFraction = 0f
+    var nearestDistance = Float.MAX_VALUE
+    for (sample in 0..LIGHT_ENDPOINT_SAMPLES) {
+        val fraction = sample.toFloat() / LIGHT_ENDPOINT_SAMPLES
+        measure.getPosTan(length * fraction, position, null)
+        val deltaX = position[0] - targetX
+        val deltaY = position[1] - targetY
+        val distance = deltaX * deltaX + deltaY * deltaY
+        if (distance < nearestDistance) {
+            nearestDistance = distance
+            nearestFraction = fraction
+        }
+    }
+    return nearestFraction
+}
+
+private const val LIGHT_ENDPOINT_SAMPLES = 960
 
 /** Draws prepared geometry; the View supplies window size, insets and animation. */
 internal class HaloRenderer(
@@ -216,21 +323,22 @@ internal class HaloRenderer(
         if (geometry.length <= 0f) return
         val timeline = phase.coerceIn(0f, 1f)
         if (timeline >= 1f) return
-        // The impulse owns its 0.90–1.00 fade; the generic finite envelope must not
+        // The impulse owns its 0.88–1.00 fade; the generic finite envelope must not
         // prematurely dim the outline travel.
         val alpha = (255f * config.intensity).roundToInt().coerceIn(0, 255)
         if (alpha == 0) return
-        val origin = rippleOriginFraction(geometry, geometry.bounds.centerX(), geometry.bounds.top) * geometry.length
-        val bottom = rippleOriginFraction(geometry, geometry.bounds.centerX(), geometry.bounds.bottom) * geometry.length
-        val forwardDistance = normalizeDistance(bottom - origin, geometry.length)
-        val reverseDistance = geometry.length - forwardDistance
+        val endpoints = lightImpulseEndpointsFor(geometry)
+        val origin = endpoints.topFraction * geometry.length
+        val bottom = endpoints.bottomFraction * geometry.length
+        val forwardDistance = endpoints.forwardDistance
+        val reverseDistance = endpoints.reverseDistance
         val save = canvas.save()
         try {
             canvas.clipPath(outline.path)
             corePaint.shader = null
             when (lightImpulsePhase(timeline)) {
                 LightImpulsePhase.IGNITION -> {
-                    val ignition = smoothStep(timeline / LIGHT_IGNITION_END)
+                    val ignition = lightImpulseOriginGlow(timeline)
                     drawImpulseBloom(
                         canvas, geometry, origin, alpha,
                         radius = geometry.length * (0.012f + ignition * 0.026f),
@@ -239,37 +347,67 @@ internal class HaloRenderer(
                 }
 
                 LightImpulsePhase.TRAVEL -> {
-                    val travel = smoothStep(
-                        (timeline - LIGHT_IGNITION_END) /
-                                (LIGHT_TRAVEL_END - LIGHT_IGNITION_END)
-                    )
+                    val travel = lightImpulseTravelProgress(timeline)
+                    val originGlow = lightImpulseOriginGlow(timeline)
+                    if (originGlow > 0f) {
+                        drawImpulseBloom(
+                            canvas, geometry, origin, alpha,
+                            radius = geometry.length * (0.018f + originGlow * 0.020f),
+                            bloom = originGlow
+                        )
+                    }
                     val forwardFront = origin + forwardDistance * travel
                     val reverseFront = origin - reverseDistance * travel
-                    drawImpulseWavefront(canvas, geometry, forwardFront, 1, alpha)
-                    drawImpulseWavefront(canvas, geometry, reverseFront, -1, alpha)
-                    drawCornerBlooms(canvas, geometry, forwardFront, reverseFront, alpha)
+                    // The two paths are born from the already-completed ignition, rather than
+                    // rendering two full beams at the top centre. Their shared, tapered light
+                    // structure keeps this one event readable as it separates around the edge.
+                    drawImpulseFlow(
+                        canvas, geometry, forwardFront, 1, alpha, timeline,
+                        tailLimit = forwardDistance * travel
+                    )
+                    drawImpulseFlow(
+                        canvas, geometry, reverseFront, -1, alpha, timeline,
+                        tailLimit = reverseDistance * travel
+                    )
+                    val bottomBloom = lightImpulseBottomBloom(timeline)
+                    if (bottomBloom > 0f) {
+                        drawImpulseBloom(
+                            canvas, geometry, bottom, alpha,
+                            radius = geometry.length * lightImpulseBottomBloomRadiusFraction(timeline),
+                            bloom = bottomBloom
+                        )
+                    }
                 }
 
                 LightImpulsePhase.CONVERGE -> {
-                    val converge = smoothStep(
+                    val converge = lightImpulseSmoothStep(
                         (timeline - LIGHT_TRAVEL_END) /
                                 (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
                     )
+                    val remainingFlow = geometry.length * LIGHT_TAIL_FRACTION * (1f - converge)
+                    drawImpulseFlow(
+                        canvas, geometry, bottom, 1, alpha, timeline, remainingFlow,
+                        drawCore = false
+                    )
+                    drawImpulseFlow(
+                        canvas, geometry, bottom, -1, alpha, timeline, remainingFlow,
+                        drawCore = false
+                    )
                     drawImpulseBloom(
                         canvas, geometry, bottom, alpha,
-                        radius = geometry.length * (0.032f + converge * 0.028f),
-                        bloom = 0.65f + converge * 0.35f
+                        radius = geometry.length * lightImpulseBottomBloomRadiusFraction(timeline),
+                        bloom = lightImpulseBottomBloom(timeline)
                     )
                 }
 
                 LightImpulsePhase.FADE -> {
-                    val fade = 1f - smoothStep(
+                    val fade = 1f - lightImpulseSmoothStep(
                         (timeline - LIGHT_CONVERGE_END) /
                                 (1f - LIGHT_CONVERGE_END)
                     )
                     drawImpulseBloom(
                         canvas, geometry, bottom, alpha,
-                        radius = geometry.length * 0.06f,
+                        radius = geometry.length * 0.040f,
                         bloom = fade
                     )
                 }
@@ -277,47 +415,61 @@ internal class HaloRenderer(
         } finally { canvas.restoreToCount(save) }
     }
 
-    /** A wide halo beneath a narrow core keeps a travelling impulse organic rather than band-like. */
-    private fun drawImpulseWavefront(
+    private fun lightImpulseEndpointsFor(geometry: StyleGeometry): LightImpulseEndpoints =
+        geometry.lightImpulseEndpoints ?: lightImpulseEndpoints(
+            measure = geometry.measure,
+            length = geometry.length,
+            bounds = geometry.bounds
+        ).also { geometry.lightImpulseEndpoints = it }
+
+    /**
+     * Draws a physical-edge-only continuous light field. Closely overlapped samples modulate
+     * opacity and width along the contour, so the eye reads one tail rather than stacked bands.
+     */
+    private fun drawImpulseFlow(
         canvas: Canvas,
         geometry: StyleGeometry,
         front: Float,
         direction: Int,
-        alpha: Int
+        alpha: Int,
+        timeline: Float,
+        tailLimit: Float,
+        drawCore: Boolean = true
     ) {
-        drawDirectionalImpulseSegment(
-            canvas, geometry, front, direction, geometry.length * LIGHT_HALO_TAIL_FRACTION,
-            alpha = (alpha * 0.22f).roundToInt(), strokeWidth = renderStrokeWidth * 3.1f
-        )
-        drawDirectionalImpulseSegment(
-            canvas, geometry, front, direction, geometry.length * LIGHT_CORE_TAIL_FRACTION,
-            alpha = alpha, strokeWidth = renderStrokeWidth * 1.15f
-        )
-    }
-
-    private fun drawCornerBlooms(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        forwardFront: Float,
-        reverseFront: Float,
-        alpha: Int
-    ) {
-        val bloomRange = geometry.length * LIGHT_CORNER_BLOOM_RANGE_FRACTION
-        cornerFractionsFor(geometry).forEach { fraction ->
-            val corner = fraction * geometry.length
-            val proximity = min(
-                circularDistance(corner, forwardFront, geometry.length),
-                circularDistance(corner, reverseFront, geometry.length)
-            )
-            val bloom = (1f - proximity / bloomRange).coerceIn(0f, 1f)
-            if (bloom > 0f) {
-                drawImpulseBloom(
-                    canvas, geometry, corner, alpha,
-                    radius = geometry.length * LIGHT_CORNER_BLOOM_RADIUS_FRACTION,
-                    bloom = bloom * bloom
+        val tailLength = min(geometry.length * LIGHT_TAIL_FRACTION, tailLimit)
+        if (tailLength <= 0f) return
+        val sampleLength = tailLength / LIGHT_TAIL_SAMPLES
+        val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + direction * 0.7f)
+        var sample = 0
+        while (sample < LIGHT_TAIL_SAMPLES) {
+            val position = (sample + 0.5f) / LIGHT_TAIL_SAMPLES
+            val retainedEnergy = 1f - position
+            val taperedEnergy = retainedEnergy * retainedEnergy
+            val fieldAlpha = (
+                alpha *
+                        (0.018f + 0.36f * taperedEnergy) *
+                        organicPulse
                 )
-            }
+                .roundToInt()
+            val fieldWidth = renderStrokeWidth * (0.56f + 0.58f * retainedEnergy)
+            drawDirectionalImpulseSample(
+                canvas = canvas,
+                geometry = geometry,
+                front = front,
+                direction = direction,
+                distanceBehindFront = sample * sampleLength,
+                length = sampleLength * 1.70f,
+                alpha = fieldAlpha,
+                strokeWidth = fieldWidth
+            )
+            sample++
         }
+
+        if (!drawCore) return
+        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, tailLength * 0.60f)
+        drawContinuousImpulseCore(
+            canvas, geometry, front, direction, alpha, organicPulse, coreLength
+        )
     }
 
     private fun drawImpulseBloom(
@@ -330,23 +482,73 @@ internal class HaloRenderer(
     ) {
         val safeBloom = bloom.coerceIn(0f, 1f)
         if (safeBloom <= 0f || radius <= 0f) return
-        drawImpulseSegment(canvas, geometry, center, radius * 2f,
-            (alpha * safeBloom * 0.20f).roundToInt(), renderStrokeWidth * 3.4f)
-        drawImpulseSegment(canvas, geometry, center, radius * 0.72f,
-            (alpha * safeBloom).roundToInt(), renderStrokeWidth * 1.2f)
+        val sampleLength = radius * 2f / LIGHT_BLOOM_SAMPLES
+        var sample = 0
+        while (sample < LIGHT_BLOOM_SAMPLES) {
+            val normalized = ((sample + 0.5f) / LIGHT_BLOOM_SAMPLES) * 2f - 1f
+            val energy = (1f - normalized * normalized).coerceAtLeast(0f)
+            val softenedEnergy = energy * energy
+            drawImpulseSegment(
+                canvas = canvas,
+                geometry = geometry,
+                center = center + normalized * radius,
+                length = sampleLength * 1.75f,
+                alpha = (alpha * safeBloom * (0.025f + 0.58f * softenedEnergy)).roundToInt(),
+                strokeWidth = renderStrokeWidth * (0.72f + 1.75f * softenedEnergy)
+            )
+            sample++
+        }
     }
 
-    private fun drawDirectionalImpulseSegment(
+    /** A one-pass longitudinal energy distribution replaces concentric core strokes. */
+    private fun drawContinuousImpulseCore(
         canvas: Canvas,
         geometry: StyleGeometry,
         front: Float,
         direction: Int,
-        tail: Float,
+        alpha: Int,
+        organicPulse: Float,
+        coreLength: Float
+    ) {
+        val coreSpan = coreLength * 3.2f
+        val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
+        var sample = 0
+        while (sample < LIGHT_CORE_SAMPLES) {
+            val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
+            // The high-energy point sits just behind the front, with a smooth release behind it.
+            val centred = (position - 0.24f) / 0.62f
+            val energy = (1f - centred * centred).coerceIn(0f, 1f)
+            val softenedEnergy = energy * energy
+            drawDirectionalImpulseSample(
+                canvas = canvas,
+                geometry = geometry,
+                front = front,
+                direction = direction,
+                distanceBehindFront = sample * sampleLength,
+                length = sampleLength * 1.75f,
+                alpha = (alpha * organicPulse * (0.14f + 0.86f * softenedEnergy)).roundToInt(),
+                strokeWidth = renderStrokeWidth * (0.92f + 1.45f * softenedEnergy)
+            )
+            sample++
+        }
+    }
+
+    private fun drawDirectionalImpulseSample(
+        canvas: Canvas,
+        geometry: StyleGeometry,
+        front: Float,
+        direction: Int,
+        distanceBehindFront: Float,
+        length: Float,
         alpha: Int,
         strokeWidth: Float
     ) {
-        val start = if (direction > 0) front - tail else front
-        drawImpulseSegment(canvas, geometry, start + tail / 2f, tail, alpha, strokeWidth)
+        val center = if (direction > 0) {
+            front - distanceBehindFront - length / 2f
+        } else {
+            front + distanceBehindFront + length / 2f
+        }
+        drawImpulseSegment(canvas, geometry, center, length, alpha, strokeWidth)
     }
 
     private fun drawImpulseSegment(
@@ -361,16 +563,6 @@ internal class HaloRenderer(
         corePaint.color = colorWithAlpha(alpha, colorRgb)
         corePaint.strokeWidth = strokeWidth
         drawWrappedSegment(canvas, geometry.measure, geometry.length, center - length / 2f, length, corePaint)
-    }
-
-    private fun circularDistance(first: Float, second: Float, length: Float): Float {
-        val direct = abs(normalizeDistance(first - second, length))
-        return min(direct, length - direct)
-    }
-
-    private fun smoothStep(value: Float): Float {
-        val t = value.coerceIn(0f, 1f)
-        return t * t * (3f - 2f * t)
     }
 
     /** Complete calibrated frame used by the static calibration preview. */
@@ -857,11 +1049,7 @@ internal class HaloRenderer(
             geometry.bounds
 
         val origin =
-            rippleOriginFraction(
-                geometry,
-                bounds.centerX(),
-                bounds.top
-            ) *
+            rippleOriginFraction(geometry) *
                     length
 
         val distance =
@@ -1065,73 +1253,17 @@ internal class HaloRenderer(
         }
     }
 
-    private fun rippleOriginFraction(
-        geometry: StyleGeometry,
-        targetX: Float,
-        targetY: Float
-    ): Float {
-        geometry.rippleOriginFraction
+    private fun rippleOriginFraction(geometry: StyleGeometry): Float {
+        geometry.topRippleOriginFraction
             ?.let {
                 return it
             }
-
-        val position =
-            FloatArray(
-                2
-            )
-
-        var nearestFraction =
-            0f
-
-        var nearestDistance =
-            Float.MAX_VALUE
-
-        for (
-        sample in
-        0..CORNER_PATH_SAMPLES
-        ) {
-            val fraction =
-                sample.toFloat() /
-                        CORNER_PATH_SAMPLES
-
-            geometry.measure
-                .getPosTan(
-                    geometry.length *
-                            fraction,
-                    position,
-                    null
-                )
-
-            val deltaX =
-                position[0] -
-                        targetX
-
-            val deltaY =
-                position[1] -
-                        targetY
-
-            val distance =
-                deltaX *
-                        deltaX +
-                        deltaY *
-                        deltaY
-
-            if (
-                distance <
-                nearestDistance
-            ) {
-                nearestDistance =
-                    distance
-
-                nearestFraction =
-                    fraction
-            }
-        }
-
-        geometry.rippleOriginFraction =
-            nearestFraction
-
-        return nearestFraction
+        return nearestPathFraction(
+            measure = geometry.measure,
+            length = geometry.length,
+            targetX = geometry.bounds.centerX(),
+            targetY = geometry.bounds.top
+        ).also { geometry.topRippleOriginFraction = it }
     }
 
     /** The DisplayOutline owns the physical centreline and its zero-default calibration. */
@@ -1511,7 +1643,8 @@ internal class HaloRenderer(
         val bounds: RectF,
         var length: Float = 0f,
         var cornerFractions: FloatArray? = null,
-        var rippleOriginFraction: Float? = null
+        var topRippleOriginFraction: Float? = null,
+        var lightImpulseEndpoints: LightImpulseEndpoints? = null
     )
 
     private companion object {

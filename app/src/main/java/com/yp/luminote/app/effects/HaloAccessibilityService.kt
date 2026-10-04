@@ -535,7 +535,10 @@ class HaloAccessibilityService : AccessibilityService() {
             max(
                 HaloAnimation.MIN_DURATION_MS,
                 (
-                        config.durationSeconds *
+                        finiteDurationFor(
+                            config.renderMode,
+                            config.durationSeconds
+                        ) *
                                 1000f
                         ).toLong()
             )
@@ -1197,7 +1200,10 @@ class HaloAccessibilityService : AccessibilityService() {
             max(
                 HaloAnimation.MIN_DURATION_MS,
                 (
-                        config.durationSeconds *
+                        finiteDurationFor(
+                            config.renderMode,
+                            config.durationSeconds
+                        ) *
                                 1000f
                         ).toLong()
             )

@@ -910,7 +910,10 @@ class HaloOverlayService : Service() {
             max(
                 HaloAnimation.MIN_DURATION_MS,
                 (
-                        config.durationSeconds *
+                        finiteDurationFor(
+                            config.renderMode,
+                            config.durationSeconds
+                        ) *
                                 1000f
                         ).toLong()
             )
@@ -1311,7 +1314,10 @@ class HaloOverlayService : Service() {
             max(
                 HaloAnimation.MIN_DURATION_MS,
                 (
-                        config.durationSeconds *
+                        finiteDurationFor(
+                            config.renderMode,
+                            config.durationSeconds
+                        ) *
                                 1000f
                         ).toLong()
             )
