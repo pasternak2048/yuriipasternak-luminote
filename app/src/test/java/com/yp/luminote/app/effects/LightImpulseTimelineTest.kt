@@ -1,6 +1,8 @@
 package com.yp.luminote.app.effects
 
 import android.graphics.Paint
+import com.yp.luminote.app.data.settings.HaloColorMode
+import com.yp.luminote.app.data.settings.HaloMotion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -24,6 +26,27 @@ class LightImpulseTimelineTest {
         assertEquals(1f, lightImpulseOriginGlow(0.09f), 0.0001f)
         assertTrue(lightImpulseTravelProgress(0.20f) > 0f)
         assertTrue(lightImpulseTravelProgress(0.20f) < lightImpulseTravelProgress(0.40f))
+    }
+
+    @Test
+    fun `production plan retains one top source through subpixel branch birth`() {
+        val atBoundary = lightImpulseProductionDrawPlan(0.09f)
+        assertTrue(atBoundary.sourceBloomVisible)
+        assertEquals(0, atBoundary.branchCount)
+        assertEquals(0f, atBoundary.aggregateTravellingCoverageFraction, 0f)
+
+        // This is deliberately below a practical PathMeasure segment threshold on a phone.  The
+        // local source is still rendered, so suppression of a tiny branch cannot create a blank.
+        val subPixelBirth = lightImpulseProductionDrawPlan(0.091f)
+        assertTrue(subPixelBirth.sourceBloomVisible)
+        assertEquals(LightImpulseDrawMode.TOP_BLOOM, subPixelBirth.mode)
+        assertEquals(0, subPixelBirth.branchCount)
+        assertEquals(0f, subPixelBirth.aggregateTravellingCoverageFraction, 0f)
+
+        val firstBranches = lightImpulseProductionDrawPlan(0.25f)
+        assertEquals(LightImpulseDrawMode.SHARED_BIRTH_FIELD, firstBranches.mode)
+        assertEquals(2, firstBranches.branchCount)
+        assertTrue(firstBranches.aggregateTravellingCoverageFraction > 0f)
     }
 
     @Test
@@ -90,22 +113,24 @@ class LightImpulseTimelineTest {
     }
 
     @Test
-    fun `shared birth front meets the owned core without a brightness or width step`() {
+    fun `shared birth front hands off to the same tapered owned core profile`() {
         // travelProgress crosses the shared-field cutoff between these two timeline samples.
-        val before = 0.2695f
-        val after = 0.2699f
+        val before = 0.276f
+        val after = 0.278f
         assertTrue(lightImpulseUsesSharedBirthField(before))
         assertTrue(!lightImpulseUsesSharedBirthField(after))
 
-        val sharedFront = lightImpulseConnectedFieldStrength(
-            position = 1f,
-            sourceStrength = lightImpulseOriginGlow(before),
-            edgeStrength = lightImpulseBranchEnergy(before),
-            sourceAnchored = false
+        val beforePlan = lightImpulseProductionDrawPlan(before)
+        assertEquals(LightImpulseDrawMode.SHARED_BIRTH_FIELD, beforePlan.mode)
+        val sharedFront = lightImpulseProductionBirthFieldStrength(
+            before, beforePlan, beforePlan.forwardFieldLength
         )
-        val ownedCore = lightImpulseTravelCorePeakStrength(after)
-        assertEquals(ownedCore.alphaFraction, sharedFront.alphaFraction, 0.002f)
-        assertEquals(ownedCore.widthFactor, sharedFront.widthFactor, 0.003f)
+        // The physical tip is intentionally unlit. Both the shared field and the later owned
+        // core place their peak a short distance behind it, avoiding a blunt bright cap.
+        assertEquals(0f, sharedFront.alphaFraction, 0f)
+        assertEquals(0.70f, sharedFront.widthFactor, 0f)
+        assertTrue(lightImpulseTaperedFrontStrength(0.24f) >
+            lightImpulseTaperedFrontStrength(0.02f))
     }
 
     @Test
@@ -210,7 +235,7 @@ class LightImpulseTimelineTest {
         assertEquals(0f, afterBloom.bloom, 0f)
         assertTrue(afterBloom.core > 0f)
 
-        val travelFlowFraction = 0.24f
+        val travelFlowFraction = lightImpulseConvergenceFieldRadiusFraction(0.80f)
         val coreBoundary = lightImpulseCoreSpanFraction(travelFlowFraction, 0f)
         assertTrue(lightImpulseConvergenceCoverage(0.80f, coreBoundary - 0.00001f).core > 0f)
         val tailAtBoundary = lightImpulseConvergenceCoverage(0.80f, coreBoundary)
@@ -354,6 +379,217 @@ class LightImpulseTimelineTest {
         assertTrue(lightImpulseFadeEnergy(0.96f) < 1f)
         assertTrue(lightImpulseFadeEnergy(0.99f) > 0f)
         assertEquals(0f, lightImpulseFadeEnergy(1f), 0.0001f)
+    }
+
+    @Test
+    fun `final travelling coverage only contracts and is gone before the local fade impulse`() {
+        val samples = listOf(0.80f, 0.82f, 0.84f, 0.88f, 0.91f, 0.919f, 0.92f, 0.96f, 1f)
+        val coverage = samples.map(::lightImpulseTravellingCoverageFraction)
+
+        coverage.zipWithNext().forEachIndexed { index, (current, next) ->
+            assertTrue("travelling coverage resurrected after ${samples[index]}", next <= current)
+        }
+        assertTrue(coverage.first() > 0f)
+        assertEquals(0f, lightImpulseTravellingCoverageFraction(0.92f), 0f)
+        assertEquals(0f, lightImpulseTravellingCoverageFraction(Float.NaN), 0f)
+    }
+
+    @Test
+    fun `production convergence plan has two owned branches and never grows coverage`() {
+        val arrival = lightImpulseProductionDrawPlan(0.80f)
+        val midConvergence = lightImpulseProductionDrawPlan(0.84f)
+        val fade = lightImpulseProductionDrawPlan(0.92f)
+
+        // The explicit aggregate budget is split equally between the two owned branches.
+        assertEquals(2, arrival.branchCount)
+        assertEquals(0.33f, arrival.aggregateTravellingCoverageFraction, 0.0001f)
+        assertEquals(2, midConvergence.branchCount)
+        assertTrue(midConvergence.sourceBloomVisible)
+        assertTrue(midConvergence.aggregateTravellingCoverageFraction <
+            arrival.aggregateTravellingCoverageFraction)
+        assertEquals(0, fade.branchCount)
+        assertEquals(0f, fade.aggregateTravellingCoverageFraction, 0f)
+
+        listOf(0.80f, 0.84f, 0.88f, 0.919f, 0.92f)
+            .map(::lightImpulseProductionDrawPlan)
+            .zipWithNext()
+            .forEach { (current, next) ->
+                assertTrue(next.aggregateTravellingCoverageFraction <=
+                    current.aggregateTravellingCoverageFraction)
+            }
+    }
+
+    @Test
+    fun `production plan supplies the exact bounded field lengths used by renderer`() {
+        val contour = 10_000f
+        val arrival = lightImpulseProductionDrawPlan(
+            progress = 0.80f,
+            contourLength = contour,
+            forwardMaxDistance = 5_000f,
+            reverseMaxDistance = 5_000f
+        )
+        assertEquals(LightImpulseDrawMode.CONVERGING_FIELDS, arrival.mode)
+        assertEquals(1_650f, arrival.forwardFieldLength, 0.001f)
+        assertEquals(1_650f, arrival.reverseFieldLength, 0.001f)
+        assertEquals(
+            (arrival.forwardFieldLength + arrival.reverseFieldLength) / contour,
+            arrival.aggregateTravellingCoverageFraction,
+            0f
+        )
+
+        val initial = lightImpulseProductionDrawPlan(
+            progress = 0.091f,
+            contourLength = contour,
+            forwardMaxDistance = 5_000f,
+            reverseMaxDistance = 5_000f
+        )
+        assertEquals(LightImpulseDrawMode.TOP_BLOOM, initial.mode)
+        assertEquals(0f, initial.forwardFieldLength, 0f)
+        assertEquals(0f, initial.reverseFieldLength, 0f)
+    }
+
+    @Test
+    fun `complete impulse field is fifty percent longer while each side stays bounded`() {
+        val contour = 10_000f
+        val plan = lightImpulseProductionDrawPlan(
+            progress = 0.80f,
+            contourLength = contour,
+            forwardMaxDistance = 5_000f,
+            reverseMaxDistance = 5_000f
+        )
+
+        assertEquals(0.33f, plan.aggregateTravellingCoverageFraction, 0.0001f)
+        assertEquals(0.165f, plan.forwardFieldLength / contour, 0.0001f)
+        assertEquals(0.165f, plan.reverseFieldLength / contour, 0.0001f)
+        assertEquals(1.5f, plan.aggregateTravellingCoverageFraction / 0.22f, 0.0001f)
+    }
+
+    @Test
+    fun `tail releases smoothly near its core without changing owned field coverage`() {
+        val attached = lightImpulseTailSampleStrength(0.20f)
+        val middle = lightImpulseTailSampleStrength(0.50f)
+        val released = lightImpulseTailSampleStrength(0.80f)
+
+        assertEquals(0f, lightImpulseTailSampleStrength(0f), 0f)
+        assertTrue(attached > middle * 3f)
+        assertTrue(middle > released * 10f)
+        assertTrue(released > 0f)
+        assertEquals(0.33f, lightImpulseProductionDrawPlan(0.80f)
+            .aggregateTravellingCoverageFraction, 0.0001f)
+    }
+
+    @Test
+    fun `every impulse front is tapered from its physical tip before it reaches the bottom glint`() {
+        val tip = lightImpulseTaperedFrontStrength(0f)
+        val nearTip = lightImpulseTaperedFrontStrength(0.08f)
+        val peak = lightImpulseTaperedFrontStrength(0.24f)
+        val release = lightImpulseTaperedFrontStrength(0.72f)
+
+        // The same source-relative profile is used by travel and bottom convergence: no blunt
+        // cap can be brighter than the compact peak behind it, and it fades back into the tail.
+        assertEquals(0f, tip, 0f)
+        assertTrue(nearTip > 0f && nearTip < peak)
+        assertTrue(release > 0f && release < peak)
+        assertEquals(0f, lightImpulseTaperedFrontStrength(1f), 0f)
+    }
+
+    @Test
+    fun `attached tail uses a shorter physical span while the planned field remains 33 percent`() {
+        val plannedPerBranch = 0.165f
+        val attachedSpan = lightImpulseAttachedTailSpanFraction(plannedPerBranch, 0f)
+
+        assertTrue("tail should stay materially closer to its core", attachedSpan < plannedPerBranch * 0.82f)
+        assertTrue(lightImpulseConvergenceCoverage(0.80f, attachedSpan - 0.00001f).tail > 0f)
+        assertEquals(0f, lightImpulseConvergenceCoverage(0.80f, attachedSpan).tail, 0f)
+        assertEquals(0.33f, lightImpulseProductionDrawPlan(0.80f)
+            .aggregateTravellingCoverageFraction, 0.0001f)
+    }
+
+    @Test
+    fun `normal impulse and dedicated light impulse use the same renderer route`() {
+        assertTrue(usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.IMPULSE)))
+        assertTrue(usesLightImpulseRenderer(HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE)))
+        assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.SNAKE)))
+    }
+
+    @Test
+    fun `normal impulse preserves app color treatment while dedicated impulse keeps source color`() {
+        val normalGradient = HaloConfig(
+            motion = HaloMotion.IMPULSE,
+            colorMode = HaloColorMode.GRADIENT,
+            palette = intArrayOf(0xFF0077FF.toInt(), 0xFFFF33AA.toInt())
+        )
+        val dedicatedImpulse = normalGradient.copy(renderMode = HaloRenderMode.LIGHT_IMPULSE)
+
+        assertTrue(impulseUsesNormalColorTreatment(normalGradient))
+        assertTrue(!impulseUsesNormalColorTreatment(dedicatedImpulse))
+    }
+
+    @Test
+    fun `birth mode switch preserves one field footprint and source peak`() {
+        val before = lightImpulseProductionDrawPlan(0.22f)
+        val after = lightImpulseProductionDrawPlan(0.23f)
+        assertEquals(LightImpulseDrawMode.TOP_BLOOM, before.mode)
+        assertEquals(LightImpulseDrawMode.SHARED_BIRTH_FIELD, after.mode)
+
+        // The source-only footprint is two radii; the two connected halves take over only after
+        // each has grown to that radius, avoiding the old abrupt contraction.
+        assertTrue(after.aggregatePhysicalCoverageFraction >=
+            before.aggregatePhysicalCoverageFraction - 0.01f)
+        assertTrue(after.aggregatePhysicalCoverageFraction <=
+            before.aggregatePhysicalCoverageFraction + 0.03f)
+
+        val sourceStrength = lightImpulseOriginGlow(0.23f)
+        val bloomPeak = lightImpulseSharedSourceBloomStrength(0f, sourceStrength)
+        val fieldPeak = lightImpulseConnectedFieldStrength(
+            position = 0f,
+            sourceStrength = sourceStrength,
+            edgeStrength = lightImpulseBranchEnergy(0.23f),
+            sourceAnchored = false
+        )
+        assertEquals(bloomPeak.alphaFraction, fieldPeak.alphaFraction, 0f)
+        assertEquals(bloomPeak.widthFactor, fieldPeak.widthFactor, 0f)
+    }
+
+    @Test
+    fun `birth handoff preserves the full source to front cross section`() {
+        val beforeProgress = 0.22f
+        val afterProgress = 0.23f
+        val before = lightImpulseProductionDrawPlan(beforeProgress)
+        val after = lightImpulseProductionDrawPlan(afterProgress)
+        val sharedRadius = minOf(before.sourceBloomRadius, after.sourceBloomRadius)
+
+        listOf(0f, 0.5f, 0.9f).forEach { normalized ->
+            val distance = sharedRadius * normalized
+            val outgoing = lightImpulseProductionBirthFieldStrength(beforeProgress, before, distance)
+            val incoming = lightImpulseProductionBirthFieldStrength(afterProgress, after, distance)
+            assertTrue("source alpha popped at $normalized", kotlin.math.abs(outgoing.alphaFraction - incoming.alphaFraction) < 0.12f)
+            assertTrue("source width popped at $normalized", kotlin.math.abs(outgoing.widthFactor - incoming.widthFactor) < 0.15f)
+        }
+
+        // Near the new field's front the born head is still below the source peak rather than a
+        // full-strength strip suddenly replacing the bloom edge.
+        val nearFront = lightImpulseProductionBirthFieldStrength(
+            afterProgress, after, after.forwardFieldLength * 0.99f
+        )
+        val center = lightImpulseProductionBirthFieldStrength(afterProgress, after, 0f)
+        assertTrue(nearFront.alphaFraction <= center.alphaFraction)
+        assertTrue(after.aggregatePhysicalCoverageFraction >= before.aggregatePhysicalCoverageFraction - 0.01f)
+    }
+
+    @Test
+    fun `wrapped segment extraction rejects tiny non finite and near full requests`() {
+        assertEquals(null, renderableWrappedSegmentRange(0f, 1_000f, 0f))
+        assertEquals(null, renderableWrappedSegmentRange(0f, 1_000f, 0.49f))
+        assertEquals(null, renderableWrappedSegmentRange(Float.NaN, 1_000f, 10f))
+        assertEquals(null, renderableWrappedSegmentRange(0f, Float.POSITIVE_INFINITY, 10f))
+        assertEquals(null, renderableWrappedSegmentRange(0f, 1_000f, 999.5f))
+
+        val wrapped = renderableWrappedSegmentRange(-20f, 1_000f, 10f)!!
+        assertEquals(980f, wrapped.start, 0f)
+        assertEquals(10f, wrapped.length, 0f)
+        assertTrue(lightImpulseTravellingSegmentIsSafe(165f, 1_000f))
+        assertTrue(!lightImpulseTravellingSegmentIsSafe(166f, 1_000f))
     }
 
     @Test

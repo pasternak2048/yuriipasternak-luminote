@@ -752,13 +752,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 intent?.getStringExtra(
                     HaloOverlayService.EXTRA_MOTION
                 )
-                    ?.let {
-                        runCatching {
-                            HaloMotion.valueOf(
-                                it
-                            )
-                        }.getOrNull()
-                    }
+                    .let(HaloMotion::fromStorage)
                     ?: defaults.motion,
 
             effectSpeed =

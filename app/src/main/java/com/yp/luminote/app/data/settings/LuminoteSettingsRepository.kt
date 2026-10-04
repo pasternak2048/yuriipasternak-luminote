@@ -266,11 +266,7 @@ class LuminoteSettingsRepository(
                         preferences[
                             Keys.haloMotion
                         ]
-                            ?.let {
-                                runCatching {
-                                    HaloMotion.valueOf(it)
-                                }.getOrNull()
-                            }
+                            .let(HaloMotion::fromStorage)
                             ?.takeIf {
                                 HaloEffectCatalog.supports(
                                     HaloFrame.CLASSIC,
@@ -403,13 +399,7 @@ class LuminoteSettingsRepository(
                         preferences[
                             Keys.ambientMotion
                         ]
-                            ?.let {
-                                runCatching {
-                                    HaloMotion.valueOf(
-                                        it
-                                    )
-                                }.getOrNull()
-                            }
+                            .let(HaloMotion::fromStorage)
                             ?.takeIf {
                                 it == HaloMotion.PULSE ||
                                         it == HaloMotion.SNAKE
