@@ -9,13 +9,26 @@ enum class HaloFrame {
 
 enum class HaloMotion {
     PULSE,
+    IMPULSE,
     SNAKE,
     CORNER_PULSE,
     RAIN,
-    RIPPLE_EDGE,
     AZURE_BLADE,
     CRIMSON_BLADE,
-    FORCE_CLASH
+    FORCE_CLASH;
+
+    companion object {
+        /**
+         * Parses persisted and external motion identifiers while preserving the
+         * one-way migration from the former Ripple Edge name.
+         */
+        fun fromStorage(value: String?): HaloMotion? =
+            when (value) {
+                "RIPPLE_EDGE" -> IMPULSE
+                null -> null
+                else -> entries.firstOrNull { it.name == value }
+            }
+    }
 }
 
 data class HaloFrameDefinition(
@@ -38,10 +51,10 @@ object HaloEffectCatalog {
             titleRes = R.string.frame_edge,
             supportedMotions = listOf(
                 HaloMotion.PULSE,
+                HaloMotion.IMPULSE,
                 HaloMotion.SNAKE,
                 HaloMotion.CORNER_PULSE,
                 HaloMotion.RAIN,
-                HaloMotion.RIPPLE_EDGE,
                 HaloMotion.AZURE_BLADE,
                 HaloMotion.CRIMSON_BLADE,
                 HaloMotion.FORCE_CLASH
@@ -54,6 +67,11 @@ object HaloEffectCatalog {
             motion = HaloMotion.PULSE,
             titleRes = R.string.motion_pulse,
             baseDurationSeconds = 2.5f
+        ),
+        HaloMotionDefinition(
+            motion = HaloMotion.IMPULSE,
+            titleRes = R.string.motion_impulse,
+            baseDurationSeconds = 2.2f
         ),
         HaloMotionDefinition(
             motion = HaloMotion.SNAKE,
@@ -69,11 +87,6 @@ object HaloEffectCatalog {
             motion = HaloMotion.RAIN,
             titleRes = R.string.motion_rain,
             baseDurationSeconds = 2.6f
-        ),
-        HaloMotionDefinition(
-            motion = HaloMotion.RIPPLE_EDGE,
-            titleRes = R.string.motion_ripple_edge,
-            baseDurationSeconds = 2.8f
         ),
         HaloMotionDefinition(
             motion = HaloMotion.AZURE_BLADE,

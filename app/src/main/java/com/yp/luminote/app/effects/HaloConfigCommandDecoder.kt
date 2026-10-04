@@ -29,11 +29,7 @@ internal object HaloConfigCommandDecoder {
                     ?: defaults.frame,
             motion =
                 command.motionName
-                    ?.let { name ->
-                        runCatching {
-                            HaloMotion.valueOf(name)
-                        }.getOrNull()
-                    }
+                    .let(HaloMotion::fromStorage)
                     ?: defaults.motion,
             effectSpeed = command.effectSpeed ?: defaults.effectSpeed,
             gradientFlowSpeed =

@@ -16,9 +16,9 @@ internal object HaloAnimationStrategies {
     fun forMotion(motion: HaloMotion): HaloAnimationStrategy = when (motion) {
         HaloMotion.PULSE -> Pulse
         HaloMotion.SNAKE -> Snake
+        HaloMotion.IMPULSE -> Impulse
         HaloMotion.CORNER_PULSE -> CornerPulse
         HaloMotion.RAIN -> Rain
-        HaloMotion.RIPPLE_EDGE -> RippleEdge
         HaloMotion.AZURE_BLADE -> AzureBlade
         HaloMotion.CRIMSON_BLADE -> CrimsonBlade
         HaloMotion.FORCE_CLASH -> ForceClash
@@ -40,8 +40,10 @@ internal object HaloAnimationStrategies {
         override fun envelope(totalDurationMs: Long) = HaloAnimationEnvelope(180L, 380L)
     }
 
-    private object RippleEdge : HaloAnimationStrategy {
-        override fun envelope(totalDurationMs: Long) = HaloAnimationEnvelope(200L, 420L)
+    private object Impulse : HaloAnimationStrategy {
+        // The Impulse renderer owns its birth and convergence fades. Applying
+        // the generic finite-cycle envelope would dim those localized fields.
+        override fun envelope(totalDurationMs: Long) = HaloAnimationEnvelope(0L, 0L)
     }
 
     private object AzureBlade : HaloAnimationStrategy {

@@ -1,6 +1,8 @@
 package com.yp.luminote.app.effects
 
 import android.graphics.Paint
+import com.yp.luminote.app.data.settings.HaloColorMode
+import com.yp.luminote.app.data.settings.HaloMotion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -111,7 +113,7 @@ class LightImpulseTimelineTest {
     }
 
     @Test
-    fun `shared birth front meets the owned core without a brightness or width step`() {
+    fun `shared birth front hands off to the same tapered owned core profile`() {
         // travelProgress crosses the shared-field cutoff between these two timeline samples.
         val before = 0.276f
         val after = 0.278f
@@ -123,9 +125,12 @@ class LightImpulseTimelineTest {
         val sharedFront = lightImpulseProductionBirthFieldStrength(
             before, beforePlan, beforePlan.forwardFieldLength
         )
-        val ownedCore = lightImpulseTravelCorePeakStrength(after)
-        assertEquals(ownedCore.alphaFraction, sharedFront.alphaFraction, 0.002f)
-        assertEquals(ownedCore.widthFactor, sharedFront.widthFactor, 0.003f)
+        // The physical tip is intentionally unlit. Both the shared field and the later owned
+        // core place their peak a short distance behind it, avoiding a blunt bright cap.
+        assertEquals(0f, sharedFront.alphaFraction, 0f)
+        assertEquals(0.70f, sharedFront.widthFactor, 0f)
+        assertTrue(lightImpulseTaperedFrontStrength(0.24f) >
+            lightImpulseTaperedFrontStrength(0.02f))
     }
 
     @Test
@@ -395,9 +400,9 @@ class LightImpulseTimelineTest {
         val midConvergence = lightImpulseProductionDrawPlan(0.84f)
         val fade = lightImpulseProductionDrawPlan(0.92f)
 
-        // The explicit aggregate budget prevents the former 0.22 contour on each side.
+        // The explicit aggregate budget is split equally between the two owned branches.
         assertEquals(2, arrival.branchCount)
-        assertEquals(0.22f, arrival.aggregateTravellingCoverageFraction, 0.0001f)
+        assertEquals(0.33f, arrival.aggregateTravellingCoverageFraction, 0.0001f)
         assertEquals(2, midConvergence.branchCount)
         assertTrue(midConvergence.sourceBloomVisible)
         assertTrue(midConvergence.aggregateTravellingCoverageFraction <
@@ -424,8 +429,8 @@ class LightImpulseTimelineTest {
             reverseMaxDistance = 5_000f
         )
         assertEquals(LightImpulseDrawMode.CONVERGING_FIELDS, arrival.mode)
-        assertEquals(1_100f, arrival.forwardFieldLength, 0.001f)
-        assertEquals(1_100f, arrival.reverseFieldLength, 0.001f)
+        assertEquals(1_650f, arrival.forwardFieldLength, 0.001f)
+        assertEquals(1_650f, arrival.reverseFieldLength, 0.001f)
         assertEquals(
             (arrival.forwardFieldLength + arrival.reverseFieldLength) / contour,
             arrival.aggregateTravellingCoverageFraction,
@@ -441,6 +446,83 @@ class LightImpulseTimelineTest {
         assertEquals(LightImpulseDrawMode.TOP_BLOOM, initial.mode)
         assertEquals(0f, initial.forwardFieldLength, 0f)
         assertEquals(0f, initial.reverseFieldLength, 0f)
+    }
+
+    @Test
+    fun `complete impulse field is fifty percent longer while each side stays bounded`() {
+        val contour = 10_000f
+        val plan = lightImpulseProductionDrawPlan(
+            progress = 0.80f,
+            contourLength = contour,
+            forwardMaxDistance = 5_000f,
+            reverseMaxDistance = 5_000f
+        )
+
+        assertEquals(0.33f, plan.aggregateTravellingCoverageFraction, 0.0001f)
+        assertEquals(0.165f, plan.forwardFieldLength / contour, 0.0001f)
+        assertEquals(0.165f, plan.reverseFieldLength / contour, 0.0001f)
+        assertEquals(1.5f, plan.aggregateTravellingCoverageFraction / 0.22f, 0.0001f)
+    }
+
+    @Test
+    fun `tail releases smoothly near its core without changing owned field coverage`() {
+        val attached = lightImpulseTailSampleStrength(0.20f)
+        val middle = lightImpulseTailSampleStrength(0.50f)
+        val released = lightImpulseTailSampleStrength(0.80f)
+
+        assertEquals(0f, lightImpulseTailSampleStrength(0f), 0f)
+        assertTrue(attached > middle * 3f)
+        assertTrue(middle > released * 10f)
+        assertTrue(released > 0f)
+        assertEquals(0.33f, lightImpulseProductionDrawPlan(0.80f)
+            .aggregateTravellingCoverageFraction, 0.0001f)
+    }
+
+    @Test
+    fun `every impulse front is tapered from its physical tip before it reaches the bottom glint`() {
+        val tip = lightImpulseTaperedFrontStrength(0f)
+        val nearTip = lightImpulseTaperedFrontStrength(0.08f)
+        val peak = lightImpulseTaperedFrontStrength(0.24f)
+        val release = lightImpulseTaperedFrontStrength(0.72f)
+
+        // The same source-relative profile is used by travel and bottom convergence: no blunt
+        // cap can be brighter than the compact peak behind it, and it fades back into the tail.
+        assertEquals(0f, tip, 0f)
+        assertTrue(nearTip > 0f && nearTip < peak)
+        assertTrue(release > 0f && release < peak)
+        assertEquals(0f, lightImpulseTaperedFrontStrength(1f), 0f)
+    }
+
+    @Test
+    fun `attached tail uses a shorter physical span while the planned field remains 33 percent`() {
+        val plannedPerBranch = 0.165f
+        val attachedSpan = lightImpulseAttachedTailSpanFraction(plannedPerBranch, 0f)
+
+        assertTrue("tail should stay materially closer to its core", attachedSpan < plannedPerBranch * 0.82f)
+        assertTrue(lightImpulseConvergenceCoverage(0.80f, attachedSpan - 0.00001f).tail > 0f)
+        assertEquals(0f, lightImpulseConvergenceCoverage(0.80f, attachedSpan).tail, 0f)
+        assertEquals(0.33f, lightImpulseProductionDrawPlan(0.80f)
+            .aggregateTravellingCoverageFraction, 0.0001f)
+    }
+
+    @Test
+    fun `normal impulse and dedicated light impulse use the same renderer route`() {
+        assertTrue(usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.IMPULSE)))
+        assertTrue(usesLightImpulseRenderer(HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE)))
+        assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.SNAKE)))
+    }
+
+    @Test
+    fun `normal impulse preserves app color treatment while dedicated impulse keeps source color`() {
+        val normalGradient = HaloConfig(
+            motion = HaloMotion.IMPULSE,
+            colorMode = HaloColorMode.GRADIENT,
+            palette = intArrayOf(0xFF0077FF.toInt(), 0xFFFF33AA.toInt())
+        )
+        val dedicatedImpulse = normalGradient.copy(renderMode = HaloRenderMode.LIGHT_IMPULSE)
+
+        assertTrue(impulseUsesNormalColorTreatment(normalGradient))
+        assertTrue(!impulseUsesNormalColorTreatment(dedicatedImpulse))
     }
 
     @Test
@@ -506,8 +588,8 @@ class LightImpulseTimelineTest {
         val wrapped = renderableWrappedSegmentRange(-20f, 1_000f, 10f)!!
         assertEquals(980f, wrapped.start, 0f)
         assertEquals(10f, wrapped.length, 0f)
-        assertTrue(lightImpulseTravellingSegmentIsSafe(110f, 1_000f))
-        assertTrue(!lightImpulseTravellingSegmentIsSafe(111f, 1_000f))
+        assertTrue(lightImpulseTravellingSegmentIsSafe(165f, 1_000f))
+        assertTrue(!lightImpulseTravellingSegmentIsSafe(166f, 1_000f))
     }
 
     @Test

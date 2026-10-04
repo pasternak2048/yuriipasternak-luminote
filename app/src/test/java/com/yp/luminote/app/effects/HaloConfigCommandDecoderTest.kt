@@ -85,4 +85,14 @@ class HaloConfigCommandDecoderTest {
         assertEquals(HaloColorMode.GRADIENT, config.colorMode)
         assertEquals(HaloRenderMode.NORMAL, config.renderMode)
     }
+
+    @Test
+    fun `legacy ripple edge command selects impulse`() {
+        val config =
+            HaloConfigCommandDecoder.decode(
+                RawHaloConfigCommand(motionName = "RIPPLE_EDGE")
+            )
+
+        assertEquals(HaloMotion.IMPULSE, config.motion)
+    }
 }
