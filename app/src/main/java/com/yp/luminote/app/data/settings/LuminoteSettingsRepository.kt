@@ -65,15 +65,19 @@ class LuminoteSettingsRepository(
                 "halo_interval"
             )
 
-        val haloRepeatCount =
+        /** Legacy-only keys: values are read as inert migration input. */
+        val legacyHaloRepeatCount =
             intPreferencesKey(
                 "halo_repeat_count"
             )
 
-        val notificationPlayback =
+        val legacyNotificationPlayback =
             stringPreferencesKey(
                 "notification_playback"
             )
+
+        val remindersEnabled = booleanPreferencesKey("reminders_enabled")
+        val reminderIntervalSeconds = intPreferencesKey("reminder_interval_seconds")
 
         val notificationSource =
             stringPreferencesKey(
@@ -238,27 +242,14 @@ class LuminoteSettingsRepository(
                             )
                             ?: defaultSettings.haloInterval,
 
-                    haloRepeatCount =
-                        preferences[
-                            Keys.haloRepeatCount
-                        ]
-                            ?.takeIf {
-                                it in 1..5
-                            }
-                            ?: defaultSettings.haloRepeatCount,
+                    // Consume legacy playback values without allowing them to affect runtime mode.
+                    // Normal effects are always one cycle; only AMBIENT is persistent.
 
-                    notificationPlayback =
-                        preferences[
-                            Keys.notificationPlayback
-                        ]
-                            ?.let {
-                                runCatching {
-                                    NotificationPlayback.valueOf(
-                                        it
-                                    )
-                                }.getOrNull()
-                            }
-                            ?: NotificationPlayback.ONCE,
+                    remindersEnabled = preferences[Keys.remindersEnabled] ?: false,
+
+                    reminderIntervalSeconds = (preferences[Keys.reminderIntervalSeconds]
+                        ?: defaultSettings.reminderIntervalSeconds)
+                        .let(::sanitizeReminderIntervalSeconds),
 
                     haloFrame =
                         preferences[
@@ -509,15 +500,9 @@ class LuminoteSettingsRepository(
                     )
                     ?: defaultSettings.haloInterval
 
-            preferences[Keys.haloRepeatCount] =
-                settings.haloRepeatCount
-                    .coerceIn(
-                        1,
-                        5
-                    )
-
-            preferences[Keys.notificationPlayback] =
-                settings.notificationPlayback.name
+            preferences[Keys.remindersEnabled] = settings.remindersEnabled
+            preferences[Keys.reminderIntervalSeconds] = settings.reminderIntervalSeconds
+                .let(::sanitizeReminderIntervalSeconds)
 
             preferences[Keys.haloFrame] =
                 settings.haloFrame.name

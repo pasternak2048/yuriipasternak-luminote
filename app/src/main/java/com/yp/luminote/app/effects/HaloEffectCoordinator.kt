@@ -2,6 +2,8 @@ package com.yp.luminote.app.effects
 
 import android.util.Log
 import java.util.ArrayDeque
+import java.util.Collections
+import java.util.IdentityHashMap
 
 /** A renderer attempt. Identity, not request equality, owns completion. */
 internal data class HaloEffectDelivery(
@@ -31,6 +33,10 @@ internal class HaloEffectCoordinator {
 
     private val pendingRequests =
         ArrayDeque<HaloEffectRequest>()
+
+    /** Normal requests held by the active multi-colour reminder do not age out mid-cycle. */
+    private val expirySuspendedRequests =
+        Collections.newSetFromMap(IdentityHashMap<HaloEffectRequest, Boolean>())
 
     private var activeDelivery:
             HaloEffectDelivery? = null
@@ -117,6 +123,10 @@ internal class HaloEffectCoordinator {
             request
         )
 
+        if (active?.isReminder() == true && !request.isReminder()) {
+            expirySuspendedRequests += request
+        }
+
         Log.d(
             TAG,
             "queued " +
@@ -152,14 +162,19 @@ internal class HaloEffectCoordinator {
                     "pending=${pendingRequests.size}"
         )
 
-        activeDelivery =
-            null
+        val completedReminder = activeDelivery?.request?.isReminder() == true
+        activeDelivery = null
+
+        if (completedReminder) {
+            rebaseNormalRequestsHeldByReminder()
+        }
 
         startNext()
     }
 
     fun clear() {
         pendingRequests.clear()
+        expirySuspendedRequests.clear()
 
         activeDelivery =
             null
@@ -369,9 +384,22 @@ internal class HaloEffectCoordinator {
     private fun isExpired(
         request: HaloEffectRequest
     ): Boolean =
+        request !in expirySuspendedRequests &&
         android.os.SystemClock.elapsedRealtime() -
                 request.enqueuedAt >=
                 MAX_REQUEST_AGE_MS
+
+    private fun rebaseNormalRequestsHeldByReminder() {
+        val now = android.os.SystemClock.elapsedRealtime()
+        expirySuspendedRequests.forEach { request ->
+            request.enqueuedAt = now
+        }
+        expirySuspendedRequests.clear()
+    }
+
+    private fun HaloEffectRequest.isReminder(): Boolean =
+        config.renderMode == HaloRenderMode.LIGHT_IMPULSE &&
+                reminderColors.isNotEmpty()
 
     private companion object {
         const val TAG =

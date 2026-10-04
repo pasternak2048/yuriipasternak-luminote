@@ -10,6 +10,13 @@ import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.HaloMotion
 import java.util.Locale
 
+internal fun finiteDurationFor(renderMode: HaloRenderMode, requestedDuration: Float): Float =
+    if (renderMode == HaloRenderMode.LIGHT_IMPULSE) {
+        LIGHT_IMPULSE_DURATION_SECONDS
+    } else {
+        requestedDuration
+    }
+
 /**
  * Bridges the overlay window lifecycle to geometry, animation and rendering.
  *
@@ -49,6 +56,8 @@ internal class HaloView(
 
     private var ambientMotion =
         config.motion
+
+    private var renderMode = config.renderMode
 
     private var pendingFiniteAnimation:
             FiniteAnimation? = null
@@ -90,6 +99,7 @@ internal class HaloView(
         renderer.update(
             config
         )
+        renderMode = config.renderMode
 
         ambientEffectSpeed =
             config.effectSpeed.coerceIn(
@@ -135,7 +145,7 @@ internal class HaloView(
 
         val request =
             FiniteAnimation(
-                duration = duration,
+                duration = finiteDurationFor(renderMode, duration),
                 interval = interval,
                 count = count,
                 motion = motion

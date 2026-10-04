@@ -13,5 +13,7 @@ internal data class HaloEffectRequest(
     val notificationKey: String,
     val config: HaloConfig,
     val paletteColors: IntArray?,
-    val enqueuedAt: Long = SystemClock.elapsedRealtime()
+    val reminderColors: IntArray = intArrayOf(),
+    /** Rebases only when a normal request waited behind an active reminder lease. */
+    var enqueuedAt: Long = SystemClock.elapsedRealtime()
 )

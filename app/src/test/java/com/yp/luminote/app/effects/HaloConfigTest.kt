@@ -51,7 +51,6 @@ class HaloConfigTest {
                 effectSpeed = 9f,
                 gradientFlowSpeed = 9f,
                 intervalSeconds = -2f,
-                repeatCount = 9,
                 intensity = -1f,
                 thickness = 2f
             )
@@ -60,7 +59,6 @@ class HaloConfigTest {
         assertEquals(2f, config.effectSpeed)
         assertEquals(2.5f, config.gradientFlowSpeed)
         assertEquals(0f, config.intervalSeconds)
-        assertEquals(1, config.repeatCount)
         assertEquals(0f, config.intensity)
         assertEquals(1f, config.thickness)
     }

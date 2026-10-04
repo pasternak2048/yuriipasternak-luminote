@@ -18,7 +18,7 @@ import android.view.WindowManager
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.NotificationPlayback
+import com.yp.luminote.app.notification.HaloReminderRuntime
 import kotlin.math.max
 
 /**
@@ -204,7 +204,7 @@ class HaloAccessibilityService : AccessibilityService() {
             return
         }
         if (commandCalibrationToken != null && !CalibrationPreviewSession.isCurrent(commandCalibrationToken)) return
-        if (commandCalibrationToken != null && activeConfig?.notificationPlayback == NotificationPlayback.KEEP_VISIBLE && !CalibrationPreviewSession.isCurrent(calibrationToken)) {
+        if (commandCalibrationToken != null && activeConfig?.renderMode == HaloRenderMode.AMBIENT && !CalibrationPreviewSession.isCurrent(calibrationToken)) {
             CalibrationPreviewSession.stop(commandCalibrationToken)
             return
         }
@@ -217,21 +217,21 @@ class HaloAccessibilityService : AccessibilityService() {
             lastCalibrationIntent = intent
         }
         if (commandCalibrationToken == null && CalibrationPreviewSession.isCurrent(calibrationToken) &&
-            intent?.getStringExtra(HaloOverlayService.EXTRA_NOTIFICATION_PLAYBACK) == NotificationPlayback.KEEP_VISIBLE.name) {
+            intent?.getBooleanExtra(HaloOverlayService.EXTRA_AMBIENT, false) == true) {
             return
         }
         if (
             intent?.getBooleanExtra(
-                HaloOverlayService.EXTRA_STOP_REPEATING,
+                HaloOverlayService.EXTRA_STOP_ALL,
                 false
             ) == true
         ) {
-            if (
-                activeQueuedCompletion ==
-                null
-            ) {
-                removeOverlay()
-            }
+            cancelQueuedPlaybackForGlobalStop()
+            HaloOverlayService.cancelTransientPlaybackForGlobalStop()
+            HaloReminderRuntime.onReminderPlaybackCancelled(
+                recoverWithFreshInterval = false
+            )
+            removeOverlay()
 
             return
         }
@@ -247,8 +247,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 activeQueuedCompletion ==
                 null &&
                 (
-                        activeConfig?.notificationPlayback ==
-                                NotificationPlayback.KEEP_VISIBLE ||
+                        activeConfig?.renderMode == HaloRenderMode.AMBIENT ||
                                 overlayView == null
                         )
             ) {
@@ -361,11 +360,7 @@ class HaloAccessibilityService : AccessibilityService() {
                     onFiniteAnimationCompleted
                 )
 
-                if (
-                    restart ||
-                    resolvedConfig.notificationPlayback ==
-                    NotificationPlayback.KEEP_VISIBLE
-                ) {
+                if (restart) {
                     startAnimation(
                         view,
                         resolvedConfig
@@ -498,10 +493,7 @@ class HaloAccessibilityService : AccessibilityService() {
         view: HaloView,
         config: HaloConfig
     ) {
-        if (
-            config.notificationPlayback ==
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
+        if (config.renderMode == HaloRenderMode.AMBIENT) {
             handler.removeCallbacks(
                 removeOverlayTask
             )
@@ -523,7 +515,7 @@ class HaloAccessibilityService : AccessibilityService() {
         view.repeatAnimation(
             config.durationSeconds,
             config.intervalSeconds,
-            config.repeatCount,
+            1,
             config.motion
         )
     }
@@ -531,10 +523,7 @@ class HaloAccessibilityService : AccessibilityService() {
     private fun scheduleRemoval(
         config: HaloConfig
     ) {
-        if (
-            config.notificationPlayback ==
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
+        if (config.renderMode == HaloRenderMode.AMBIENT) {
             return
         }
 
@@ -546,7 +535,10 @@ class HaloAccessibilityService : AccessibilityService() {
             max(
                 HaloAnimation.MIN_DURATION_MS,
                 (
-                        config.durationSeconds *
+                        finiteDurationFor(
+                            config.renderMode,
+                            config.durationSeconds
+                        ) *
                                 1000f
                         ).toLong()
             )
@@ -563,13 +555,7 @@ class HaloAccessibilityService : AccessibilityService() {
 
         handler.postDelayed(
             removeOverlayTask,
-            duration *
-                    config.repeatCount +
-                    interval *
-                    (
-                            config.repeatCount -
-                                    1
-                            ) +
+            duration +
                     50L
         )
     }
@@ -613,10 +599,7 @@ class HaloAccessibilityService : AccessibilityService() {
             activeConfig
                 ?: return
 
-        if (
-            config.notificationPlayback !=
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
+        if (config.renderMode != HaloRenderMode.AMBIENT) {
             return
         }
 
@@ -629,10 +612,7 @@ class HaloAccessibilityService : AccessibilityService() {
             activeConfig
                 ?: return
 
-        if (
-            config.notificationPlayback !=
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
+        if (config.renderMode != HaloRenderMode.AMBIENT) {
             return
         }
 
@@ -698,6 +678,20 @@ class HaloAccessibilityService : AccessibilityService() {
         }
     }
 
+    /** Global Off must not translate renderer teardown into a queued completion callback. */
+    private fun cancelQueuedPlaybackForGlobalStop() {
+        handler.removeCallbacks(removeOverlayTask)
+        queuedCompletionLease.invalidate(queuedRequestToken)
+        queuedRequestToken++
+        cancelQueuedWatchdog()
+        activeQueuedCompletion = null
+        overlayView?.let { view ->
+            view.setOnFiniteAnimationCompletedListener(null)
+            view.setOnFiniteAnimationStartedListener(null)
+            view.cancelAnimation()
+        }
+    }
+
     /** The only teardown exit for an already invalidated queued lease. */
     private fun completeQueuedTerminal(
         completion: (() -> Unit)?
@@ -724,11 +718,6 @@ class HaloAccessibilityService : AccessibilityService() {
                     defaults.intervalSeconds
                 ) ?: defaults.intervalSeconds,
 
-            repeatCount =
-                intent?.getIntExtra(
-                    HaloOverlayService.EXTRA_REPEAT_COUNT,
-                    defaults.repeatCount
-                ) ?: defaults.repeatCount,
 
             intensity =
                 intent?.getFloatExtra(
@@ -797,19 +786,13 @@ class HaloAccessibilityService : AccessibilityService() {
                     }
                     ?: defaults.colorMode,
 
-            notificationPlayback =
-                intent?.getStringExtra(
-                    HaloOverlayService.EXTRA_NOTIFICATION_PLAYBACK
-                )
-                    ?.let {
-                        runCatching {
-                            NotificationPlayback.valueOf(
-                                it
-                            )
-                        }.getOrNull()
-                    }
-                    ?: defaults.notificationPlayback
-        ).sanitized()
+        ).sanitized().copy(
+            renderMode = when {
+                intent?.getBooleanExtra(HaloOverlayService.EXTRA_AMBIENT, false) == true -> HaloRenderMode.AMBIENT
+                intent?.getBooleanExtra(HaloOverlayService.EXTRA_LIGHT_IMPULSE, false) == true -> HaloRenderMode.LIGHT_IMPULSE
+                else -> HaloRenderMode.NORMAL
+            }
+        )
     }
 
     private fun showQueuedEffect(
@@ -1207,10 +1190,7 @@ class HaloAccessibilityService : AccessibilityService() {
         onCompleted: () -> Unit,
         onWatchdogClaimed: () -> Unit
     ) {
-        if (
-            config.notificationPlayback ==
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
+        if (config.renderMode == HaloRenderMode.AMBIENT) {
             return
         }
 
@@ -1220,7 +1200,10 @@ class HaloAccessibilityService : AccessibilityService() {
             max(
                 HaloAnimation.MIN_DURATION_MS,
                 (
-                        config.durationSeconds *
+                        finiteDurationFor(
+                            config.renderMode,
+                            config.durationSeconds
+                        ) *
                                 1000f
                         ).toLong()
             )
@@ -1235,20 +1218,7 @@ class HaloAccessibilityService : AccessibilityService() {
                     0L
                 )
 
-        val cycles =
-            config.repeatCount
-                .coerceAtLeast(
-                    1
-                )
-
-        val totalDuration =
-            duration *
-                    cycles +
-                    interval *
-                    (
-                            cycles -
-                                    1
-                            )
+        val totalDuration = duration
 
         /*
          * This watchdog is recovery-only.
@@ -1332,6 +1302,14 @@ class HaloAccessibilityService : AccessibilityService() {
         fun dispatch(
             intent: Intent?
         ): Boolean {
+            if (requiresCoordinatorOwnedReminderDelivery(intent)) {
+                Log.d(
+                    TAG,
+                    "Reminder command requires coordinator-owned delivery; falling back to overlay service"
+                )
+                return false
+            }
+
             val service =
                 activeService
                     ?: run {
@@ -1373,6 +1351,22 @@ class HaloAccessibilityService : AccessibilityService() {
 
             return true
         }
+
+        /**
+         * Generic accessibility commands have no terminal callback. A reminder
+         * must instead enter HaloEffectCoordinator, whose queued delivery owns
+         * the full multi-colour lease and reports terminal completion.
+         */
+        internal fun requiresCoordinatorOwnedReminderDelivery(intent: Intent?): Boolean =
+            requiresCoordinatorOwnedReminderDelivery(
+                lightImpulse = intent?.getBooleanExtra(HaloOverlayService.EXTRA_LIGHT_IMPULSE, false) == true,
+                reminderColors = intent?.getIntArrayExtra(HaloOverlayService.EXTRA_REMINDER_COLORS)
+            )
+
+        internal fun requiresCoordinatorOwnedReminderDelivery(
+            lightImpulse: Boolean,
+            reminderColors: IntArray?
+        ): Boolean = lightImpulse && reminderColors?.isNotEmpty() == true
 
         internal fun dispatchQueuedEffect(
             request: HaloEffectRequest,

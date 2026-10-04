@@ -82,6 +82,8 @@
     <string name="edge_width">Ширина краю</string>
     <string name="effect_speed">Швидкість ефекту</string>
     <string name="reminders">Нагадування</string>
+    <string name="enable_reminders">Увімкнути нагадування</string>
+    <string name="reminder_interval">Інтервал нагадування</string>
     <string name="repeat">Повторювати</string>
     <string name="keep_visible">Не гасити</string>
     <string name="reminder_pulses">Повторів нагадування</string>

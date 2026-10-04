@@ -11,7 +11,7 @@ Normative orchestration-time context. Yurko selects protocols and sends roles on
 - Load/inspect progressively; review diff first; preserve unrelated code; repository facts stay single-source.
 
 ## Evidence package
-Base: `TASK:` `AC:` `FILES/DIFF:`. Add only when active: `RISK:` `BUDGET:` `INVARIANTS:` `A#:` `D#:` `BLAST_RADIUS:` `TEST_IMPACT:` `EVIDENCE:`. Omit routing tags and known orchestration state.
+Base: `TASK:` `AC:` `FILES/DIFF:`. Add only when active: `RISK:` `BUDGET:` `INVARIANTS:` `A#:` `D#:` `BLAST_RADIUS:` `TEST_IMPACT:` `QA_FOCUS:` `EVIDENCE:`.
 
 ## Scope/design
 - CHANGE_BUDGET bounds subsystem/files/refactor/API/dependencies/schema.

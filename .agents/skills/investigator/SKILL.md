@@ -7,5 +7,5 @@ Read-only. Evidence before modification. Use for bugs whose cause is unknown or 
 
 Return: `INVESTIGATION` `OBSERVED:` `EXPECTED:` `REPRO:` `ROOT_CAUSE:` `EVIDENCE:` `AFFECTED:` `FIX_BOUNDARY:` `CONFIDENCE: HIGH|MEDIUM|LOW` `STATUS: FOUND|NOT_REPRODUCED|NEEDS_MORE_EVIDENCE`.
 Low confidence must be explicit and may trigger escalation.
-Test critical assumptions against evidence when relevant. If the bug escaped previous validation, return a compact `REGRESSION_RECORD` with a stable `R#`, trigger, invariant, test target and source task when practical.
+Test critical assumptions against evidence when relevant. If the bug escaped previous validation, return a compact `REGRESSION_RECORD` for Yurko to canonize as a stable `R#`, trigger, invariant, test target and source task when practical.
 

@@ -8,7 +8,6 @@ import com.yp.luminote.app.data.settings.GradientPalette
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
-import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.effects.HaloConfig
 import com.yp.luminote.app.effects.HaloOverlayService
 import kotlinx.coroutines.CompletableDeferred
@@ -81,6 +80,24 @@ class LuminoteNotificationListener :
     private val activeNotificationsLock =
         Any()
 
+    private val reminderCoordinator by lazy {
+        HaloReminderCoordinator(
+            dispatchCycle = { packages ->
+                val settings = cachedSettings.get() ?: return@HaloReminderCoordinator false
+                HaloOverlayService.start(
+                    this,
+                    HaloOverlayService.createReminderIntent(
+                        context = this,
+                        settings = settings,
+                        packageName = REMINDER_PACKAGE_NAME,
+                        colors = packages.map { appIconColorResolver.colorFor(it, settings.haloColor) }.toIntArray()
+                    )
+                )
+            },
+            playbackBusy = HaloOverlayService::isTransientPlaybackBusy
+        )
+    }
+
     /*
      * Last persistent KEEP_VISIBLE state actually sent to the renderer.
      *
@@ -102,10 +119,15 @@ class LuminoteNotificationListener :
         appIconColorResolver =
             AppIconColorResolver(this)
 
+        HaloReminderRuntime.attach(reminderCoordinator)
+
         serviceScope.launch {
             settingsRepository.settings.collect { settings ->
                 val previous =
                     previousSettings
+
+                // Always update/cancel the reminder lifecycle before mode-specific early returns.
+                reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
 
                 if (settings.ambientEnabled) {
                     clearPersistentHaloState()
@@ -128,15 +150,13 @@ class LuminoteNotificationListener :
                 if (!settings.haloEnabled) {
                     if (
                         previous?.ambientEnabled == true ||
-                        previous?.haloEnabled == true ||
-                        previous?.notificationPlayback ==
-                        NotificationPlayback.KEEP_VISIBLE
+                        previous?.haloEnabled == true
                     ) {
                         clearPersistentHaloState()
 
                         HaloOverlayService.start(
                             this@LuminoteNotificationListener,
-                            HaloOverlayService.createStopRepeatingIntent(
+                            HaloOverlayService.createStopAllIntent(
                                 this@LuminoteNotificationListener
                             )
                         )
@@ -150,19 +170,13 @@ class LuminoteNotificationListener :
                 }
 
                 if (
-                    previous?.ambientEnabled == true ||
-                    (
-                            previous?.notificationPlayback ==
-                                    NotificationPlayback.KEEP_VISIBLE &&
-                                    settings.notificationPlayback !=
-                                    NotificationPlayback.KEEP_VISIBLE
-                            )
+                    previous?.ambientEnabled == true
                 ) {
                     clearPersistentHaloState()
 
                     HaloOverlayService.start(
                         this@LuminoteNotificationListener,
-                        HaloOverlayService.createStopRepeatingIntent(
+                        HaloOverlayService.createStopAmbientIntent(
                             this@LuminoteNotificationListener
                         )
                     )
@@ -172,9 +186,8 @@ class LuminoteNotificationListener :
                 cachedSettings.set(settings)
                 settingsReady.complete(settings)
 
-                if (isPersistentReminder(settings)) {
-                    refreshActiveNotifications(settings)
-                }
+                refreshActiveNotifications(settings)
+                reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
             }
         }
 
@@ -480,28 +493,6 @@ class LuminoteNotificationListener :
             return
         }
 
-        /*
-         * KEEP_VISIBLE is persistent state, not a finite notification effect.
-         *
-         * It must never enter HaloEffectCoordinator because a persistent
-         * request has no natural finite completion and would otherwise block
-         * the FIFO queue.
-         */
-        if (
-            settings.notificationPlayback ==
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
-            startPersistentReminderIfNeeded(
-                settings
-            )
-
-            return
-        }
-
-        /*
-         * From this point on we only handle finite notification playback:
-         * ONCE or REPEAT.
-         */
         val effectSettings =
             settings.copy(
                 haloColor =
@@ -516,22 +507,6 @@ class LuminoteNotificationListener :
                     } else {
                         settings.haloColor
                     },
-                haloRepeatCount =
-                    when (
-                        settings.notificationPlayback
-                    ) {
-                        NotificationPlayback.ONCE ->
-                            1
-
-                        NotificationPlayback.REPEAT ->
-                            settings.haloRepeatCount
-
-                        NotificationPlayback.KEEP_VISIBLE ->
-                            error(
-                                "KEEP_VISIBLE must use " +
-                                        "persistent Halo playback"
-                            )
-                    }
             )
 
         val isGradient =
@@ -569,6 +544,7 @@ class LuminoteNotificationListener :
             packageName = sbn.packageName,
             notificationKey = sbn.key
         )
+        HaloReminderRuntime.onNormalEnqueued()
     }
 
     private fun startTransientEffect(
@@ -691,9 +667,6 @@ class LuminoteNotificationListener :
             }
         }
 
-        startPersistentReminderIfNeeded(
-            settings
-        )
     }
 
     private fun isRelevantActiveNotification(
@@ -725,85 +698,6 @@ class LuminoteNotificationListener :
         )
     }
 
-    private fun isPersistentReminder(
-        settings: LuminoteSettings
-    ): Boolean =
-        settings.haloEnabled &&
-                settings.notificationPlayback ==
-                NotificationPlayback.KEEP_VISIBLE
-
-    private fun startPersistentReminderIfNeeded(
-        settings: LuminoteSettings
-    ) {
-        if (!isPersistentReminder(settings)) {
-            return
-        }
-
-        if (!hasActiveNotifications()) {
-            return
-        }
-
-        val paletteColors =
-            when {
-                settings.colorSource !=
-                        HaloColorSource.GRADIENT ->
-                    activePaletteColors(
-                        settings
-                    )
-
-                settings.gradientPalette ==
-                        GradientPalette.NOTIFICATION_APPS ->
-                    activePaletteColors(
-                        settings,
-                        useAppColors = true
-                    )
-
-                else ->
-                    HaloConfig.defaultGradientPalette()
-            }
-
-        /*
-         * IntArray uses reference equality when stored directly inside a
-         * data class. Convert it to an immutable List<Int> so the snapshot
-         * gets structural equality.
-         */
-        val persistentState =
-            PersistentHaloState(
-                settings = settings,
-                paletteColors = paletteColors.toList()
-            )
-
-        if (
-            lastPersistentHaloState ==
-            persistentState
-        ) {
-            Log.d(
-                TAG,
-                "Persistent Halo unchanged; skipping dispatch"
-            )
-
-            return
-        }
-
-        lastPersistentHaloState =
-            persistentState
-
-        Log.d(
-            TAG,
-            "Persistent Halo changed; dispatching update"
-        )
-
-        /*
-         * Intentionally omit packageName and notificationKey.
-         *
-         * KEEP_VISIBLE remains a persistent overlay command instead of a
-         * finite HaloEffectRequest handled by HaloEffectCoordinator.
-         */
-        startTransientEffect(
-            settings = settings,
-            paletteColors = paletteColors
-        )
-    }
 
     private fun clearPersistentHaloState() {
         lastPersistentHaloState =
@@ -813,6 +707,16 @@ class LuminoteNotificationListener :
     private fun hasActiveNotifications(): Boolean =
         synchronized(activeNotificationsLock) {
             activeNotificationPackages.isNotEmpty()
+        }
+
+    private fun relevantReminderPackages(settings: LuminoteSettings): List<String> =
+        synchronized(activeNotificationsLock) {
+            activeNotificationPackages.values
+                .filter { packageName ->
+                    settings.notificationSource != com.yp.luminote.app.data.settings.NotificationSource.SELECTED_APPS ||
+                        packageName in settings.selectedApps
+                }
+                .distinct()
         }
 
     private fun isDuplicateNotification(
@@ -925,6 +829,10 @@ class LuminoteNotificationListener :
         val settings =
             cachedSettings.get()
 
+        if (noRelevantNotifications) {
+            reminderCoordinator.onNoRelevantNotifications()
+        }
+
         if (
             settings?.ambientEnabled == true ||
             settings?.haloEnabled == false
@@ -932,29 +840,6 @@ class LuminoteNotificationListener :
             return
         }
 
-        if (
-            settings?.notificationPlayback ==
-            NotificationPlayback.KEEP_VISIBLE
-        ) {
-            if (noRelevantNotifications) {
-                /*
-                 * The persistent overlay is gone, so forget its rendered
-                 * state. A future notification must always dispatch again.
-                 */
-                clearPersistentHaloState()
-
-                HaloOverlayService.start(
-                    this,
-                    HaloOverlayService.createStopRepeatingIntent(
-                        this
-                    )
-                )
-            } else {
-                startPersistentReminderIfNeeded(
-                    settings
-                )
-            }
-        }
     }
 
     private fun shouldHandleSource(
@@ -989,6 +874,8 @@ class LuminoteNotificationListener :
         }
 
         clearPersistentHaloState()
+        reminderCoordinator.onNoRelevantNotifications()
+        HaloReminderRuntime.detach(reminderCoordinator)
 
         cachedSettings.set(null)
         settingsReady.cancel()
@@ -1007,6 +894,8 @@ class LuminoteNotificationListener :
 
         private const val TAG =
             "LuminoteNotification"
+
+        private const val REMINDER_PACKAGE_NAME = "com.yp.luminote.reminder"
 
         /*
          * Only suppress the same framework callback,

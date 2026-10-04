@@ -14,8 +14,10 @@ import com.yp.luminote.app.data.settings.MAX_HALO_INTERVAL_SECONDS
 import com.yp.luminote.app.data.settings.MAX_HALO_VALUE
 import com.yp.luminote.app.data.settings.MIN_HALO_INTERVAL_SECONDS
 import com.yp.luminote.app.data.settings.MIN_HALO_VALUE
+import com.yp.luminote.app.data.settings.MIN_REMINDER_INTERVAL_SECONDS
+import com.yp.luminote.app.data.settings.MAX_REMINDER_INTERVAL_SECONDS
+import com.yp.luminote.app.data.settings.sanitizeReminderIntervalSeconds
 import com.yp.luminote.app.data.settings.NotificationSource
-import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.data.settings.ThemeMode
 import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
 import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
@@ -270,37 +272,13 @@ class LuminoteSettingsViewModel(
         }
     }
 
-    fun setHaloRepeatCount(
-        count: Int
-    ) {
-        updateSettings {
-            copy(
-                haloRepeatCount =
-                    count.coerceIn(
-                        2,
-                        5
-                    )
-            )
-        }
+    fun setRemindersEnabled(enabled: Boolean) {
+        updateSettings { copy(remindersEnabled = enabled) }
     }
 
-    fun setNotificationPlayback(
-        playback: NotificationPlayback
-    ) {
-        updateSettings {
-            copy(
-                notificationPlayback = playback,
-                haloRepeatCount =
-                    if (
-                        playback ==
-                        NotificationPlayback.REPEAT &&
-                        haloRepeatCount < 2
-                    ) {
-                        2
-                    } else {
-                        haloRepeatCount
-                    }
-            )
+    fun setReminderIntervalSeconds(interval: Int) {
+        updateSettings(debounce = true) {
+            copy(reminderIntervalSeconds = sanitizeReminderIntervalSeconds(interval))
         }
     }
 

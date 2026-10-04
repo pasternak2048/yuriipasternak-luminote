@@ -84,6 +84,8 @@
     <string name="edge_width">Edge width</string>
     <string name="effect_speed">Effect speed</string>
     <string name="reminders">Reminders</string>
+    <string name="enable_reminders">Enable reminders</string>
+    <string name="reminder_interval">Reminder interval</string>
     <string name="repeat">Repeat</string>
     <string name="keep_visible">Keep visible</string>
     <string name="reminder_pulses">Reminder pulses</string>
