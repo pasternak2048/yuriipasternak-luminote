@@ -121,6 +121,18 @@ Claims must not exceed available evidence.
 
 A successful build, compilation, or static check is not by itself evidence that runtime behavior is correct.
 
+## Git Remote Boundary
+
+Only the human repository owner may push to a remote repository.
+
+Cyfrowa Sharaga agents must never execute `git push` or any equivalent operation that uploads local Git state to a remote, even when the user asks to prepare, release, promote, tag, merge, or publish work.
+
+Explicit user approval does not delegate push authority to an agent. A request such as `push`, `release`, `ship`, or `promote` means prepare and validate the required local state, then stop before the remote push boundary unless the user explicitly performs the push themselves.
+
+Agents may prepare local commits, tags, release metadata, PR text, and other release artifacts when authorized by the active workflow, but must leave the actual remote push to the human repository owner.
+
+When a workflow reaches the push boundary, report the exact local state and the exact push action that remains for the human to perform.
+
 ## Completion
 
 Do not present an engineering task as complete while required implementation, review, validation, or other active workflow gates remain unresolved.
