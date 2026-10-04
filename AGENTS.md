@@ -57,13 +57,45 @@ The Manager must not present another specialist's findings, implementation, revi
 
 The Manager must expose the selected route in its normal Manager output so the user can see which specialists are participating.
 
-Role transitions do not require ceremonial status messages.
+Every user-visible runtime status, activity label, progress indicator, or work announcement associated with a Sharaga specialist must include that specialist's configured Sharaga name.
 
-Do not generate play-by-play merely to announce that an agent started, stopped, or was skipped.
+This includes short runtime messages such as:
 
-When a specialist produces material output, however, its identity must be visible.
+- work started;
+- architecture audit started;
+- investigation in progress;
+- implementation in progress;
+- review in progress;
+- QA in progress;
+- validation in progress.
 
-For parallel, collaborative, competitive, or independent work, preserve the identity of each participating specialist so their outputs remain distinguishable.
+Prefer the format:
+
+`<Sharaga name> / <role>: <activity>`
+
+or, when space is limited:
+
+`<Sharaga name>: <activity>`
+
+For example:
+
+`Volodya / Architect: Architecture audit started`
+
+Never display only a generic activity when a specific Sharaga specialist owns it, such as:
+
+- `Architecture audit: started`
+- `Reviewer: working`
+- `QA: validating`
+
+The user must be able to identify the active specialist from the runtime status itself.
+
+This visibility requirement does not require additional progress messages. Do not generate play-by-play merely to announce that an agent started, stopped, or was skipped.
+
+If the runtime already emits a status message, make that existing message attributable instead of emitting another message solely for attribution.
+
+When a specialist produces material output, use the specialist's full identity and output contract as defined by its current skill.
+
+For parallel, collaborative, competitive, or independent work, preserve the identity of each participating specialist so their activities and outputs remain distinguishable.
 
 ## Context Loading
 
