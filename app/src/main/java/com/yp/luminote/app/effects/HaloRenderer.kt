@@ -28,12 +28,20 @@ internal fun lightImpulsePhase(progress: Float): LightImpulsePhase = when {
 internal const val LIGHT_IMPULSE_DURATION_SECONDS = 2.2f
 private const val LIGHT_IGNITION_END = 0.09f
 private const val LIGHT_TRAVEL_END = 0.80f
-private const val LIGHT_CONVERGE_END = 0.88f
+// Keep the owned fields on screen long enough to release their energy into the
+// bottom source. A short handoff makes the tail look as if it was cut off.
+private const val LIGHT_CONVERGE_END = 0.92f
 private const val LIGHT_TAIL_FRACTION = 0.24f
 private const val LIGHT_CORE_FRACTION = 0.022f
-private const val LIGHT_TAIL_SAMPLES = 24
-private const val LIGHT_CORE_SAMPLES = 18
-private const val LIGHT_BLOOM_SAMPLES = 24
+private const val LIGHT_TERMINAL_SOURCE_RADIUS_FRACTION = 0.040f
+private const val LIGHT_TAIL_SAMPLES = 40
+private const val LIGHT_CORE_SAMPLES = 28
+private const val LIGHT_BLOOM_SAMPLES = 40
+private const val LIGHT_BRANCH_EMERGENCE_TRAVEL = 0.16f
+// Tail and core own neighbouring intervals, so a saturated core need not be dimmed to share a
+// global alpha budget with a tail that is never rasterized underneath it.
+private const val LIGHT_TAIL_PASS_SHARE = 0.42f
+private const val LIGHT_CORE_PASS_SHARE = 1f
 
 internal fun lightImpulseTravelProgress(progress: Float): Float =
     lightImpulseSmoothStep(
@@ -41,36 +49,251 @@ internal fun lightImpulseTravelProgress(progress: Float): Float =
                 (LIGHT_TRAVEL_END - LIGHT_IGNITION_END)
     )
 
-/** Carries the single source through the exact ignition-to-split boundary. */
+/**
+ * Strength allocated to each directional branch. The branches occupy disjoint physical paths,
+ * so their visual strength is not divided in half merely because there are two of them.
+ */
+internal fun lightImpulseBranchEnergy(progress: Float): Float = when {
+    progress <= LIGHT_IGNITION_END -> 0f
+    progress < LIGHT_TRAVEL_END -> lightImpulseSmoothStep(
+        lightImpulseTravelProgress(progress) / LIGHT_BRANCH_EMERGENCE_TRAVEL
+    )
+    else -> 1f
+}
+
 internal fun lightImpulseOriginGlow(progress: Float): Float = when {
     progress <= LIGHT_IGNITION_END -> lightImpulseSmoothStep(progress / LIGHT_IGNITION_END)
-    progress < LIGHT_TRAVEL_END -> {
-        val release = (1f - lightImpulseTravelProgress(progress) * 6f).coerceIn(0f, 1f)
-        release * release
-    }
+    progress < LIGHT_TRAVEL_END -> 1f - lightImpulseBranchEnergy(progress)
     else -> 0f
 }
 
-/** Builds the reunion point before the cores arrive, avoiding a phase-boundary flash. */
-internal fun lightImpulseBottomBloom(progress: Float): Float = when {
-    progress < LIGHT_TRAVEL_END -> {
-        val readiness = lightImpulseSmoothStep(
-            (lightImpulseTravelProgress(progress) - 0.80f) / 0.20f
-        )
-        0.45f * readiness
-    }
-    progress < LIGHT_CONVERGE_END -> 0.45f + 0.55f * lightImpulseSmoothStep(
+/** The energy retained by one owned branch while the two branches reunite at the bottom. */
+internal fun lightImpulseConvergenceEnergy(progress: Float): Float = when {
+    progress < LIGHT_TRAVEL_END -> 1f
+    progress < LIGHT_CONVERGE_END -> 1f - lightImpulseSmoothStep(
         (progress - LIGHT_TRAVEL_END) / (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
     )
     else -> 0f
+}
+
+/**
+ * The first part of travel is a single connected source field, not a bloom plus two beams.
+ * Keeping this separate from the later travelling body prevents a visible hand-off stack.
+ */
+internal fun lightImpulseUsesSharedBirthField(progress: Float): Boolean =
+    lightImpulsePhase(progress) == LightImpulsePhase.TRAVEL &&
+        lightImpulseTravelProgress(progress) < LIGHT_BRANCH_EMERGENCE_TRAVEL
+
+internal data class LightImpulseFieldStrength(
+    val alphaFraction: Float,
+    val widthFactor: Float
+)
+
+/**
+ * Longitudinal strength for the one-pass shared field. With a travelling front at full strength,
+ * its peak exactly matches the later owned core's full-alpha, 1.90x-width emission.
+ */
+internal fun lightImpulseConnectedFieldStrength(
+    position: Float,
+    sourceStrength: Float,
+    edgeStrength: Float,
+    sourceAnchored: Boolean
+): LightImpulseFieldStrength {
+    val safePosition = position.coerceIn(0f, 1f)
+    val source = (1f - safePosition) * (1f - safePosition) * sourceStrength.coerceIn(0f, 1f)
+    val edge = if (sourceAnchored) {
+        0.32f * safePosition * safePosition * edgeStrength.coerceIn(0f, 1f)
+    } else {
+        lightImpulseSmoothStep((safePosition - 0.52f) / 0.48f) * edgeStrength.coerceIn(0f, 1f)
+    }
+    val bridge = 0.32f * lightImpulseSmoothStep(safePosition / 0.25f) *
+            lightImpulseSmoothStep((1f - safePosition) / 0.25f) *
+            maxOf(sourceStrength, edgeStrength).coerceIn(0f, 1f)
+    val energy = (source + edge + bridge).coerceIn(0f, 1f)
+    return LightImpulseFieldStrength(
+        alphaFraction = energy,
+        widthFactor = 0.70f + 1.20f * energy
+    )
+}
+
+/** The core's peak emission after birth; shared-field cutoff must meet this value. */
+internal fun lightImpulseTravelCorePeakStrength(progress: Float): LightImpulseFieldStrength {
+    val energy = lightImpulseCorePassEnergy(lightImpulseBranchEnergy(progress))
+    return LightImpulseFieldStrength(energy, 0.70f + 1.20f * energy)
+}
+
+/** The bottom source remains optically charged as incoming energy changes into bloom. */
+internal fun lightImpulseConvergenceSourceStrength(progress: Float): Float =
+    (lightImpulseConvergenceEnergy(progress) + lightImpulseBottomBloom(progress)).coerceIn(0f, 1f)
+
+/** The connected bottom field retracts into, rather than disappears before, the fade source. */
+internal fun lightImpulseConvergenceFieldRadiusFraction(progress: Float): Float {
+    val convergence = lightImpulseSmoothStep(
+        (progress.coerceIn(LIGHT_TRAVEL_END, LIGHT_CONVERGE_END) - LIGHT_TRAVEL_END) /
+                (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
+    )
+    return LIGHT_TAIL_FRACTION * (1f - convergence) +
+            LIGHT_TERMINAL_SOURCE_RADIUS_FRACTION * convergence
+}
+
+/** Fade starts at the exact convergence source radius, then contracts with the same zero-slope fade. */
+internal fun lightImpulseTerminalBloomRadiusFraction(progress: Float): Float =
+    0.012f + (LIGHT_TERMINAL_SOURCE_RADIUS_FRACTION - 0.012f) * lightImpulseFadeEnergy(progress)
+
+/** Both the arriving core and the converging source put their brightest footprint at the endpoint. */
+internal fun lightImpulseCorePeakOffsetFraction(): Float = 0f
+
+/** Terminal bloom starts with the same peak profile as the connected bottom source. */
+internal fun lightImpulseTerminalBloomStrength(
+    normalizedDistance: Float,
+    fade: Float
+): LightImpulseFieldStrength {
+    val energy = (1f - normalizedDistance * normalizedDistance).coerceAtLeast(0f)
+    val softened = energy * energy
+    return LightImpulseFieldStrength(
+        alphaFraction = fade.coerceIn(0f, 1f) * softened,
+        widthFactor = 0.70f + 1.20f * softened
+    )
+}
+
+/**
+ * The shared bottom source receives exactly the energy released by both owned branches.
+ * It intentionally stays dark during travel: pre-charging a full bloom underneath two full
+ * arriving fields is perceived as a stacked, thick endpoint.
+ */
+internal fun lightImpulseBottomBloom(progress: Float): Float = when {
+    progress < LIGHT_TRAVEL_END -> 0f
+    progress < LIGHT_CONVERGE_END -> lightImpulseSmoothStep(
+        (progress - LIGHT_TRAVEL_END) / (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
+    )
+    else -> 1f
 }
 
 internal fun lightImpulseBottomBloomRadiusFraction(progress: Float): Float = when {
-    progress < LIGHT_TRAVEL_END -> 0.012f + 0.006f * (lightImpulseBottomBloom(progress) / 0.45f)
-    progress < LIGHT_CONVERGE_END -> 0.018f + 0.022f * lightImpulseSmoothStep(
+    progress < LIGHT_TRAVEL_END -> 0.012f
+    progress < LIGHT_CONVERGE_END -> 0.012f + 0.028f * lightImpulseSmoothStep(
         (progress - LIGHT_TRAVEL_END) / (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
     )
-    else -> 0.040f
+    else -> LIGHT_TERMINAL_SOURCE_RADIUS_FRACTION
+}
+
+/** A long, zero-slope terminal release avoids a last-frame brightness cutoff. */
+internal fun lightImpulseFadeEnergy(progress: Float): Float =
+    1f - lightImpulseSmoothStep(
+        (progress - LIGHT_CONVERGE_END) / (1f - LIGHT_CONVERGE_END)
+    )
+
+internal fun lightImpulseTailPassEnergy(ownedBranchEnergy: Float): Float =
+    ownedBranchEnergy.coerceIn(0f, 1f) * LIGHT_TAIL_PASS_SHARE
+
+internal fun lightImpulseCorePassEnergy(ownedBranchEnergy: Float): Float =
+    ownedBranchEnergy.coerceIn(0f, 1f) * LIGHT_CORE_PASS_SHARE
+
+/** The actual source/bloom input used by the renderer, including terminal fade. */
+internal fun lightImpulseBottomBloomPassEnergy(progress: Float): Float = when {
+    progress < LIGHT_CONVERGE_END -> lightImpulseBottomBloom(progress)
+    else -> lightImpulseFadeEnergy(progress)
+}
+
+/**
+ * Pass strengths used after the shared source field has opened into physically separate paths.
+ * They are deliberately not a global alpha budget: the two paths never rasterize the same edge.
+ */
+internal data class LightImpulsePassEnergy(
+    val originBloom: Float,
+    val tailPerBranch: Float,
+    val corePerBranch: Float,
+    val bottomBloom: Float
+) {
+    fun total(): Float = originBloom + 2f * (tailPerBranch + corePerBranch) + bottomBloom
+}
+
+internal fun lightImpulsePassEnergy(progress: Float): LightImpulsePassEnergy {
+    val safeProgress = progress.coerceIn(0f, 1f)
+    return when (lightImpulsePhase(safeProgress)) {
+        LightImpulsePhase.IGNITION -> LightImpulsePassEnergy(
+            originBloom = lightImpulseOriginGlow(safeProgress),
+            tailPerBranch = 0f,
+            corePerBranch = 0f,
+            bottomBloom = 0f
+        )
+        LightImpulsePhase.TRAVEL -> {
+            val branch = lightImpulseBranchEnergy(safeProgress)
+            LightImpulsePassEnergy(
+                originBloom = lightImpulseOriginGlow(safeProgress),
+                tailPerBranch = lightImpulseTailPassEnergy(branch),
+                corePerBranch = lightImpulseCorePassEnergy(branch),
+                bottomBloom = 0f
+            )
+        }
+        LightImpulsePhase.CONVERGE -> {
+            val branch = lightImpulseConvergenceEnergy(safeProgress)
+            LightImpulsePassEnergy(
+                originBloom = 0f,
+                tailPerBranch = lightImpulseTailPassEnergy(branch),
+                corePerBranch = lightImpulseCorePassEnergy(branch),
+                bottomBloom = lightImpulseBottomBloomPassEnergy(safeProgress)
+            )
+        }
+        LightImpulsePhase.FADE -> LightImpulsePassEnergy(
+            originBloom = 0f,
+            tailPerBranch = 0f,
+            corePerBranch = 0f,
+            bottomBloom = lightImpulseBottomBloomPassEnergy(safeProgress)
+        )
+    }
+}
+
+/** One-sided local coverage for the source-anchored convergence renderer. */
+internal data class LightImpulseLocalCoverage(
+    val bloom: Float = 0f,
+    val core: Float = 0f,
+    val tail: Float = 0f
+) {
+    fun total(): Float = bloom + core + tail
+    fun activePassCount(): Int = listOf(bloom, core, tail).count { it > 0f }
+}
+
+internal fun lightImpulseCoreSpanFraction(
+    totalFlowFraction: Float,
+    sourceExclusionFraction: Float
+): Float = min(
+    LIGHT_CORE_FRACTION * 3.2f,
+    (totalFlowFraction - sourceExclusionFraction).coerceAtLeast(0f) * 0.60f
+)
+
+/**
+ * Mirrors the spatial reservation in the convergence draw calls. Distances are normalized to
+ * outline length and measured outward from bottom on either owned side.
+ */
+internal fun lightImpulseConvergenceCoverage(
+    progress: Float,
+    distanceFromBottomFraction: Float
+): LightImpulseLocalCoverage {
+    if (lightImpulsePhase(progress) != LightImpulsePhase.CONVERGE) {
+        return LightImpulseLocalCoverage()
+    }
+    val safeProgress = progress.coerceIn(0f, 1f)
+    val distance = distanceFromBottomFraction.coerceAtLeast(0f)
+    val passes = lightImpulsePassEnergy(safeProgress)
+    // Keep this pure reservation model aligned with the renderer: the final connected field
+    // retains the finite source span that the fade bloom inherits at the phase boundary.
+    val totalFlowLength = lightImpulseConvergenceFieldRadiusFraction(safeProgress)
+    val bloomRadius = if (passes.bottomBloom > 0f) {
+        lightImpulseBottomBloomRadiusFraction(safeProgress)
+    } else {
+        0f
+    }
+    if (distance < bloomRadius) return LightImpulseLocalCoverage(bloom = passes.bottomBloom)
+
+    val coreSpan = lightImpulseCoreSpanFraction(totalFlowLength, bloomRadius)
+    if (distance < bloomRadius + coreSpan) {
+        return LightImpulseLocalCoverage(core = passes.corePerBranch)
+    }
+    if (distance < totalFlowLength) {
+        return LightImpulseLocalCoverage(tail = passes.tailPerBranch)
+    }
+    return LightImpulseLocalCoverage()
 }
 
 internal fun lightImpulseIgnitionDurationMs(): Long =
@@ -88,6 +311,65 @@ internal data class LightImpulseEndpoints(
     val forwardDistance: Float,
     val reverseDistance: Float
 )
+
+/**
+ * A physical beam segment expressed as distance away from its shared source.
+ *
+ * Keeping these values source-relative is deliberate: a positive segment can be mapped only
+ * onto its own directional half of the outline, so a core or tail can never cross the source
+ * and become stacked geometry on the opposing path.
+ */
+internal class LightImpulseOwnedSegment(
+    var startDistance: Float = 0f,
+    var endDistance: Float = 0f,
+    var pathCenter: Float = 0f
+)
+
+/** The bottom source uses the inverse direction of each top-origin branch. */
+internal data class LightImpulseConvergenceOwnership(
+    val forwardDirection: Int,
+    val forwardMaxDistance: Float,
+    val reverseDirection: Int,
+    val reverseMaxDistance: Float
+)
+
+internal fun lightImpulseConvergenceOwnership(
+    endpoints: LightImpulseEndpoints
+): LightImpulseConvergenceOwnership = LightImpulseConvergenceOwnership(
+    // bottom = top + forwardDistance: retract the forward (positive) branch toward top.
+    forwardDirection = -1,
+    forwardMaxDistance = endpoints.forwardDistance,
+    // The reverse branch reaches bottom from negative top-origin coordinates.
+    reverseDirection = 1,
+    reverseMaxDistance = endpoints.reverseDistance
+)
+
+/** Owned cores and tails use a non-projecting cap at the shared-source boundary. */
+internal fun lightImpulseOwnedBeamCap(): Paint.Cap = Paint.Cap.BUTT
+
+/** Source bloom is contained by its reservation; round caps would extend past that footprint. */
+internal fun lightImpulseBloomCap(): Paint.Cap = Paint.Cap.BUTT
+
+internal fun lightImpulseOwnedSegment(
+    origin: Float,
+    direction: Int,
+    frontDistance: Float,
+    distanceBehindFront: Float,
+    requestedLength: Float,
+    maxDistance: Float,
+    minSourceDistance: Float = 0f,
+    out: LightImpulseOwnedSegment = LightImpulseOwnedSegment()
+): LightImpulseOwnedSegment? {
+    if (direction != 1 && direction != -1) return null
+    if (frontDistance <= 0f || requestedLength <= 0f || maxDistance <= 0f) return null
+    val end = (frontDistance - distanceBehindFront).coerceIn(0f, maxDistance)
+    val start = (end - requestedLength).coerceAtLeast(minSourceDistance.coerceIn(0f, maxDistance))
+    if (end <= start) return null
+    out.startDistance = start
+    out.endDistance = end
+    out.pathCenter = origin + direction * ((start + end) / 2f)
+    return out
+}
 
 internal fun lightImpulseEndpoints(
     measure: PathMeasure,
@@ -175,6 +457,10 @@ internal class HaloRenderer(
 
     private val segmentPath =
         Path()
+
+    /** Reused by owned-beam sampling; branch geometry must not allocate per frame. */
+    private val impulseOwnedSegment =
+        LightImpulseOwnedSegment()
 
     private var gradientShader:
             SweepGradient? = null
@@ -323,7 +609,7 @@ internal class HaloRenderer(
         if (geometry.length <= 0f) return
         val timeline = phase.coerceIn(0f, 1f)
         if (timeline >= 1f) return
-        // The impulse owns its 0.88–1.00 fade; the generic finite envelope must not
+        // The impulse owns its 0.92–1.00 fade; the generic finite envelope must not
         // prematurely dim the outline travel.
         val alpha = (255f * config.intensity).roundToInt().coerceIn(0, 255)
         if (alpha == 0) return
@@ -335,10 +621,12 @@ internal class HaloRenderer(
         val save = canvas.save()
         try {
             canvas.clipPath(outline.path)
+            corePaint.strokeCap = Paint.Cap.ROUND
             corePaint.shader = null
+            val passEnergy = lightImpulsePassEnergy(timeline)
             when (lightImpulsePhase(timeline)) {
                 LightImpulsePhase.IGNITION -> {
-                    val ignition = lightImpulseOriginGlow(timeline)
+                    val ignition = passEnergy.originBloom
                     drawImpulseBloom(
                         canvas, geometry, origin, alpha,
                         radius = geometry.length * (0.012f + ignition * 0.026f),
@@ -348,71 +636,88 @@ internal class HaloRenderer(
 
                 LightImpulsePhase.TRAVEL -> {
                     val travel = lightImpulseTravelProgress(timeline)
-                    val originGlow = lightImpulseOriginGlow(timeline)
+                    if (lightImpulseUsesSharedBirthField(timeline)) {
+                        // This is one connected field with a shared centre, sampled outward into
+                        // two owned halves. It replaces the former bloom-to-two-beams hand-off.
+                        drawConnectedImpulseField(
+                            canvas = canvas,
+                            geometry = geometry,
+                            origin = origin,
+                            forwardDistance = forwardDistance * travel,
+                            reverseDistance = reverseDistance * travel,
+                            forwardDirection = 1,
+                            reverseDirection = -1,
+                            alpha = alpha,
+                            sourceStrength = lightImpulseOriginGlow(timeline),
+                            frontStrength = lightImpulseBranchEnergy(timeline)
+                        )
+                        return
+                    }
+                    val originGlow = passEnergy.originBloom
+                    val originBloomRadius = geometry.length * (0.018f + originGlow * 0.020f)
                     if (originGlow > 0f) {
                         drawImpulseBloom(
                             canvas, geometry, origin, alpha,
-                            radius = geometry.length * (0.018f + originGlow * 0.020f),
+                            radius = originBloomRadius,
                             bloom = originGlow
                         )
                     }
-                    val forwardFront = origin + forwardDistance * travel
-                    val reverseFront = origin - reverseDistance * travel
-                    // The two paths are born from the already-completed ignition, rather than
-                    // rendering two full beams at the top centre. Their shared, tapered light
-                    // structure keeps this one event readable as it separates around the edge.
+                    val forwardFront = forwardDistance * travel
+                    val reverseFront = reverseDistance * travel
+                    // Each flow is source-relative and is clipped to its directional half.
+                    // The one origin bloom is emitted light; no beam body exists on both halves.
                     drawImpulseFlow(
-                        canvas, geometry, forwardFront, 1, alpha, timeline,
-                        tailLimit = forwardDistance * travel
+                        canvas, geometry, origin, forwardFront, forwardDistance, 1, alpha, timeline,
+                        tailLimit = forwardDistance * travel,
+                        sourceExclusionDistance = if (originGlow > 0f) originBloomRadius else 0f,
+                        fieldEnergy = passEnergy.tailPerBranch,
+                        coreEnergy = passEnergy.corePerBranch
                     )
                     drawImpulseFlow(
-                        canvas, geometry, reverseFront, -1, alpha, timeline,
-                        tailLimit = reverseDistance * travel
+                        canvas, geometry, origin, reverseFront, reverseDistance, -1, alpha, timeline,
+                        tailLimit = reverseDistance * travel,
+                        sourceExclusionDistance = if (originGlow > 0f) originBloomRadius else 0f,
+                        fieldEnergy = passEnergy.tailPerBranch,
+                        coreEnergy = passEnergy.corePerBranch
                     )
-                    val bottomBloom = lightImpulseBottomBloom(timeline)
-                    if (bottomBloom > 0f) {
-                        drawImpulseBloom(
-                            canvas, geometry, bottom, alpha,
-                            radius = geometry.length * lightImpulseBottomBloomRadiusFraction(timeline),
-                            bloom = bottomBloom
-                        )
-                    }
                 }
 
                 LightImpulsePhase.CONVERGE -> {
-                    val converge = lightImpulseSmoothStep(
-                        (timeline - LIGHT_TRAVEL_END) /
-                                (LIGHT_CONVERGE_END - LIGHT_TRAVEL_END)
-                    )
-                    val remainingFlow = geometry.length * LIGHT_TAIL_FRACTION * (1f - converge)
-                    drawImpulseFlow(
-                        canvas, geometry, bottom, 1, alpha, timeline, remainingFlow,
-                        drawCore = false
-                    )
-                    drawImpulseFlow(
-                        canvas, geometry, bottom, -1, alpha, timeline, remainingFlow,
-                        drawCore = false
-                    )
-                    drawImpulseBloom(
-                        canvas, geometry, bottom, alpha,
-                        radius = geometry.length * lightImpulseBottomBloomRadiusFraction(timeline),
-                        bloom = lightImpulseBottomBloom(timeline)
+                    val remainingFlow = geometry.length * lightImpulseConvergenceFieldRadiusFraction(timeline)
+                    val ownership = lightImpulseConvergenceOwnership(endpoints)
+                    // The field retracts into one source instead of drawing an arriving pair
+                    // under a separately growing bloom. Each half owns its side of bottom.
+                    drawConnectedImpulseField(
+                        canvas = canvas,
+                        geometry = geometry,
+                        origin = bottom,
+                        forwardDistance = min(remainingFlow, ownership.forwardMaxDistance),
+                        reverseDistance = min(remainingFlow, ownership.reverseMaxDistance),
+                        forwardDirection = ownership.forwardDirection,
+                        reverseDirection = ownership.reverseDirection,
+                        alpha = alpha,
+                        sourceStrength = lightImpulseConvergenceSourceStrength(timeline),
+                        frontStrength = lightImpulseConvergenceEnergy(timeline),
+                        sourceAnchored = true
                     )
                 }
 
                 LightImpulsePhase.FADE -> {
-                    val fade = 1f - lightImpulseSmoothStep(
-                        (timeline - LIGHT_CONVERGE_END) /
-                                (1f - LIGHT_CONVERGE_END)
-                    )
+                    val fade = passEnergy.bottomBloom
                     drawImpulseBloom(
                         canvas, geometry, bottom, alpha,
-                        radius = geometry.length * 0.040f,
-                        bloom = fade
+                        // Let the afterglow contract as it dissipates instead of leaving a
+                        // fixed, faint endpoint that vanishes with the final animation frame.
+                        radius = geometry.length * lightImpulseTerminalBloomRadiusFraction(timeline),
+                        bloom = fade,
+                        matchConnectedSourcePeak = true
                     )
                 }
             }
-        } finally { canvas.restoreToCount(save) }
+        } finally {
+            corePaint.strokeCap = Paint.Cap.ROUND
+            canvas.restoreToCount(save)
+        }
     }
 
     private fun lightImpulseEndpointsFor(geometry: StyleGeometry): LightImpulseEndpoints =
@@ -423,53 +728,190 @@ internal class HaloRenderer(
         ).also { geometry.lightImpulseEndpoints = it }
 
     /**
-     * Draws a physical-edge-only continuous light field. Closely overlapped samples modulate
-     * opacity and width along the contour, so the eye reads one tail rather than stacked bands.
+     * Draws one optical field centred on a source and split into two butt-to-butt owned halves.
+     * No bloom/core/tail pass overlaps another here: every longitudinal sample owns one interval.
      */
+    private fun drawConnectedImpulseField(
+        canvas: Canvas,
+        geometry: StyleGeometry,
+        origin: Float,
+        forwardDistance: Float,
+        reverseDistance: Float,
+        forwardDirection: Int,
+        reverseDirection: Int,
+        alpha: Int,
+        sourceStrength: Float,
+        frontStrength: Float,
+        sourceAnchored: Boolean = false
+    ) {
+        val safeSource = sourceStrength.coerceIn(0f, 1f)
+        val safeFront = frontStrength.coerceIn(0f, 1f)
+        corePaint.strokeCap = lightImpulseOwnedBeamCap()
+        drawConnectedImpulseHalf(
+            canvas, geometry, origin, forwardDistance, forwardDirection, alpha, safeSource, safeFront,
+            sourceAnchored
+        )
+        drawConnectedImpulseHalf(
+            canvas, geometry, origin, reverseDistance, reverseDirection, alpha, safeSource, safeFront,
+            sourceAnchored
+        )
+    }
+
+    private fun drawConnectedImpulseHalf(
+        canvas: Canvas,
+        geometry: StyleGeometry,
+        origin: Float,
+        distance: Float,
+        direction: Int,
+        alpha: Int,
+        sourceStrength: Float,
+        frontStrength: Float,
+        sourceAnchored: Boolean
+    ) {
+        if (distance <= 0f || (direction != 1 && direction != -1)) return
+        val sampleLength = distance / LIGHT_BLOOM_SAMPLES
+        var sample = 0
+        while (sample < LIGHT_BLOOM_SAMPLES) {
+            val position = (sample + 0.5f) / LIGHT_BLOOM_SAMPLES
+            val strength = lightImpulseConnectedFieldStrength(
+                position = position,
+                sourceStrength = sourceStrength,
+                edgeStrength = frontStrength,
+                sourceAnchored = sourceAnchored
+            )
+            drawSourceAnchoredImpulseSample(
+                canvas = canvas,
+                geometry = geometry,
+                origin = origin,
+                maxDistance = distance,
+                direction = direction,
+                distanceFromSource = sample * sampleLength,
+                length = sampleLength,
+                alpha = (alpha * strength.alphaFraction).roundToInt(),
+                strokeWidth = renderStrokeWidth * strength.widthFactor
+            )
+            sample++
+        }
+    }
+
+    /** Draws one physical-edge-only tail with a core-owned head and a softly released body. */
     private fun drawImpulseFlow(
         canvas: Canvas,
         geometry: StyleGeometry,
-        front: Float,
+        origin: Float,
+        frontDistance: Float,
+        maxDistance: Float,
         direction: Int,
         alpha: Int,
         timeline: Float,
         tailLimit: Float,
-        drawCore: Boolean = true
+        sourceExclusionDistance: Float = 0f,
+        fieldEnergy: Float = 1f,
+        coreEnergy: Float = 1f
     ) {
         val tailLength = min(geometry.length * LIGHT_TAIL_FRACTION, tailLimit)
-        if (tailLength <= 0f) return
-        val sampleLength = tailLength / LIGHT_TAIL_SAMPLES
-        val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + direction * 0.7f)
+        val safeFieldEnergy = fieldEnergy.coerceIn(0f, 1f)
+        val safeCoreEnergy = coreEnergy.coerceIn(0f, 1f)
+        if (tailLength <= 0f || (safeFieldEnergy <= 0f && safeCoreEnergy <= 0f)) return
+        // A round cap extends beyond its path end; owned beams must end at the source boundary.
+        corePaint.strokeCap = lightImpulseOwnedBeamCap()
+        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, tailLength * 0.60f)
+        val coreSpan = coreLength * 3.2f
+        // The body begins after the core's occupied interval. This is a spatial partition, not
+        // an alpha trick: no high-energy tail sample is rasterized underneath the core.
+        val bodyLength = (tailLength - coreSpan).coerceAtLeast(0f)
+        val sampleLength = bodyLength / LIGHT_TAIL_SAMPLES
+        // The shared-birth field has no independent pulse. Keep the subsequent core deterministic
+        // too, so its emission meets the connected front without a brightness step.
+        val organicPulse = 1f
         var sample = 0
-        while (sample < LIGHT_TAIL_SAMPLES) {
+        while (sample < LIGHT_TAIL_SAMPLES && sampleLength > 0f) {
             val position = (sample + 0.5f) / LIGHT_TAIL_SAMPLES
             val retainedEnergy = 1f - position
-            val taperedEnergy = retainedEnergy * retainedEnergy
+            // Leave the head to the core. This removes the former tail-plus-core pile-up at
+            // the moving source while retaining a continuously fading body behind it.
+            val taperedEnergy = retainedEnergy * retainedEnergy *
+                    lightImpulseSmoothStep(position / 0.28f)
             val fieldAlpha = (
-                alpha *
-                        (0.018f + 0.36f * taperedEnergy) *
+                alpha * safeFieldEnergy *
+                        (0.38f * taperedEnergy) *
                         organicPulse
                 )
                 .roundToInt()
-            val fieldWidth = renderStrokeWidth * (0.56f + 0.58f * retainedEnergy)
+            val fieldWidth = renderStrokeWidth *
+                    (0.38f + 0.72f * taperedEnergy) * (0.58f + 0.42f * safeFieldEnergy)
             drawDirectionalImpulseSample(
                 canvas = canvas,
                 geometry = geometry,
-                front = front,
+                origin = origin,
+                frontDistance = frontDistance,
+                maxDistance = maxDistance,
                 direction = direction,
-                distanceBehindFront = sample * sampleLength,
-                length = sampleLength * 1.70f,
+                distanceBehindFront = coreSpan + sample * sampleLength,
+                // A small overlap prevents raster seams without repeatedly summing the same
+                // energy into visibly striped or thick bands.
+                length = sampleLength * 1.12f,
+                minSourceDistance = sourceExclusionDistance,
                 alpha = fieldAlpha,
                 strokeWidth = fieldWidth
             )
             sample++
         }
 
-        if (!drawCore) return
-        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, tailLength * 0.60f)
+        if (safeCoreEnergy <= 0f) return
         drawContinuousImpulseCore(
-            canvas, geometry, front, direction, alpha, organicPulse, coreLength
+            canvas, geometry, origin, frontDistance, maxDistance, direction, alpha, organicPulse,
+            coreLength, safeCoreEnergy, sourceExclusionDistance
         )
+    }
+
+    /**
+     * Mirrors travel's field around the bottom source. At the handoff, each sample has the same
+     * path interval and pulse as its arriving counterpart; it can then shorten into that source.
+     */
+    private fun drawSourceAnchoredImpulseFlow(
+        canvas: Canvas,
+        geometry: StyleGeometry,
+        origin: Float,
+        maxDistance: Float,
+        direction: Int,
+        pulseDirection: Int,
+        alpha: Int,
+        timeline: Float,
+        tailLimit: Float,
+        sourceExclusionDistance: Float,
+        fieldEnergy: Float
+    ) {
+        val resolvedTailLength = min(geometry.length * LIGHT_TAIL_FRACTION, tailLimit)
+        val safeFieldEnergy = fieldEnergy.coerceIn(0f, 1f)
+        val availableOwnedLength = (resolvedTailLength - sourceExclusionDistance).coerceAtLeast(0f)
+        if (availableOwnedLength <= 0f || safeFieldEnergy <= 0f) return
+        corePaint.strokeCap = lightImpulseOwnedBeamCap()
+        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, availableOwnedLength * 0.60f)
+        val coreSpan = coreLength * 3.2f
+        val bodyLength = (availableOwnedLength - coreSpan).coerceAtLeast(0f)
+        val sampleLength = bodyLength / LIGHT_TAIL_SAMPLES
+        val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + pulseDirection * 0.7f)
+        var sample = 0
+        while (sample < LIGHT_TAIL_SAMPLES && sampleLength > 0f) {
+            val position = (sample + 0.5f) / LIGHT_TAIL_SAMPLES
+            val retainedEnergy = 1f - position
+            val taperedEnergy = retainedEnergy * retainedEnergy *
+                    lightImpulseSmoothStep(position / 0.28f)
+            drawSourceAnchoredImpulseSample(
+                canvas = canvas,
+                geometry = geometry,
+                origin = origin,
+                maxDistance = maxDistance,
+                direction = direction,
+                distanceFromSource = sourceExclusionDistance + coreSpan + sample * sampleLength,
+                length = sampleLength * 1.12f,
+                alpha = (alpha * safeFieldEnergy * 0.38f * taperedEnergy * organicPulse).roundToInt(),
+                strokeWidth = renderStrokeWidth * (0.38f + 0.72f * taperedEnergy) *
+                        (0.58f + 0.42f * safeFieldEnergy)
+            )
+            sample++
+        }
     }
 
     private fun drawImpulseBloom(
@@ -478,23 +920,39 @@ internal class HaloRenderer(
         center: Float,
         alpha: Int,
         radius: Float,
-        bloom: Float
+        bloom: Float,
+        matchConnectedSourcePeak: Boolean = false
     ) {
         val safeBloom = bloom.coerceIn(0f, 1f)
         if (safeBloom <= 0f || radius <= 0f) return
+        // A butt cap makes the raster footprint end exactly at the reserved source radius.
+        // ROUND would add half a stroke width outside it, underneath the owned core.
+        corePaint.strokeCap = lightImpulseBloomCap()
         val sampleLength = radius * 2f / LIGHT_BLOOM_SAMPLES
         var sample = 0
         while (sample < LIGHT_BLOOM_SAMPLES) {
             val normalized = ((sample + 0.5f) / LIGHT_BLOOM_SAMPLES) * 2f - 1f
             val energy = (1f - normalized * normalized).coerceAtLeast(0f)
             val softenedEnergy = energy * energy
+            val terminalStrength = if (matchConnectedSourcePeak) {
+                lightImpulseTerminalBloomStrength(normalized, safeBloom)
+            } else {
+                null
+            }
             drawImpulseSegment(
                 canvas = canvas,
                 geometry = geometry,
                 center = center + normalized * radius,
-                length = sampleLength * 1.75f,
-                alpha = (alpha * safeBloom * (0.025f + 0.58f * softenedEnergy)).roundToInt(),
-                strokeWidth = renderStrokeWidth * (0.72f + 1.75f * softenedEnergy)
+                // Keep bloom inside its reserved source interval. Adjacent source samples meet
+                // at their bounds instead of bleeding underneath an owned core outside radius.
+                length = sampleLength,
+                alpha = if (terminalStrength != null) {
+                    (alpha * terminalStrength.alphaFraction).roundToInt()
+                } else {
+                    (alpha * safeBloom * (0.025f + 0.58f * softenedEnergy)).roundToInt()
+                },
+                strokeWidth = renderStrokeWidth * (terminalStrength?.widthFactor
+                    ?: (0.72f + 1.75f * softenedEnergy))
             )
             sample++
         }
@@ -504,11 +962,15 @@ internal class HaloRenderer(
     private fun drawContinuousImpulseCore(
         canvas: Canvas,
         geometry: StyleGeometry,
-        front: Float,
+        origin: Float,
+        frontDistance: Float,
+        maxDistance: Float,
         direction: Int,
         alpha: Int,
         organicPulse: Float,
-        coreLength: Float
+        coreLength: Float,
+        coreEnergy: Float,
+        minSourceDistance: Float
     ) {
         val coreSpan = coreLength * 3.2f
         val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
@@ -516,18 +978,71 @@ internal class HaloRenderer(
         while (sample < LIGHT_CORE_SAMPLES) {
             val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
             // The high-energy point sits just behind the front, with a smooth release behind it.
-            val centred = (position - 0.24f) / 0.62f
+            val centred = (position - lightImpulseCorePeakOffsetFraction()) / 0.62f
             val energy = (1f - centred * centred).coerceIn(0f, 1f)
             val softenedEnergy = energy * energy
             drawDirectionalImpulseSample(
                 canvas = canvas,
                 geometry = geometry,
-                front = front,
+                origin = origin,
+                frontDistance = frontDistance,
+                maxDistance = maxDistance,
                 direction = direction,
                 distanceBehindFront = sample * sampleLength,
-                length = sampleLength * 1.75f,
-                alpha = (alpha * organicPulse * (0.14f + 0.86f * softenedEnergy)).roundToInt(),
-                strokeWidth = renderStrokeWidth * (0.92f + 1.45f * softenedEnergy)
+                // Core and tail own adjacent, not overlapping, intervals. Internal tail samples
+                // retain their own small overlap; it never crosses this ownership seam.
+                length = sampleLength,
+                minSourceDistance = minSourceDistance,
+                alpha = (alpha * coreEnergy * organicPulse * softenedEnergy).roundToInt(),
+                strokeWidth = renderStrokeWidth * (0.70f + 1.20f * softenedEnergy) *
+                        (0.58f + 0.42f * coreEnergy)
+            )
+            sample++
+        }
+    }
+
+    /**
+     * The final cores shrink toward a shared bottom source. Its sample coordinates are measured
+     * from that source, preserving the arrival position from the preceding travel frame.
+     */
+    private fun drawSourceAnchoredImpulseCore(
+        canvas: Canvas,
+        geometry: StyleGeometry,
+        origin: Float,
+        maxDistance: Float,
+        direction: Int,
+        pulseDirection: Int,
+        alpha: Int,
+        timeline: Float,
+        tailLength: Float,
+        sourceExclusionDistance: Float,
+        coreEnergy: Float
+    ) {
+        val availableOwnedLength = (tailLength - sourceExclusionDistance).coerceAtLeast(0f)
+        if (availableOwnedLength <= 0f || coreEnergy <= 0f) return
+        corePaint.strokeCap = lightImpulseOwnedBeamCap()
+        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, availableOwnedLength * 0.60f)
+        val coreSpan = coreLength * 3.2f
+        val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
+        val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + pulseDirection * 0.7f)
+        var sample = 0
+        while (sample < LIGHT_CORE_SAMPLES) {
+            val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
+            val centred = (position - 0.24f) / 0.62f
+            val energy = (1f - centred * centred).coerceIn(0f, 1f)
+            val softenedEnergy = energy * energy
+            drawSourceAnchoredImpulseSample(
+                canvas = canvas,
+                geometry = geometry,
+                origin = origin,
+                maxDistance = maxDistance,
+                direction = direction,
+                distanceFromSource = sourceExclusionDistance + sample * sampleLength,
+                // Match travel's butt-to-butt core/tail ownership boundary.
+                length = sampleLength,
+                alpha = (alpha * coreEnergy * organicPulse * softenedEnergy).roundToInt(),
+                strokeWidth = renderStrokeWidth * (0.70f + 1.20f * softenedEnergy) *
+                        (0.58f + 0.42f * coreEnergy)
             )
             sample++
         }
@@ -536,19 +1051,64 @@ internal class HaloRenderer(
     private fun drawDirectionalImpulseSample(
         canvas: Canvas,
         geometry: StyleGeometry,
-        front: Float,
+        origin: Float,
+        frontDistance: Float,
+        maxDistance: Float,
         direction: Int,
         distanceBehindFront: Float,
+        length: Float,
+        minSourceDistance: Float,
+        alpha: Int,
+        strokeWidth: Float
+    ) {
+        val segment = lightImpulseOwnedSegment(
+            origin = origin,
+            direction = direction,
+            frontDistance = frontDistance,
+            distanceBehindFront = distanceBehindFront,
+            requestedLength = length,
+            maxDistance = maxDistance,
+            minSourceDistance = minSourceDistance,
+            out = impulseOwnedSegment
+        ) ?: return
+        drawImpulseSegment(
+            canvas = canvas,
+            geometry = geometry,
+            center = segment.pathCenter,
+            length = segment.endDistance - segment.startDistance,
+            alpha = alpha,
+            strokeWidth = strokeWidth
+        )
+    }
+
+    private fun drawSourceAnchoredImpulseSample(
+        canvas: Canvas,
+        geometry: StyleGeometry,
+        origin: Float,
+        maxDistance: Float,
+        direction: Int,
+        distanceFromSource: Float,
         length: Float,
         alpha: Int,
         strokeWidth: Float
     ) {
-        val center = if (direction > 0) {
-            front - distanceBehindFront - length / 2f
-        } else {
-            front + distanceBehindFront + length / 2f
-        }
-        drawImpulseSegment(canvas, geometry, center, length, alpha, strokeWidth)
+        val segment = lightImpulseOwnedSegment(
+            origin = origin,
+            direction = direction,
+            frontDistance = distanceFromSource + length,
+            distanceBehindFront = 0f,
+            requestedLength = length,
+            maxDistance = maxDistance,
+            out = impulseOwnedSegment
+        ) ?: return
+        drawImpulseSegment(
+            canvas = canvas,
+            geometry = geometry,
+            center = segment.pathCenter,
+            length = segment.endDistance - segment.startDistance,
+            alpha = alpha,
+            strokeWidth = strokeWidth
+        )
     }
 
     private fun drawImpulseSegment(
