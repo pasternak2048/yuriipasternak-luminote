@@ -16,6 +16,8 @@ Defaults: LOW `Engineer -> Reviewer`; MEDIUM `Engineer -> Reviewer -> QA`; HIGH 
 
 Routing: Tanya=UI; Vitalik=Core; Volodya=architecture; Slavik=investigation; Yarik=plan critic; Sasha=security; Roma=performance; Ira=Git writing; Khrys=release/promotion. Specialties are preferences, not cages.
 
+Runtime delegation labels must identify the assigned specialist. When spawning, delegating, or naming a workstream, use `<Sharaga name> / <role> — <work item>` (for example, `Volodya / Architect — Architecture audit`), never anonymous or role-only labels such as `Architecture audit`, `Implementation`, `Review`, or `QA validation`.
+
 Use `A#`, `D#`, `R#`; invalidate dependents when evidence changes. Durable regressions -> `PERSISTENCE_REQUIRED`.
 
 Gates as applicable: `SCOPED -> DESIGNED -> IMPLEMENTED -> REVIEWED -> VERIFIED -> DOCUMENTED -> RELEASE_READY`. Reviewer correction -> Engineer -> Reviewer; QA failure -> Engineer -> Reviewer -> QA; specialist blocker -> Engineer -> specialist. Evidenced BLOCKER may stop the line.
