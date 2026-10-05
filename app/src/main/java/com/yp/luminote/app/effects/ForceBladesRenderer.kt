@@ -17,8 +17,7 @@ import kotlin.math.sin
 internal class ForceBladesRenderer(
     private val outline: DisplayOutline
 ) {
-    private var surface: EdgePathGeometry? = null
-    private var surfaceKey: SurfaceKey? = null
+    private val pathCache = EdgePathCache(outline)
     private val azureHead = EnergyBladeHead(BladePalette.AZURE)
     private val crimsonHead = EnergyBladeHead(BladePalette.CRIMSON)
     // Duel owns four fronts. They share cached surface resources, but their progress is independent.
@@ -62,29 +61,14 @@ internal class ForceBladesRenderer(
     }
 
     private fun geometryFor(strokeWidth: Float, edgeCalibrationPx: Float, cornerCalibrationPx: Float, cornerShape: Float): EdgePathGeometry? {
-        val key = SurfaceKey(outline.version, strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape)
-        if (surfaceKey != key) {
-            surface = EdgePathGeometry(
-                outline.centerlinePath(
-                    strokeWidth = strokeWidth,
-                    edgeCalibrationPx = edgeCalibrationPx,
-                    cornerCalibrationPx = cornerCalibrationPx,
-                    cornerShape = cornerShape,
-                    extraEnvelopePx = MAX_BLOOM_INSET_PX
-                )
-            )
-            surfaceKey = key
-        }
-        return surface?.takeIf { it.length > 0f }
+        return pathCache.geometryFor(
+            strokeWidth = strokeWidth,
+            edgeCalibrationPx = edgeCalibrationPx,
+            cornerCalibrationPx = cornerCalibrationPx,
+            cornerShape = cornerShape,
+            extraEnvelopePx = MAX_BLOOM_INSET_PX
+        )
     }
-
-    private data class SurfaceKey(
-        val outlineVersion: Int,
-        val strokeWidth: Float,
-        val edgeCalibrationPx: Float,
-        val cornerCalibrationPx: Float,
-        val cornerShape: Float
-    )
 
     private fun drawAzure(canvas: Canvas, surface: EdgePathGeometry, phase: Float, alpha: Int) {
         val t = phase.coerceIn(0f, 1f)
@@ -179,38 +163,6 @@ internal class ForceBladesRenderer(
         const val CLASH_APPROACH = 0.25f
         const val DUEL_EXTEND_END = 0.30f
     }
-}
-
-/** Cached surface shared by all simultaneous effect heads. */
-internal class EdgePathGeometry(path: Path) {
-    val measure = PathMeasure(path, false)
-    val length = measure.length
-    val segmentPath = Path()
-    val scratchPath = Path()
-    val position = FloatArray(2)
-    val tangent = FloatArray(2)
-
-    fun wrappedSegment(startFraction: Float, fraction: Float, out: Path = segmentPath): Path {
-        out.reset()
-        if (length <= 0f || fraction <= 0f) return out
-        val start = normalized(startFraction) * length
-        val segment = fraction.coerceAtMost(1f) * length
-        val end = start + segment
-        if (end <= length) {
-            measure.getSegment(start, end, out, true)
-        } else {
-            measure.getSegment(start, length, out, true)
-            measure.getSegment(0f, end - length, out, true)
-        }
-        return out
-    }
-
-    fun pointAt(fraction: Float): FloatArray {
-        measure.getPosTan(normalized(fraction) * length, position, tangent)
-        return position
-    }
-
-    fun normalized(value: Float): Float = ((value % 1f) + 1f) % 1f
 }
 
 internal enum class BladePalette(val body: Int, val bloom: Int) {

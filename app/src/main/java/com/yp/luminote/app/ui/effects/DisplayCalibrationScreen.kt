@@ -13,7 +13,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -23,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -45,7 +45,7 @@ import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 @Composable
 fun DisplayCalibrationScreen(onBackClick: () -> Unit, viewModel: LuminoteSettingsViewModel) {
     val context = LocalContext.current
-    val settings by viewModel.settings.collectAsState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val token = remember { java.util.UUID.randomUUID().toString() }
     val lifecycleOwner = LocalLifecycleOwner.current
     val density = LocalDensity.current.density

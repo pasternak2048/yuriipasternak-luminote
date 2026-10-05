@@ -65,17 +65,6 @@ class LuminoteSettingsRepository(
                 "halo_interval"
             )
 
-        /** Legacy-only keys: values are read as inert migration input. */
-        val legacyHaloRepeatCount =
-            intPreferencesKey(
-                "halo_repeat_count"
-            )
-
-        val legacyNotificationPlayback =
-            stringPreferencesKey(
-                "notification_playback"
-            )
-
         val remindersEnabled = booleanPreferencesKey("reminders_enabled")
         val reminderIntervalSeconds = intPreferencesKey("reminder_interval_seconds")
 
