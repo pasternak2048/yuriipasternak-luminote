@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.HaloMode
-import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
@@ -54,9 +54,9 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
     val onModeSelected: (HaloMode) -> Unit = { mode ->
         viewModel.setHaloMode(mode)
         when (mode) {
-            HaloMode.AMBIENT -> HaloOverlayService.start(context, HaloOverlayService.createAmbientIntent(context, settings.copy(haloMode = HaloMode.AMBIENT)))
-            HaloMode.NOTIFICATIONS -> HaloOverlayService.start(context, HaloOverlayService.createStopAmbientIntent(context))
-            HaloMode.OFF -> HaloOverlayService.start(context, HaloOverlayService.createStopAllIntent(context))
+            HaloMode.AMBIENT -> HaloEffectController.ambient(context, settings.copy(haloMode = HaloMode.AMBIENT))
+            HaloMode.NOTIFICATIONS -> HaloEffectController.stopAmbient(context)
+            HaloMode.OFF -> HaloEffectController.globalOff(context)
         }
     }
     if (!settingsLoaded) {

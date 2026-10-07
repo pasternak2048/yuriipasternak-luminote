@@ -132,9 +132,12 @@ class HaloAccessibilityService : AccessibilityService() {
                     ambientIntent
                 )
 
+                HaloEffectController.onAccessibilityAmbientTakeover(this)
+
                 HaloOverlayService
                     .stopApplicationAmbientOverlay(
-                        this
+                        this,
+                        ambientIntent
                     )
             }
     }
@@ -1345,6 +1348,8 @@ class HaloAccessibilityService : AccessibilityService() {
 
             return true
         }
+
+        internal fun isAvailable(): Boolean = activeService != null
 
         /**
          * Generic accessibility commands have no terminal callback. A reminder

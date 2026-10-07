@@ -52,7 +52,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yp.luminote.app.effects.HaloAccessibilityService
 import com.yp.luminote.app.R
-import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.theme.LocalLuminoteStatusColors
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
@@ -170,13 +170,7 @@ fun AccessScreen(
             AccessStatusCard(
                 haloReady = haloReady,
                 onTestHaloClick = {
-                    HaloOverlayService.start(
-                        context,
-                        HaloOverlayService.createPreviewIntent(
-                            context,
-                            settings
-                        )
-                    )
+                    HaloEffectController.preview(context, settings)
                 }
             )
         }

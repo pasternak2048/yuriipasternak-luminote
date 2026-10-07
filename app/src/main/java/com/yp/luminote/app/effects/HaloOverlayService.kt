@@ -166,11 +166,16 @@ class HaloOverlayService : Service() {
                 false
             ) == true
         ) {
-            pendingApplicationAmbientIntent =
-                null
-
-            removeOverlay()
-            stopSelf()
+            val lease = intent.getLongExtra(EXTRA_APPLICATION_AMBIENT_LEASE, NO_APPLICATION_AMBIENT_LEASE)
+            applicationAmbientOwnership.consumePending(lease.takeIf { it != NO_APPLICATION_AMBIENT_LEASE })
+            if (lease != NO_APPLICATION_AMBIENT_LEASE && applicationAmbientOwnership.canStopOverlay(lease)) {
+                applicationAmbientOwnership.consumeActive(lease)
+                removeOverlay()
+                stopSelf()
+            } else if (overlayView == null && !hasCurrentStaticCalibration()) {
+                // A stale takeover cleanup must not remove a newer calibration session.
+                stopSelf(startId)
+            }
 
             return START_NOT_STICKY
         }
@@ -203,6 +208,7 @@ class HaloOverlayService : Service() {
 
         if (
             !isNotificationEffect &&
+            intent?.getBooleanExtra(EXTRA_DIRECT_OVERLAY_COMMAND, false) != true &&
             !CalibrationPreviewCommandPolicy.bypassAccessibilityRoute(
                 intent?.getStringExtra(EXTRA_CALIBRATION_TOKEN),
                 intent?.getBooleanExtra(EXTRA_STOP_CALIBRATION, false) == true,
@@ -284,6 +290,9 @@ class HaloOverlayService : Service() {
         if (commandCalibrationToken != null &&
             (commandCalibrationGeneration == null ||
                 !CalibrationPreviewSession.isCurrent(commandCalibrationToken, commandCalibrationGeneration))) return START_NOT_STICKY
+        if (commandCalibrationToken != null) {
+            invalidatePendingApplicationAmbient()
+        }
         if (commandCalibrationToken != null && effectCoordinator.isBusy()) {
             pendingCalibrationIntent = intent
             return START_NOT_STICKY
@@ -296,6 +305,14 @@ class HaloOverlayService : Service() {
         // Settings/ambient emissions are tokenless and must never replace a calibration owner.
         if (commandCalibrationToken == null && hasCurrentStaticCalibration() && intent?.let(::isPersistentAmbientIntent) == true) {
             return START_NOT_STICKY
+        }
+
+        if (intent?.let(::isPersistentAmbientIntent) == true) {
+            val ambientLease = intent.getLongExtra(EXTRA_APPLICATION_AMBIENT_LEASE, NO_APPLICATION_AMBIENT_LEASE)
+            if (ambientLease != NO_APPLICATION_AMBIENT_LEASE) {
+                if (!applicationAmbientOwnership.isPending(ambientLease)) return START_NOT_STICKY
+                applicationAmbientOwnership.markOverlayActive(ambientLease)
+            }
         }
 
         val config =
@@ -1449,7 +1466,10 @@ class HaloOverlayService : Service() {
         const val EXTRA_CALIBRATION_GENERATION = "extra_calibration_generation"
         const val EXTRA_PAUSE_CALIBRATION = "extra_pause_calibration"
         const val EXTRA_STOP_CALIBRATION = "extra_stop_calibration"
+        private const val EXTRA_DIRECT_OVERLAY_COMMAND = "extra_direct_overlay_command"
+        private const val EXTRA_APPLICATION_AMBIENT_LEASE = "extra_application_ambient_lease"
         private const val NO_CALIBRATION_GENERATION = -1L
+        private const val NO_APPLICATION_AMBIENT_LEASE = -1L
 
         const val EXTRA_PACKAGE_NAME =
             "extra_notification_package_name"
@@ -1476,6 +1496,8 @@ class HaloOverlayService : Service() {
         @Volatile
         private var pendingApplicationAmbientIntent:
                 Intent? = null
+
+        private val applicationAmbientOwnership = ApplicationAmbientOwnership()
 
         private val effectCoordinator =
             HaloEffectCoordinator()
@@ -1611,6 +1633,9 @@ class HaloOverlayService : Service() {
             context: Context,
             intent: Intent
         ): Boolean {
+            if (intent.getBooleanExtra(EXTRA_STOP_AMBIENT, false) || intent.getBooleanExtra(EXTRA_STOP_ALL, false)) {
+                invalidatePendingApplicationAmbient()
+            }
             /*
              * Accessibility overlays are the lock-screen/AoD renderer. Route
              * there before attempting an FGS start, which Android may reject
@@ -1623,6 +1648,9 @@ class HaloOverlayService : Service() {
                         intent.hasExtra(
                             EXTRA_NOTIFICATION_KEY
                         )
+
+            val fallbackAmbient =
+                if (isPersistentAmbientIntent(intent)) takePendingApplicationAmbientIntent() else null
 
             if (
                 !isNotificationEffect &&
@@ -1640,26 +1668,39 @@ class HaloOverlayService : Service() {
                         intent
                     )
                 ) {
-                    pendingApplicationAmbientIntent =
-                        null
+                    HaloEffectController.onAmbientStarted(context, HaloEffectHost.ACCESSIBILITY)
+                    fallbackAmbient?.let { pendingAmbient ->
+                        stopApplicationAmbientOverlay(context, pendingAmbient)
+                    }
                 }
 
                 return true
             }
 
-            if (
-                isPersistentAmbientIntent(
-                    intent
-                )
-            ) {
-                pendingApplicationAmbientIntent =
-                    Intent(intent)
+            return startOverlay(context, intent)
+        }
+
+        /**
+         * Delivers a command to the application-overlay host after its owner
+         * has already been selected by [HaloEffectController].
+         */
+        internal fun startOverlay(
+            context: Context,
+            intent: Intent
+        ): Boolean {
+            val hostIntent = if (isPersistentAmbientIntent(intent)) stageApplicationAmbient(intent) else Intent(intent)
+
+            val directIntent = Intent(hostIntent).apply {
+                putExtra(EXTRA_DIRECT_OVERLAY_COMMAND, true)
             }
 
             try {
                 context.startForegroundService(
-                    intent
+                    directIntent
                 )
+                if (isPersistentAmbientIntent(hostIntent)) {
+                    HaloEffectController.onAmbientStarted(context, HaloEffectHost.OVERLAY)
+                }
                 return true
             } catch (
                 exception: IllegalStateException
@@ -1688,7 +1729,11 @@ class HaloOverlayService : Service() {
          */
         internal fun takePendingApplicationAmbientIntent():
                 Intent? =
-            pendingApplicationAmbientIntent?.let { pendingIntent ->
+            pendingApplicationAmbientIntent?.takeIf { pendingIntent ->
+                applicationAmbientOwnership.isPending(
+                    pendingIntent.getLongExtra(EXTRA_APPLICATION_AMBIENT_LEASE, NO_APPLICATION_AMBIENT_LEASE)
+                )
+            }?.let { pendingIntent ->
                 Intent(
                     pendingIntent
                 )
@@ -1696,8 +1741,10 @@ class HaloOverlayService : Service() {
 
         /** Stops only the fallback FGS overlay after accessibility takes it over. */
         internal fun stopApplicationAmbientOverlay(
-            context: Context
+            context: Context,
+            ambientIntent: Intent
         ) {
+            val lease = ambientIntent.getLongExtra(EXTRA_APPLICATION_AMBIENT_LEASE, NO_APPLICATION_AMBIENT_LEASE)
             context.startService(
                 Intent(
                     context,
@@ -1707,8 +1754,22 @@ class HaloOverlayService : Service() {
                         EXTRA_STOP_APPLICATION_AMBIENT,
                         true
                     )
+                    putExtra(EXTRA_APPLICATION_AMBIENT_LEASE, lease)
                 }
             )
+        }
+
+        /** Terminal Ambient commands consume an unadopted fallback before it can revive. */
+        internal fun invalidatePendingApplicationAmbient() {
+            applicationAmbientOwnership.supersedeOverlay()
+            pendingApplicationAmbientIntent = null
+        }
+
+        private fun stageApplicationAmbient(intent: Intent): Intent {
+            val lease = applicationAmbientOwnership.beginFallback()
+            return Intent(intent).apply {
+                putExtra(EXTRA_APPLICATION_AMBIENT_LEASE, lease)
+            }.also { pendingApplicationAmbientIntent = Intent(it) }
         }
 
         private fun isPersistentAmbientIntent(
