@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
@@ -74,7 +74,7 @@ fun AmbientHaloScreen(
         settings.ambientGradientFlowSpeed
     ) {
         if (settings.ambientEnabled) {
-            HaloOverlayService.start(context, HaloOverlayService.createAmbientIntent(context, settings))
+            HaloEffectController.ambient(context, settings)
         }
     }
 

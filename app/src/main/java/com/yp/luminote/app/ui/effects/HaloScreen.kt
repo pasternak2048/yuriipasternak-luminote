@@ -46,7 +46,7 @@ import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.definition
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
-import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
@@ -72,7 +72,7 @@ fun HaloScreen(
 
     DisposableEffect(context) {
         onDispose {
-            HaloOverlayService.start(context, HaloOverlayService.createStopPreviewIntent(context))
+            HaloEffectController.stopPreview(context)
         }
     }
 
@@ -470,16 +470,13 @@ private fun TestEffectButton(
 
         Button(
             onClick = {
-                HaloOverlayService.start(
+                HaloEffectController.preview(
                     context,
-                    HaloOverlayService.createPreviewIntent(
-                        context = context,
-                        settings = settings.copy(
+                    settings.copy(
                             // App icon colors are resolved at notification time. Preview uses the
                             // current theme primary instead, so its default outline remains visible.
                             haloColor = if (settings.colorSource == HaloColorSource.APP_ICON) previewAppColor else settings.haloColor,
                         )
-                    )
                 )
             },
             modifier =

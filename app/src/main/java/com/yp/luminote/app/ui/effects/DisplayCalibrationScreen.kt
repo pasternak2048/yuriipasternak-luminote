@@ -35,8 +35,7 @@ import com.yp.luminote.app.data.settings.MIN_DISPLAY_CORNER_SHAPE
 import com.yp.luminote.app.data.settings.MAX_DISPLAY_CORNER_SHAPE
 import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
 import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
-import com.yp.luminote.app.effects.CalibrationPreviewSession
-import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 import com.yp.luminote.app.ui.components.LuminoteSliderSetting
@@ -62,19 +61,12 @@ fun DisplayCalibrationScreen(onBackClick: () -> Unit, viewModel: LuminoteSetting
     var lastGeneration by remember { mutableLongStateOf(NO_CALIBRATION_GENERATION) }
     val currentGeneration by rememberUpdatedState(lastGeneration)
     fun startCurrentDraft() {
-        lastGeneration = CalibrationPreviewSession.activate(token)
-        HaloOverlayService.start(
-            context,
-            HaloOverlayService.createCalibrationIntent(context, currentDraft(), token, lastGeneration, start = true)
-        )
+        lastGeneration = HaloEffectController.startCalibration(context, currentDraft(), token)
     }
     fun updatePreview() {
         val generation = lastGeneration
         if (generation == NO_CALIBRATION_GENERATION) return
-        HaloOverlayService.start(
-            context,
-            HaloOverlayService.createCalibrationIntent(context, currentDraft(), token, generation, start = false)
-        )
+        HaloEffectController.updateCalibration(context, currentDraft(), token, generation)
     }
     DisposableEffect(lifecycleOwner, token) {
         val observer = LifecycleEventObserver { _, event ->
@@ -83,7 +75,7 @@ fun DisplayCalibrationScreen(onBackClick: () -> Unit, viewModel: LuminoteSetting
                 Lifecycle.Event.ON_STOP -> {
                     val generation = lastGeneration
                     if (generation != NO_CALIBRATION_GENERATION) {
-                        HaloOverlayService.start(context, HaloOverlayService.createPauseCalibrationIntent(context, token, generation))
+                        HaloEffectController.pauseCalibration(context, token, generation)
                     }
                 }
                 else -> Unit
@@ -94,7 +86,7 @@ fun DisplayCalibrationScreen(onBackClick: () -> Unit, viewModel: LuminoteSetting
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
             if (currentGeneration != NO_CALIBRATION_GENERATION) {
-                HaloOverlayService.start(context, HaloOverlayService.createStopCalibrationIntent(context, token, currentGeneration))
+                HaloEffectController.stopCalibration(context, token, currentGeneration)
             }
         }
     }
@@ -134,7 +126,7 @@ fun DisplayCalibrationScreen(onBackClick: () -> Unit, viewModel: LuminoteSetting
                 val generation = lastGeneration
                 viewModel.applyDisplayCalibration(edge, corner, cornerShape)
                 if (generation != NO_CALIBRATION_GENERATION) {
-                    HaloOverlayService.start(context, HaloOverlayService.createStopCalibrationIntent(context, token, generation))
+                    HaloEffectController.stopCalibration(context, token, generation)
                 }
                 onBackClick()
             }, Modifier.fillMaxWidth()) { Text(stringResource(R.string.done)) }
