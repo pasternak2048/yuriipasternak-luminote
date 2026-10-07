@@ -506,8 +506,8 @@ class LightImpulseTimelineTest {
     }
 
     @Test
-    fun `normal impulse and dedicated light impulse use the same renderer route`() {
-        assertTrue(usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.IMPULSE)))
+    fun `only dedicated reminder mode uses the light impulse override`() {
+        assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.IMPULSE)))
         assertTrue(usesLightImpulseRenderer(HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE)))
         assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.SNAKE)))
     }

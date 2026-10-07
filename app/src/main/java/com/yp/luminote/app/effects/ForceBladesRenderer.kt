@@ -4,7 +4,6 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
-import com.yp.luminote.app.data.settings.HaloMotion
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -29,9 +28,8 @@ internal class ForceBladesRenderer(
     private val duelLifecycle = MutableDuelPhase()
     private val duelBoundaries = MutableDuelBoundaries()
 
-    fun draw(
+    fun drawAzure(
         canvas: Canvas,
-        motion: HaloMotion,
         phase: Float,
         alpha: Int,
         strokeWidth: Float,
@@ -49,15 +47,22 @@ internal class ForceBladesRenderer(
         try {
             // Bloom is allowed inward, never beyond the physical display shape.
             canvas.clipPath(outline.path)
-            when (motion) {
-                HaloMotion.AZURE_BLADE -> drawAzure(canvas, geometry, phase, alpha)
-                HaloMotion.CRIMSON_BLADE -> drawCrimson(canvas, geometry, phase, alpha)
-                HaloMotion.FORCE_CLASH -> drawClash(canvas, geometry, phase, alpha)
-                else -> Unit
-            }
+            drawAzure(canvas, geometry, phase, alpha)
         } finally {
             canvas.restoreToCount(save)
         }
+    }
+
+    fun drawCrimson(canvas: Canvas, phase: Float, alpha: Int, strokeWidth: Float, edgeCalibrationPx: Float, cornerCalibrationPx: Float, cornerShape: Float) {
+        val geometry = geometryFor(strokeWidth, outline.opticalInsetPx + edgeCalibrationPx, cornerCalibrationPx, cornerShape) ?: return
+        val save = canvas.save()
+        try { canvas.clipPath(outline.path); drawCrimson(canvas, geometry, phase, alpha) } finally { canvas.restoreToCount(save) }
+    }
+
+    fun drawClash(canvas: Canvas, phase: Float, alpha: Int, strokeWidth: Float, edgeCalibrationPx: Float, cornerCalibrationPx: Float, cornerShape: Float) {
+        val geometry = geometryFor(strokeWidth, outline.opticalInsetPx + edgeCalibrationPx, cornerCalibrationPx, cornerShape) ?: return
+        val save = canvas.save()
+        try { canvas.clipPath(outline.path); drawClash(canvas, geometry, phase, alpha) } finally { canvas.restoreToCount(save) }
     }
 
     private fun geometryFor(strokeWidth: Float, edgeCalibrationPx: Float, cornerCalibrationPx: Float, cornerShape: Float): EdgePathGeometry? {

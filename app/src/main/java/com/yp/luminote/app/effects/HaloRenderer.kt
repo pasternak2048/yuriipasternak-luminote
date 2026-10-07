@@ -8,8 +8,13 @@ import android.graphics.PathMeasure
 import android.graphics.RectF
 import android.graphics.SweepGradient
 import com.yp.luminote.app.data.settings.HaloColorMode
+import com.yp.luminote.app.data.settings.HaloMotionDefinition
+import com.yp.luminote.app.data.settings.HaloRenderFrame
+import com.yp.luminote.app.data.settings.HaloRenderSurface
+import com.yp.luminote.app.data.settings.HaloBladeVariant
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.definition
 import kotlin.math.PI
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -17,9 +22,9 @@ import kotlin.math.sin
 
 internal enum class LightImpulsePhase { IGNITION, TRAVEL, CONVERGE, FADE }
 
-/** Both entry points deliberately resolve to one renderer choreography. */
+/** Reminder owns the dedicated Light Impulse route; normal Impulse is registry-dispatched. */
 internal fun usesLightImpulseRenderer(config: HaloConfig): Boolean =
-    config.renderMode == HaloRenderMode.LIGHT_IMPULSE || config.motion == HaloMotion.IMPULSE
+    config.renderMode == HaloRenderMode.LIGHT_IMPULSE
 
 /** Normal-app Impulse retains the conventional color preparation; dedicated impulse keeps its source color. */
 internal fun impulseUsesNormalColorTreatment(config: HaloConfig): Boolean =
@@ -809,9 +814,6 @@ internal class EdgeRenderPipeline(
             get() = this@EdgeRenderPipeline.outlinePath
         override val corePaint: Paint
             get() = this@EdgeRenderPipeline.corePaint
-        override val motion: HaloMotion
-            get() = config.motion
-
         override fun preparePaint(baseAlpha: Int, effectPhase: Float, gradientPhase: Float) {
             prepareConventionalPaint(baseAlpha, effectPhase, gradientPhase)
         }
@@ -844,6 +846,29 @@ internal class EdgeRenderPipeline(
     private val forceBlades =
         ForceBladesRenderer(outline)
 
+    private var activeDefinition: HaloMotionDefinition = this.config.motion.definition
+    private var delegateCanvas: Canvas? = null
+    private val renderFrame = HaloRenderFrame()
+    private val renderSurface = object : HaloRenderSurface {
+        override fun drawFullContour(frame: HaloRenderFrame) {
+            val canvas = delegateCanvas ?: return
+            conventionalRenderer.drawPulse(canvas, frame.alpha, frame.phase, frame.gradientPhase)
+        }
+
+        override fun drawSpecializedField(frame: HaloRenderFrame) {
+            val canvas = delegateCanvas ?: return
+            lightImpulseRenderer.draw(canvas, 1f, frame.phase, frame.gradientPhase)
+        }
+
+        override fun drawLuminousSegment(frame: HaloRenderFrame, startFraction: Float, lengthFraction: Float) {
+            val canvas = delegateCanvas ?: return
+            conventionalRenderer.drawLuminousSegment(canvas, frame.alpha, frame.phase, frame.gradientPhase, startFraction, lengthFraction)
+        }
+
+        override fun drawBlade(frame: HaloRenderFrame, variant: HaloBladeVariant) =
+            this@EdgeRenderPipeline.drawBlade(frame, variant)
+    }
+
     fun update(
         config: HaloConfig
     ) {
@@ -860,6 +885,7 @@ internal class EdgeRenderPipeline(
 
         this.config =
             next
+        activeDefinition = next.motion.definition
 
         colorRgb =
             next.color and RGB_MASK
@@ -901,20 +927,6 @@ internal class EdgeRenderPipeline(
             return
         }
 
-        if (config.motion.isForceBlade) {
-            forceBlades.draw(
-                canvas = canvas,
-                motion = config.motion,
-                phase = effectPhase,
-                alpha = baseAlpha,
-                strokeWidth = renderStrokeWidth,
-                edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp),
-                cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
-                , cornerShape = config.cornerShape
-            )
-            return
-        }
-
         if (
             cachedOutlineVersion !=
             outline.version
@@ -925,7 +937,24 @@ internal class EdgeRenderPipeline(
                 outline.version
         }
 
-        conventionalRenderer.draw(canvas, baseAlpha, effectPhase, gradientPhase)
+        delegateCanvas = canvas
+        try {
+            renderFrame.phase = effectPhase
+            renderFrame.alpha = baseAlpha
+            renderFrame.gradientPhase = gradientPhase
+            activeDefinition.renderDelegate.draw(renderSurface, renderFrame)
+        } finally {
+            delegateCanvas = null
+        }
+    }
+
+    private fun drawBlade(frame: HaloRenderFrame, variant: HaloBladeVariant) {
+        val canvas = delegateCanvas ?: return
+        when (variant) {
+            HaloBladeVariant.AZURE -> forceBlades.drawAzure(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape)
+            HaloBladeVariant.CRIMSON -> forceBlades.drawCrimson(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape)
+            HaloBladeVariant.CLASH -> forceBlades.drawClash(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape)
+        }
     }
 
     /** Keeps normal Impulse on the app's existing solid/palette/gradient paint path. */
@@ -1432,8 +1461,3 @@ internal class HaloRenderer(config: HaloConfig, outline: DisplayOutline) {
 
     internal fun staticPreviewPathForCurrentConfig(): Path = pipeline.staticPreviewPathForCurrentConfig()
 }
-
-private val HaloMotion.isForceBlade: Boolean
-    get() = this == HaloMotion.AZURE_BLADE ||
-        this == HaloMotion.CRIMSON_BLADE ||
-        this == HaloMotion.FORCE_CLASH

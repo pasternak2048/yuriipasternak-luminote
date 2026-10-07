@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.HaloAnimationRegistry
 import com.yp.luminote.app.data.settings.HaloMode
 import com.yp.luminote.app.data.settings.GradientPalette
 import com.yp.luminote.app.data.settings.LuminoteSettings
@@ -338,10 +339,7 @@ class LuminoteSettingsViewModel(
         updateSettings {
             copy(
                 ambientMotion =
-                    motion.takeIf {
-                        it == HaloMotion.PULSE ||
-                                it == HaloMotion.SNAKE
-                    } ?: HaloMotion.PULSE
+                    HaloAnimationRegistry.resolveAmbient(motion.name)
             )
         }
     }

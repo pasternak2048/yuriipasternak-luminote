@@ -14,6 +14,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.HaloAnimationRegistry
+import com.yp.luminote.app.data.settings.HaloMotionDefinition
 import com.yp.luminote.app.data.settings.definition
 import com.yp.luminote.app.R
 
@@ -22,7 +24,7 @@ fun HaloAppearancePicker(
     modifier: Modifier = Modifier,
     frame: HaloFrame,
     motion: HaloMotion,
-    availableMotions: List<HaloMotion> = frame.definition.supportedMotions,
+    availableDefinitions: List<HaloMotionDefinition> = HaloAnimationRegistry.normalDefinitions,
     onMotionSelected: (HaloMotion) -> Unit,
 ) {
     LuminoteSettingsCard(modifier = modifier) {
@@ -50,11 +52,11 @@ fun HaloAppearancePicker(
                 modifier = Modifier.fillMaxWidth().selectableGroup(),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                availableMotions.forEach { candidate ->
+                availableDefinitions.forEach { candidate ->
                     LuminoteSelectionRow(
-                        title = stringResource(candidate.definition.titleRes),
-                        selected = motion == candidate,
-                        onClick = { onMotionSelected(candidate) },
+                        title = stringResource(candidate.titleRes),
+                        selected = motion == candidate.motion,
+                        onClick = { onMotionSelected(candidate.motion) },
                         control = LuminoteSelectionControl.Radio
                     )
                 }
