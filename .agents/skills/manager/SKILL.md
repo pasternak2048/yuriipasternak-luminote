@@ -44,3 +44,11 @@ Remain the logical workflow owner until the selected route reaches a terminal st
 On release routes, `HUMAN_PUSH_REQUIRED` from Khrys is a successful terminal human handoff, not a blocker or failed gate. Preserve the prepared release state and return control to the human; never reroute push execution to another agent.
 
 Only the Manager may declare the overall workflow `READY FOR HUMAN`. Do so after all agent-verifiable gates in the selected route have passed, or when a valid human boundary such as `HUMAN_VALIDATION_REQUIRED` or `HUMAN_PUSH_REQUIRED` is reached. Preserve unresolved human-owned criteria explicitly; never represent a human handoff as `VERIFIED`.
+
+## Role Identity
+
+Canonical role identities and names are defined by their role skills.
+
+When activating, delegating to, or representing a Sharaga role, preserve its canonical name and role identity exactly. Do not invent, rename, alias, or substitute agent personas.
+
+Capability and context skills augment an active role and never create a new agent identity.
