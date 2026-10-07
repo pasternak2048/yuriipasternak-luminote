@@ -5,7 +5,6 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.RectF
-import com.yp.luminote.app.data.settings.HaloMotion
 import kotlin.math.PI
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -19,11 +18,6 @@ internal class StyleGeometry(
 )
 
 private const val SNAKE_SEGMENT_FRACTION = 0.18f
-private const val CORNER_SEGMENT_FRACTION = 0.14f
-private const val CORNER_COUNT = 4
-private const val CORNER_PATH_SAMPLES = 240
-private const val RAIN_DROP_LENGTH_FRACTION = 0.14f
-private val RAIN_OFFSETS = floatArrayOf(0f, 0.18f, 0.43f, 0.67f)
 
 private fun normalizedPhase(phase: Float): Float = (phase % 1f + 1f) % 1f
 
@@ -33,7 +27,6 @@ private fun colorWithAlpha(alpha: Int, rgb: Int): Int =
 internal interface ConventionalRenderSurface {
     val outlinePath: Path
     val corePaint: Paint
-    val motion: HaloMotion
     fun preparePaint(baseAlpha: Int, effectPhase: Float, gradientPhase: Float)
     fun stylePath(): Path
     fun styleGeometry(path: Path): StyleGeometry
@@ -51,383 +44,107 @@ internal interface LightImpulseRenderSurface {
 
 internal class ConventionalEdgeRenderer(private val surface: ConventionalRenderSurface) {
     private val segmentPath = Path()
-    private var cachedCornerGeometry: StyleGeometry? = null
-    private var cachedCornerFractions: FloatArray? = null
+    private val luminousSegment = LuminousEdgeSegmentOptics(segmentPath)
 
-    fun draw(canvas: Canvas, baseAlpha: Int, effectPhase: Float, gradientPhase: Float) {
+    fun drawPulse(canvas: Canvas, baseAlpha: Int, effectPhase: Float, gradientPhase: Float) {
         val saveCount = canvas.save()
         try {
             canvas.clipPath(surface.outlinePath)
             surface.preparePaint(baseAlpha, effectPhase, gradientPhase)
-            drawConventionalStyle(canvas, surface.corePaint, effectPhase)
+            canvas.drawPath(surface.stylePath(), surface.corePaint)
         } finally {
             canvas.restoreToCount(saveCount)
         }
     }
-/** Shared calibrated geometry primitive; conventional motion owns its dispatch. */
-internal fun drawConventionalStyle(
-    canvas: Canvas,
-    paint: Paint,
-    phase: Float
-) {
-    val path = surface.stylePath()
 
-    when (surface.motion) {
-        HaloMotion.PULSE ->
-            canvas.drawPath(
-                path,
-                paint
-            )
-
-        HaloMotion.SNAKE ->
-            drawSnakePath(
-                canvas,
-                surface.styleGeometry(path),
-                paint,
-                phase
-            )
-
-        HaloMotion.CORNER_PULSE ->
-            drawCornerPulsePath(
-                canvas,
-                surface.styleGeometry(path),
-                paint,
-                phase
-            )
-
-        HaloMotion.RAIN ->
-            drawRain(
-                canvas,
-                surface.styleGeometry(path),
-                paint,
-                phase
-            )
-
-        HaloMotion.AZURE_BLADE,
-        HaloMotion.CRIMSON_BLADE,
-        HaloMotion.FORCE_CLASH,
-        HaloMotion.IMPULSE -> Unit
-    }
-}
-
-private fun drawSnakePath(
-    canvas: Canvas,
-    geometry: StyleGeometry,
-    paint: Paint,
-    phase: Float
-) {
-    val measure =
-        geometry.measure
-
-    val length =
-        geometry.length
-
-    if (length <= 0f) {
-        return
-    }
-
-    val start =
-        normalizedPhase(
-            phase
-        ) *
-                length
-
-    val segmentLength =
-        length *
-                SNAKE_SEGMENT_FRACTION
-
-    drawWrappedSegment(
-        canvas = canvas,
-        measure = measure,
-        length = length,
-        start = start,
-        segmentLength = segmentLength,
-        paint = paint
-    )
-}
-
-private fun drawCornerPulsePath(
-    canvas: Canvas,
-    geometry: StyleGeometry,
-    paint: Paint,
-    phase: Float
-) {
-    val measure =
-        geometry.measure
-
-    val length =
-        geometry.length
-
-    if (length <= 0f) {
-        return
-    }
-
-    val normalizedPhase =
-        normalizedPhase(
-            phase
-        )
-
-    val cornerProgress =
-        normalizedPhase *
-                CORNER_COUNT
-
-    val cornerIndex =
-        cornerProgress
-            .toInt()
-            .coerceIn(
-                0,
-                CORNER_COUNT - 1
-            )
-
-    val cornerAlpha =
-        sin(
-            (
-                    cornerProgress -
-                            cornerIndex
-                    ) *
-                    PI
-        )
-            .toFloat()
-            .coerceIn(
-                0f,
-                1f
-            )
-
-    if (cornerAlpha <= 0f) {
-        return
-    }
-
-    val center =
-        cornerFractionsFor(
-            geometry
-        )[cornerIndex] *
-                length
-
-    val baseAlpha =
-        paint.alpha
-
-    paint.alpha =
-        (
-                baseAlpha *
-                        cornerAlpha
-                )
-            .roundToInt()
-
-    drawWrappedSegment(
-        canvas = canvas,
-        measure = measure,
-        length = length,
-        start =
-            center -
-                    length *
-                    CORNER_SEGMENT_FRACTION /
-                    2f,
-        segmentLength =
-            length *
-                    CORNER_SEGMENT_FRACTION,
-        paint = paint
-    )
-
-    paint.alpha =
-        baseAlpha
-}
-
-private fun drawRain(
-    canvas: Canvas,
-    geometry: StyleGeometry,
-    paint: Paint,
-    phase: Float
-) {
-    val bounds =
-        geometry.bounds
-
-    val height =
-        bounds.height()
-
-    if (height <= 0f) {
-        return
-    }
-
-    val normalizedPhase =
-        normalizedPhase(
-            phase
-        )
-
-    val dropLength =
-        height *
-                RAIN_DROP_LENGTH_FRACTION
-
-    for (
-    index in
-    RAIN_OFFSETS.indices
-    ) {
-        val offset =
-            RAIN_OFFSETS[index]
-
-        val dropProgress =
-            (
-                    normalizedPhase +
-                            offset
-                    ) %
-                    1f
-
-        val bottom =
-            bounds.top +
-                    dropProgress *
-                    (
-                            height +
-                                    dropLength
-                            )
-
-        val top =
-            bottom -
-                    dropLength
-
-        val laneX =
-            if (
-                index %
-                2 ==
-                0
-            ) {
-                bounds.left
-            } else {
-                bounds.right
-            }
-
-        canvas.drawLine(
-            laneX,
-            top,
-            laneX,
-            bottom,
-            paint
-        )
-    }
-}
-
-private fun drawWrappedSegment(
-    canvas: Canvas,
-    measure: PathMeasure,
-    length: Float,
-    start: Float,
-    segmentLength: Float,
-    paint: Paint
-) {
-    if (EdgeSegmentRenderer.append(
-            measure = measure,
-            contourLength = length,
-            start = start,
-            segmentLength = segmentLength,
-            out = segmentPath,
-            allowFullContour = false
-        )) {
-        canvas.drawPath(segmentPath, paint)
-    }
-}
-
-private fun cornerFractionsFor(
-    geometry: StyleGeometry
-): FloatArray {
-    cachedCornerFractions
-        ?.takeIf { cachedCornerGeometry === geometry }
-        ?.let { return it }
-
-    val bounds =
-        geometry.bounds
-
-    val targets =
-        floatArrayOf(
-            bounds.left,
-            bounds.top,
-            bounds.right,
-            bounds.top,
-            bounds.right,
-            bounds.bottom,
-            bounds.left,
-            bounds.bottom
-        )
-
-    val position =
-        FloatArray(
-            2
-        )
-
-    return FloatArray(
-        CORNER_COUNT
-    ) { cornerIndex ->
-
-        val targetX =
-            targets[
-                cornerIndex *
-                        2
-            ]
-
-        val targetY =
-            targets[
-                cornerIndex *
-                        2 +
-                        1
-            ]
-
-        var nearestFraction =
-            0f
-
-        var nearestDistance =
-            Float.MAX_VALUE
-
-        for (
-        sample in
-        0..CORNER_PATH_SAMPLES
-        ) {
-            val fraction =
-                sample.toFloat() /
-                        CORNER_PATH_SAMPLES
-
-            geometry.measure
-                .getPosTan(
-                    geometry.length *
-                            fraction,
-                    position,
-                    null
-                )
-
-            val deltaX =
-                position[0] -
-                        targetX
-
-            val deltaY =
-                position[1] -
-                        targetY
-
-            val distance =
-                deltaX *
-                        deltaX +
-                        deltaY *
-                        deltaY
-
-            if (
-                distance <
-                nearestDistance
-            ) {
-                nearestDistance =
-                    distance
-
-                nearestFraction =
-                    fraction
-            }
+    fun drawLuminousSegment(canvas: Canvas, baseAlpha: Int, effectPhase: Float, gradientPhase: Float, startFraction: Float, lengthFraction: Float) {
+        val saveCount = canvas.save()
+        try {
+            canvas.clipPath(surface.outlinePath)
+            surface.preparePaint(baseAlpha, effectPhase, gradientPhase)
+            val path = surface.stylePath()
+            val geometry = surface.styleGeometry(path)
+            luminousSegment.draw(canvas, geometry, startFraction.coerceIn(0f, 1f) * geometry.length,
+                lengthFraction.coerceIn(0f, 1f) * geometry.length, surface.corePaint, surface.corePaint.alpha, 1f)
+        } finally {
+            canvas.restoreToCount(saveCount)
         }
-
-        nearestFraction
-    }.also { fractions ->
-        cachedCornerGeometry = geometry
-        cachedCornerFractions = fractions
     }
+
 }
 
+
+/** Immutable choreography witness: the moving segment is physical-path based and wraps at 1. */
+internal data class LuminousSnakeDrawPlan(val start: Float, val length: Float)
+
+internal fun luminousSnakeDrawPlan(contourLength: Float, phase: Float): LuminousSnakeDrawPlan? {
+    if (!contourLength.isFinite() || contourLength <= 0f || !phase.isFinite()) return null
+    val length = contourLength * SNAKE_SEGMENT_FRACTION
+    if (length < EdgeSegmentRenderer.MIN_RENDERABLE_SEGMENT_PX) return null
+    return LuminousSnakeDrawPlan(normalizedPhase(phase) * contourLength, length)
+}
+
+/**
+ * Shared Impulse-derived luminous edge primitive. Passes own neighbouring tail/body/core/soft
+ * head intervals, and [EdgeSegmentRenderer] handles their single physical 0/1 wrap.
+ */
+internal class LuminousEdgeSegmentOptics(private val segmentPath: Path) {
+    fun draw(canvas: Canvas, geometry: StyleGeometry, start: Float, length: Float, paint: Paint, alpha: Int, intensity: Float) {
+        if (!length.isFinite() || length < EdgeSegmentRenderer.MIN_RENDERABLE_SEGMENT_PX) return
+        val safeIntensity = intensity.coerceIn(0f, 1f)
+        if (safeIntensity <= 0f || alpha <= 0) return
+        val baseWidth = paint.strokeWidth
+        val baseCap = paint.strokeCap
+        paint.strokeCap = Paint.Cap.BUTT
+        try {
+            var cursor = start
+            drawPass(canvas, geometry, cursor, length * TAIL_SHARE, paint, alpha, baseWidth * 0.76f, safeIntensity * 0.30f)
+            cursor += length * TAIL_SHARE
+            drawPass(canvas, geometry, cursor, length * BODY_SHARE, paint, alpha, baseWidth * 1.04f, safeIntensity * 0.58f)
+            cursor += length * BODY_SHARE
+            drawPass(canvas, geometry, cursor, length * CORE_SHARE, paint, alpha, baseWidth * 1.42f, safeIntensity)
+            cursor += length * CORE_SHARE
+            drawPass(canvas, geometry, cursor, length * SOFT_HEAD_SHARE, paint, alpha, baseWidth * 1.88f, safeIntensity * 0.78f)
+        } finally {
+            paint.strokeWidth = baseWidth
+            paint.strokeCap = baseCap
+            paint.alpha = alpha
+        }
+    }
+
+    /** Impulse retains its approved choreography while reusing the calibrated segment primitive. */
+    fun drawCalibratedSample(canvas: Canvas, geometry: StyleGeometry, center: Float, length: Float, paint: Paint, alpha: Int, strokeWidth: Float) {
+        if (alpha <= 0 || !lightImpulseTravellingSegmentIsSafe(length, geometry.length)) return
+        paint.alpha = alpha
+        paint.strokeWidth = strokeWidth
+        appendAndDraw(canvas, geometry, center - length / 2f, length, paint)
+    }
+
+    private fun drawPass(canvas: Canvas, geometry: StyleGeometry, start: Float, length: Float, paint: Paint, alpha: Int, strokeWidth: Float, emission: Float) {
+        if (length < EdgeSegmentRenderer.MIN_RENDERABLE_SEGMENT_PX || emission <= 0f) return
+        paint.alpha = (alpha * emission).roundToInt().coerceIn(0, 255)
+        paint.strokeWidth = strokeWidth
+        appendAndDraw(canvas, geometry, start, length, paint)
+    }
+
+    private fun appendAndDraw(canvas: Canvas, geometry: StyleGeometry, start: Float, length: Float, paint: Paint) {
+        if (EdgeSegmentRenderer.append(geometry.measure, geometry.length, start, length, segmentPath, allowFullContour = false)) {
+            canvas.drawPath(segmentPath, paint)
+        }
+    }
+
+    private companion object {
+        private const val TAIL_SHARE = 0.22f
+        private const val BODY_SHARE = 0.43f
+        private const val CORE_SHARE = 0.23f
+        private const val SOFT_HEAD_SHARE = 0.12f
+    }
 }
 
 internal class LightImpulseRenderer(private val surface: LightImpulseRenderSurface) {
     private val drawPlan = LightImpulseProductionDrawPlan()
     private val segmentPath = Path()
+    private val luminousSegment = LuminousEdgeSegmentOptics(segmentPath)
     private val impulseOwnedSegment = LightImpulseOwnedSegment()
     private var endpointGeometry: StyleGeometry? = null
     private var cachedEndpoints: LightImpulseEndpoints? = null
@@ -912,14 +629,18 @@ private fun drawImpulseSegment(
     alpha: Int,
     strokeWidth: Float
 ) {
-    if (alpha <= 0 || !lightImpulseTravellingSegmentIsSafe(length, geometry.length)) return
     if (surface.corePaint.shader == null) {
         surface.corePaint.color = colorWithAlpha(alpha, surface.colorRgb)
-    } else {
-        surface.corePaint.alpha = alpha
     }
-    surface.corePaint.strokeWidth = strokeWidth
-    drawWrappedSegment(canvas, geometry.measure, geometry.length, center - length / 2f, length, surface.corePaint)
+    luminousSegment.drawCalibratedSample(
+        canvas = canvas,
+        geometry = geometry,
+        center = center,
+        length = length,
+        paint = surface.corePaint,
+        alpha = alpha,
+        strokeWidth = strokeWidth
+    )
 }
 
 private fun drawWrappedSegment(

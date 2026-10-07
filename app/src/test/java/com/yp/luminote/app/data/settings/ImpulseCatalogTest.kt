@@ -10,10 +10,10 @@ import org.junit.Test
 class ImpulseCatalogTest {
 
     @Test
-    fun `classic catalog exposes impulse once immediately after pulse`() {
-        val motions = HaloEffectCatalog.frame(HaloFrame.CLASSIC).supportedMotions
+    fun `registry exposes the locked normal catalog order`() {
+        val motions = HaloAnimationRegistry.normalDefinitions.map { it.motion }
 
-        assertEquals(HaloMotion.IMPULSE, motions[motions.indexOf(HaloMotion.PULSE) + 1])
+        assertEquals(listOf(HaloMotion.IMPULSE, HaloMotion.PULSE, HaloMotion.SNAKE, HaloMotion.AZURE_BLADE, HaloMotion.CRIMSON_BLADE, HaloMotion.FORCE_CLASH), motions)
         assertEquals(1, motions.count { it == HaloMotion.IMPULSE })
         assertEquals(R.string.motion_impulse, HaloMotion.IMPULSE.definition.titleRes)
         assertEquals(2.2f, HaloMotion.IMPULSE.definition.baseDurationSeconds)
@@ -33,5 +33,14 @@ class ImpulseCatalogTest {
         val parsed = HaloMotion.fromStorage("RIPPLE_EDGE")
 
         assertTrue(parsed !in setOf(HaloMotion.PULSE, HaloMotion.SNAKE))
+    }
+
+    @Test
+    fun `removed unknown and non ambient identifiers normalize by capability`() {
+        assertEquals(HaloMotion.IMPULSE, HaloAnimationRegistry.resolveNormal("CORNER_PULSE"))
+        assertEquals(HaloMotion.IMPULSE, HaloAnimationRegistry.resolveNormal("unknown"))
+        assertEquals(HaloMotion.PULSE, HaloAnimationRegistry.resolveAmbient("FORCE_CLASH"))
+        assertEquals(HaloMotion.PULSE, HaloAnimationRegistry.resolveAmbient("RAIN"))
+        assertEquals(listOf(HaloMotion.PULSE, HaloMotion.SNAKE), HaloAnimationRegistry.ambientDefinitions.map { it.motion })
     }
 }

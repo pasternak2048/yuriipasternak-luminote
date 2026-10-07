@@ -23,6 +23,7 @@ import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.HaloAnimationRegistry
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.notification.HaloReminderRuntime
 import kotlin.math.max
@@ -473,7 +474,11 @@ class HaloOverlayService : Service() {
                 intent?.getBooleanExtra(EXTRA_LIGHT_IMPULSE, false) == true -> HaloRenderMode.LIGHT_IMPULSE
                 else -> HaloRenderMode.NORMAL
             }
-        )
+        ).let { config ->
+            if (config.renderMode == HaloRenderMode.AMBIENT) {
+                config.copy(motion = HaloAnimationRegistry.resolveAmbient(intent?.getStringExtra(EXTRA_MOTION)))
+            } else config
+        }
     }
 
     private fun showOverlay(

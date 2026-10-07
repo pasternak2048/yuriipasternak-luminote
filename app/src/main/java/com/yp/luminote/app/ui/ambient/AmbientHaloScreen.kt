@@ -41,7 +41,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.HaloAnimationRegistry
 import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
@@ -112,7 +112,7 @@ fun AmbientHaloScreen(
                         modifier = Modifier.fillMaxWidth(),
                         frame = HaloFrame.CLASSIC,
                         motion = settings.ambientMotion,
-                        availableMotions = listOf(HaloMotion.PULSE, HaloMotion.SNAKE),
+                        availableDefinitions = HaloAnimationRegistry.ambientDefinitions,
                         onMotionSelected = viewModel::setAmbientMotion
                     )
                 }

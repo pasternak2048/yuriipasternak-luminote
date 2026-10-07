@@ -18,6 +18,7 @@ import android.view.WindowManager
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.data.settings.HaloAnimationRegistry
 import com.yp.luminote.app.notification.HaloReminderRuntime
 import kotlin.math.max
 
@@ -755,7 +756,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 intent?.getStringExtra(
                     HaloOverlayService.EXTRA_MOTION
                 )
-                    .let(HaloMotion::fromStorage)
+                    ?.let(HaloAnimationRegistry::resolveNormal)
                     ?: defaults.motion,
 
             effectSpeed =
@@ -789,7 +790,11 @@ class HaloAccessibilityService : AccessibilityService() {
                 intent?.getBooleanExtra(HaloOverlayService.EXTRA_LIGHT_IMPULSE, false) == true -> HaloRenderMode.LIGHT_IMPULSE
                 else -> HaloRenderMode.NORMAL
             }
-        )
+        ).let { config ->
+            if (config.renderMode == HaloRenderMode.AMBIENT) {
+                config.copy(motion = HaloAnimationRegistry.resolveAmbient(intent?.getStringExtra(HaloOverlayService.EXTRA_MOTION)))
+            } else config
+        }
     }
 
     private fun showQueuedEffect(

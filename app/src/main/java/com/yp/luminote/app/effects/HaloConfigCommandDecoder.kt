@@ -1,6 +1,7 @@
 package com.yp.luminote.app.effects
 
 import com.yp.luminote.app.data.settings.HaloColorMode
+import com.yp.luminote.app.data.settings.HaloAnimationRegistry
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloMotion
 
@@ -29,7 +30,7 @@ internal object HaloConfigCommandDecoder {
                     ?: defaults.frame,
             motion =
                 command.motionName
-                    .let(HaloMotion::fromStorage)
+                    ?.let(HaloAnimationRegistry::resolveNormal)
                     ?: defaults.motion,
             effectSpeed = command.effectSpeed ?: defaults.effectSpeed,
             gradientFlowSpeed =

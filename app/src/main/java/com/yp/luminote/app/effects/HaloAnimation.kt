@@ -6,11 +6,11 @@ import android.os.SystemClock
 import android.view.Choreographer
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator
-import com.yp.luminote.app.data.settings.HaloMotion
-import kotlin.math.PI
+import com.yp.luminote.app.data.settings.AmbientProgressPolicy
+import com.yp.luminote.app.data.settings.AmbientProgressPolicies
+import com.yp.luminote.app.data.settings.HaloAnimationEnvelopePolicy
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
 
 /** Test seam for deterministic VSYNC-driven ambient animation tests. */
 internal interface HaloFrameScheduler {
@@ -130,8 +130,9 @@ internal class HaloAnimation(
     private var ambientGradientPhaseStart =
         0f
 
-    private var ambientMotion =
-        HaloMotion.PULSE
+    /** Preselected at ambient session start; no ID branching on VSYNC. */
+    private var ambientProgressPolicy: AmbientProgressPolicy =
+        AmbientProgressPolicies.pulseWithSilence
 
     private var currentPhase =
         0f
@@ -145,11 +146,8 @@ internal class HaloAnimation(
     private var frameCallbackPosted =
         false
 
-    private var strategy:
-            HaloAnimationStrategy =
-        HaloAnimationStrategies.forMotion(
-            HaloMotion.PULSE
-        )
+    /** Preselected at finite session start; no catalog lookup during frames. */
+    private var envelope = HaloAnimationEnvelopePolicy(250L, 350L)
 
     private var frameCallback:
             Choreographer.FrameCallback? = null
@@ -254,10 +252,7 @@ internal class HaloAnimation(
         remainingCycles =
             request.maxCycles
 
-        strategy =
-            HaloAnimationStrategies.forMotion(
-                request.motion
-            )
+        envelope = request.definition.envelope
 
         startFiniteCycle()
     }
@@ -286,8 +281,7 @@ internal class HaloAnimation(
         ambientGradientPhaseStart =
             request.gradientPhaseStart
 
-        ambientMotion =
-            request.motion
+        ambientProgressPolicy = request.definition.ambientProgressPolicy
 
         currentPhase =
             ambientPhaseStart
@@ -299,7 +293,7 @@ internal class HaloAnimation(
             0L
 
         dispatchState(
-            progress = ambientProgressFor(0.0)
+            progress = ambientProgressPolicy.alphaAt(0.0)
         )
 
         postFrame()
@@ -353,11 +347,6 @@ internal class HaloAnimation(
         ) {
             return
         }
-
-        val envelope =
-            strategy.envelope(
-                currentDurationMs
-            )
 
         val fadeInDuration =
             min(
@@ -668,9 +657,7 @@ internal class HaloAnimation(
                         .toFloat()
 
         dispatchState(
-            progress = ambientProgressFor(
-                elapsedSeconds
-            )
+            progress = ambientProgressPolicy.alphaAt(elapsedSeconds)
         )
 
         postFrame()
@@ -890,36 +877,6 @@ internal class HaloAnimation(
         }
     }
 
-    private fun ambientProgressFor(
-        elapsedSeconds: Double
-    ): Float {
-        if (
-            ambientMotion != HaloMotion.PULSE
-        ) {
-            return 1f
-        }
-
-        val pulsePositionSeconds =
-            elapsedSeconds % PULSE_CYCLE_SECONDS
-
-        if (
-            pulsePositionSeconds < PULSE_SILENCE_SECONDS
-        ) {
-            return 0f
-        }
-
-        val pulseFraction =
-            (
-                    pulsePositionSeconds -
-                            PULSE_SILENCE_SECONDS
-                    ) /
-                    PULSE_DURATION_SECONDS
-
-        return sin(
-            PI * pulseFraction
-        ).toFloat()
-    }
-
     private fun sanitizeEffectSpeed(
         effectSpeed: Float
     ): Float =
@@ -958,16 +915,6 @@ internal class HaloAnimation(
 
         private const val AMBIENT_ROTATION_DURATION_SECONDS =
             16.0
-
-        private const val PULSE_SILENCE_SECONDS =
-            10.0
-
-        private const val PULSE_DURATION_SECONDS =
-            2.5
-
-        private const val PULSE_CYCLE_SECONDS =
-            PULSE_SILENCE_SECONDS +
-                    PULSE_DURATION_SECONDS
 
         private const val AMBIENT_PHASE_SPAN =
             360.0 /

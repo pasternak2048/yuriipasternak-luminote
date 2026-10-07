@@ -252,17 +252,9 @@ class LuminoteSettingsRepository(
                             ?: HaloFrame.CLASSIC,
 
                     haloMotion =
-                        preferences[
-                            Keys.haloMotion
-                        ]
-                            .let(HaloMotion::fromStorage)
-                            ?.takeIf {
-                                HaloEffectCatalog.supports(
-                                    HaloFrame.CLASSIC,
-                                    it
-                                )
-                            }
-                            ?: HaloMotion.PULSE,
+                        preferences[Keys.haloMotion]
+                            ?.let(HaloAnimationRegistry::resolveNormal)
+                            ?: defaultSettings.haloMotion,
 
                     haloEffectSpeed =
                         preferences[
@@ -385,14 +377,8 @@ class LuminoteSettingsRepository(
                             ?: defaultSettings.ambientThickness,
 
                     ambientMotion =
-                        preferences[
-                            Keys.ambientMotion
-                        ]
-                            .let(HaloMotion::fromStorage)
-                            ?.takeIf {
-                                it == HaloMotion.PULSE ||
-                                        it == HaloMotion.SNAKE
-                            }
+                        preferences[Keys.ambientMotion]
+                            ?.let(HaloAnimationRegistry::resolveAmbient)
                             ?: defaultSettings.ambientMotion,
 
                     ambientEffectSpeed =

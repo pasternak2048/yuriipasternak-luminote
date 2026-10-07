@@ -49,7 +49,7 @@ class HaloConfigCommandDecoderTest {
         assertEquals(0.7f, config.intensity)
         assertEquals(1f, config.thickness)
         assertEquals(HaloFrame.CLASSIC, config.frame)
-        assertEquals(HaloMotion.PULSE, config.motion)
+        assertEquals(HaloMotion.IMPULSE, config.motion)
         assertEquals(2f, config.effectSpeed)
         assertEquals(0.5f, config.gradientFlowSpeed)
         assertEquals(HaloColorMode.SOLID, config.colorMode)
