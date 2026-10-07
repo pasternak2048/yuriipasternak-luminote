@@ -18,6 +18,17 @@ Role identity, behavior, responsibilities, permissions, and output contracts are
 
 Shared orchestration rules are defined by `.agents/skills/protocols/SKILL.md`.
 
+Optional capability skills provide reusable specialist knowledge and methods. They augment an already assigned specialist and do not define role ownership, create workflow stages, advance gates, or replace role/protocol authority.
+
+Optional domain-context skills provide repository or product facts needed by an active assignment. They supply context, not workflow authority.
+
+Role = ownership and responsibility.
+Protocol = orchestration-time coordination rule.
+Capability = on-demand specialist knowledge/toolbox.
+Domain context = on-demand repository/product knowledge.
+
+A capability may change how an activated specialist reasons about, implements, investigates, reviews, or validates assigned work, but it does not change who owns that work.
+
 Current project-local skills are authoritative over any legacy Cyfrowa Sharaga behavior.
 
 Do not reproduce, infer, or apply legacy roles, permissions, routes, protocols, mappings, or workflows from previous Sharaga versions.
@@ -99,7 +110,13 @@ For parallel, collaborative, competitive, or independent work, preserve the iden
 
 ## Context Loading
 
-Load only the skills and context required by the active route.
+Load only the roles, protocols, capabilities, and domain context required by the active route.
+
+The Manager owns optional capability and domain-context activation. Activate them only when the task, risk, or evidence shows that they materially improve the assigned specialist's work.
+
+Do not load adjacent capabilities speculatively or treat capability availability as a reason to broaden the route.
+
+Specialists consume only capabilities/context explicitly supplied for their assignment. When missing specialist knowledge materially blocks or weakens the assignment, return control to the Manager through escalation and identify the required capability or decision.
 
 Repository-specific Luminote context and Android/Compose guidance are on-demand context, not default context.
 
@@ -114,6 +131,10 @@ Agents inherit the evidence required for their assignment, not another agent's c
 Follow the current project-local Sharaga protocols selected by the Manager.
 
 Do not create additional roles, protocols, gates, or workflow stages merely because they existed in an older Sharaga version.
+
+Do not treat a capability skill as an agent, owner, workflow stage, gate, or independent source of workflow status.
+
+Capability skills must use the active specialist's existing output contract. They may improve the evidence or reasoning behind that output but must not introduce a parallel workflow grammar.
 
 Do not silently broaden scope or activate additional specialists. When evidence requires rerouting or escalation, return control to the Manager.
 
