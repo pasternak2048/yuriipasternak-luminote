@@ -17,8 +17,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -42,8 +42,8 @@ import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick: () -> Unit,
     onAccessClick: () -> Unit, onSettingsClick: () -> Unit,
     windowSizeClass: LuminoteWindowSizeClass, viewModel: LuminoteSettingsViewModel) {
-    val settings by viewModel.settings.collectAsState()
-    val settingsLoaded by viewModel.settingsLoaded.collectAsState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val settingsLoaded by viewModel.settingsLoaded.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val uiMetrics = rememberLuminoteUiMetrics()
     val contentModifier = when (windowSizeClass) {

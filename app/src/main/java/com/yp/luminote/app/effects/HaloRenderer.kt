@@ -41,17 +41,17 @@ private const val LIGHT_TRAVEL_END = 0.80f
 private const val LIGHT_CONVERGE_END = 0.92f
 // This is an aggregate contour budget, not a tail on each side.  Each branch owns half.
 private const val LIGHT_AGGREGATE_TAIL_FRACTION = 0.33f
-private const val LIGHT_TAIL_FRACTION = LIGHT_AGGREGATE_TAIL_FRACTION / 2f
-private const val LIGHT_CORE_FRACTION = 0.022f
+internal const val LIGHT_TAIL_FRACTION = LIGHT_AGGREGATE_TAIL_FRACTION / 2f
+internal const val LIGHT_CORE_FRACTION = 0.022f
 // The planned field still reserves 16.5% per branch, but its visible energy is intentionally
 // concentrated close to the moving head.  A shorter physical tail prevents it reading as a
 // delayed second beam while the enlarged body retains the useful 33% aggregate choreography.
-private const val LIGHT_CORE_SPAN_MULTIPLIER = 4.0f
-private const val LIGHT_ATTACHED_TAIL_BODY_SHARE = 0.55f
+internal const val LIGHT_CORE_SPAN_MULTIPLIER = 4.0f
+internal const val LIGHT_ATTACHED_TAIL_BODY_SHARE = 0.55f
 private const val LIGHT_TERMINAL_SOURCE_RADIUS_FRACTION = 0.040f
-private const val LIGHT_TAIL_SAMPLES = 40
-private const val LIGHT_CORE_SAMPLES = 28
-private const val LIGHT_BLOOM_SAMPLES = 40
+internal const val LIGHT_TAIL_SAMPLES = 40
+internal const val LIGHT_CORE_SAMPLES = 28
+internal const val LIGHT_BLOOM_SAMPLES = 40
 private const val LIGHT_BRANCH_EMERGENCE_TRAVEL = 0.08f
 // Tail and core own neighbouring intervals, so a saturated core need not be dimmed to share a
 // global alpha budget with a tail that is never rasterized underneath it.
@@ -393,11 +393,12 @@ internal fun renderableWrappedSegmentRange(
     contourLength: Float,
     segmentLength: Float
 ): WrappedSegmentRange? {
-    if (!start.isFinite() || !contourLength.isFinite() || !segmentLength.isFinite()) return null
-    if (contourLength <= MIN_RENDERABLE_SEGMENT_PX || segmentLength < MIN_RENDERABLE_SEGMENT_PX) return null
-    if (segmentLength >= contourLength - MIN_RENDERABLE_SEGMENT_PX) return null
-    val normalizedStart = ((start % contourLength) + contourLength) % contourLength
-    return WrappedSegmentRange(normalizedStart, segmentLength)
+    return EdgeSegmentRenderer.range(
+        start = start,
+        contourLength = contourLength,
+        segmentLength = segmentLength,
+        allowFullContour = false
+    )
 }
 
 /** Light Impulse owns a compact field only; invalid input can never request a broad contour. */
@@ -736,10 +737,23 @@ private fun nearestPathFraction(
 private const val LIGHT_ENDPOINT_SAMPLES = 960
 
 /** Draws prepared geometry; the View supplies window size, insets and animation. */
-internal class HaloRenderer(
+/** Rendering implementation separated from HaloRenderer's public lifecycle facade. */
+internal class EdgeRenderPipeline(
     config: HaloConfig,
     private val outline: DisplayOutline
 ) {
+    internal val outlinePath: Path
+        get() = outline.path
+
+    internal fun lightImpulseGeometry(): StyleGeometry? {
+        if (cachedOutlineVersion != outline.version) {
+            clearStylePathCache()
+            cachedOutlineVersion = outline.version
+        }
+        return styleGeometryFor(stylePathForCurrentConfig()).takeIf { it.length > 0f }
+    }
+
+    internal fun lightImpulseAlpha(): Int = (255f * config.intensity).roundToInt().coerceIn(0, 255)
     private var config =
         config.sanitized()
 
@@ -759,24 +773,12 @@ internal class HaloRenderer(
     private var cachedOutlineVersion =
         -1
 
-    private var cachedStyleKey: ConventionalPathCacheKey? = null
-
-    private var cachedStylePath:
-            Path? = null
-
     private var cachedStyleGeometry:
             StyleGeometry? = null
 
-    private val segmentPath =
-        Path()
-
-    /** Reused by owned-beam sampling; branch geometry must not allocate per frame. */
-    private val impulseOwnedSegment =
-        LightImpulseOwnedSegment()
-
-    /** Reused production draw plan; no per-frame plan allocation in the render path. */
-    private val impulseDrawPlan =
-        LightImpulseProductionDrawPlan()
+    /** Conventional and impulse use the shared 0px-envelope physical surface. */
+    private val conventionalPathCache = EdgePathCache(outline)
+    private val calibrationRenderer = CalibrationEdgeRenderer(outline)
 
     private var gradientShader:
             SweepGradient? = null
@@ -796,11 +798,47 @@ internal class HaloRenderer(
     private var gradientCenterY =
         0f
 
-    private val corePaint =
+    internal val corePaint =
         createPaint().apply {
             strokeWidth =
                 renderStrokeWidth
         }
+
+    private val conventionalRenderer = ConventionalEdgeRenderer(object : ConventionalRenderSurface {
+        override val outlinePath: Path
+            get() = this@EdgeRenderPipeline.outlinePath
+        override val corePaint: Paint
+            get() = this@EdgeRenderPipeline.corePaint
+        override val motion: HaloMotion
+            get() = config.motion
+
+        override fun preparePaint(baseAlpha: Int, effectPhase: Float, gradientPhase: Float) {
+            prepareConventionalPaint(baseAlpha, effectPhase, gradientPhase)
+        }
+
+        override fun stylePath(): Path = stylePathForCurrentConfig()
+
+        override fun styleGeometry(path: Path): StyleGeometry = styleGeometryFor(path)
+    })
+
+    private val lightImpulseRenderer = LightImpulseRenderer(object : LightImpulseRenderSurface {
+        override val outlinePath: Path
+            get() = this@EdgeRenderPipeline.outlinePath
+        override val corePaint: Paint
+            get() = this@EdgeRenderPipeline.corePaint
+        override val renderStrokeWidth: Float
+            get() = this@EdgeRenderPipeline.renderStrokeWidth
+        override val colorRgb: Int
+            get() = this@EdgeRenderPipeline.colorRgb
+
+        override fun geometry(): StyleGeometry? = lightImpulseGeometry()
+
+        override fun alpha(): Int = lightImpulseAlpha()
+
+        override fun preparePaint(alpha: Int, effectPhase: Float, gradientPhase: Float) {
+            prepareLightImpulsePaint(alpha, effectPhase, gradientPhase)
+        }
+    })
 
     /** Separate multi-head surface; conventional motions keep their established renderer path. */
     private val forceBlades =
@@ -841,7 +879,7 @@ internal class HaloRenderer(
         gradientPhase: Float
     ) {
         if (usesLightImpulseRenderer(config)) {
-            drawLightImpulse(canvas, animationProgress, effectPhase, gradientPhase)
+            lightImpulseRenderer.draw(canvas, animationProgress, effectPhase, gradientPhase)
             return
         }
         val baseAlpha =
@@ -887,629 +925,17 @@ internal class HaloRenderer(
                 outline.version
         }
 
-        val saveCount =
-            canvas.save()
-
-        try {
-            canvas.clipPath(
-                outline.path
-            )
-
-            preparePaint(
-                baseAlpha = baseAlpha,
-                effectPhase = effectPhase,
-                gradientPhase = gradientPhase
-            )
-
-            drawStylePath(
-                canvas = canvas,
-                paint = corePaint,
-                phase = effectPhase
-            )
-        } finally {
-            canvas.restoreToCount(
-                saveCount
-            )
-        }
-    }
-
-    /** Shared impulse wavefront. It uses the same calibrated contour cache as normal effects. */
-    private fun drawLightImpulse(
-        canvas: Canvas,
-        progress: Float,
-        phase: Float,
-        gradientPhase: Float
-    ) {
-        if (outline.path.isEmpty) return
-        if (cachedOutlineVersion != outline.version) {
-            clearStylePathCache()
-            cachedOutlineVersion = outline.version
-        }
-        val path = stylePathForCurrentConfig()
-        val geometry = styleGeometryFor(path)
-        if (geometry.length <= 0f) return
-        val timeline = phase.coerceIn(0f, 1f)
-        if (timeline >= 1f) return
-        // The impulse owns its 0.92–1.00 fade; the generic finite envelope must not
-        // prematurely dim the outline travel.
-        val alpha = (255f * config.intensity).roundToInt().coerceIn(0, 255)
-        if (alpha == 0) return
-        val endpoints = lightImpulseEndpointsFor(geometry)
-        val origin = endpoints.topFraction * geometry.length
-        val bottom = endpoints.bottomFraction * geometry.length
-        val forwardDistance = endpoints.forwardDistance
-        val reverseDistance = endpoints.reverseDistance
-        val save = canvas.save()
-        try {
-            canvas.clipPath(outline.path)
-            corePaint.strokeCap = Paint.Cap.ROUND
-            prepareImpulsePaint(alpha, phase, gradientPhase)
-            val passEnergy = lightImpulsePassEnergy(timeline)
-            when (lightImpulsePhase(timeline)) {
-                LightImpulsePhase.IGNITION -> {
-                    val ignition = passEnergy.originBloom
-                    drawImpulseBloom(
-                        canvas, geometry, origin, alpha,
-                        radius = geometry.length * (0.012f + ignition * 0.026f),
-                        bloom = ignition,
-                        matchSharedSourcePeak = true
-                    )
-                }
-
-                LightImpulsePhase.TRAVEL -> {
-                    val travel = lightImpulseTravelProgress(timeline)
-                    val drawPlan = lightImpulseProductionDrawPlan(
-                        timeline, geometry.length, forwardDistance, reverseDistance, impulseDrawPlan
-                    )
-                    if (drawPlan.mode == LightImpulseDrawMode.TOP_BLOOM) {
-                        val originGlow = lightImpulseOriginGlow(timeline)
-                        drawImpulseBloom(
-                            canvas, geometry, origin, alpha,
-                            radius = drawPlan.sourceBloomRadius,
-                            bloom = originGlow,
-                            matchSharedSourcePeak = true
-                        )
-                        return
-                    }
-                    if (drawPlan.mode == LightImpulseDrawMode.SHARED_BIRTH_FIELD) {
-                        // One connected source-to-front field replaces the bloom exactly when both
-                        // halves can render.  There is never a bloom plus branch overlap.
-                        drawConnectedImpulseField(
-                            canvas = canvas,
-                            geometry = geometry,
-                            origin = origin,
-                            forwardDistance = drawPlan.forwardFieldLength,
-                            reverseDistance = drawPlan.reverseFieldLength,
-                            forwardDirection = 1,
-                            reverseDirection = -1,
-                            alpha = alpha,
-                            sourceStrength = lightImpulseOriginGlow(timeline),
-                            frontStrength = lightImpulseBranchEnergy(timeline),
-                            birthSourceRadius = drawPlan.sourceBloomRadius
-                        )
-                        return
-                    }
-                    val originGlow = passEnergy.originBloom
-                    val originBloomRadius = geometry.length * (0.018f + originGlow * 0.020f)
-                    if (originGlow > 0f) {
-                        drawImpulseBloom(
-                            canvas, geometry, origin, alpha,
-                            radius = originBloomRadius,
-                            bloom = originGlow
-                        )
-                    }
-                    val forwardFront = forwardDistance * travel
-                    val reverseFront = reverseDistance * travel
-                    // Each flow is source-relative and is clipped to its directional half.
-                    // The one origin bloom is emitted light; no beam body exists on both halves.
-                    drawImpulseFlow(
-                        canvas, geometry, origin, forwardFront, forwardDistance, 1, alpha, timeline,
-                        tailLimit = drawPlan.forwardFieldLength,
-                        sourceExclusionDistance = if (originGlow > 0f) originBloomRadius else 0f,
-                        fieldEnergy = passEnergy.tailPerBranch,
-                        coreEnergy = passEnergy.corePerBranch
-                    )
-                    drawImpulseFlow(
-                        canvas, geometry, origin, reverseFront, reverseDistance, -1, alpha, timeline,
-                        tailLimit = drawPlan.reverseFieldLength,
-                        sourceExclusionDistance = if (originGlow > 0f) originBloomRadius else 0f,
-                        fieldEnergy = passEnergy.tailPerBranch,
-                        coreEnergy = passEnergy.corePerBranch
-                    )
-                }
-
-                LightImpulsePhase.CONVERGE -> {
-                    val ownership = lightImpulseConvergenceOwnership(endpoints)
-                    val drawPlan = lightImpulseProductionDrawPlan(
-                        timeline, geometry.length, ownership.forwardMaxDistance, ownership.reverseMaxDistance,
-                        impulseDrawPlan
-                    )
-                    // These are the same two arriving, source-relative fields as travel, only
-                    // consumed from the bottom.  A local bloom receives released energy but is
-                    // spatially reserved from both fields, so it cannot relight a long edge.
-                    val bloomRadius = drawPlan.sourceBloomRadius
-                    if (drawPlan.sourceBloomVisible) {
-                        drawImpulseBloom(
-                            canvas, geometry, bottom, alpha,
-                            radius = bloomRadius,
-                            bloom = passEnergy.bottomBloom
-                        )
-                    }
-                    drawSourceAnchoredImpulseFlow(
-                        canvas, geometry, bottom, ownership.forwardMaxDistance,
-                        ownership.forwardDirection, ownership.forwardDirection, alpha, timeline,
-                        tailLimit = drawPlan.forwardFieldLength, sourceExclusionDistance = bloomRadius,
-                        fieldEnergy = passEnergy.tailPerBranch
-                    )
-                    drawSourceAnchoredImpulseCore(
-                        canvas, geometry, bottom, ownership.forwardMaxDistance,
-                        ownership.forwardDirection, ownership.forwardDirection, alpha, timeline,
-                        tailLength = drawPlan.forwardFieldLength, sourceExclusionDistance = bloomRadius,
-                        coreEnergy = passEnergy.corePerBranch
-                    )
-                    drawSourceAnchoredImpulseFlow(
-                        canvas, geometry, bottom, ownership.reverseMaxDistance,
-                        ownership.reverseDirection, ownership.reverseDirection, alpha, timeline,
-                        tailLimit = drawPlan.reverseFieldLength, sourceExclusionDistance = bloomRadius,
-                        fieldEnergy = passEnergy.tailPerBranch
-                    )
-                    drawSourceAnchoredImpulseCore(
-                        canvas, geometry, bottom, ownership.reverseMaxDistance,
-                        ownership.reverseDirection, ownership.reverseDirection, alpha, timeline,
-                        tailLength = drawPlan.reverseFieldLength, sourceExclusionDistance = bloomRadius,
-                        coreEnergy = passEnergy.corePerBranch
-                    )
-                }
-
-                LightImpulsePhase.FADE -> {
-                    val fade = passEnergy.bottomBloom
-                    drawImpulseBloom(
-                        canvas, geometry, bottom, alpha,
-                        // Let the afterglow contract as it dissipates instead of leaving a
-                        // fixed, faint endpoint that vanishes with the final animation frame.
-                        radius = geometry.length * lightImpulseTerminalBloomRadiusFraction(timeline),
-                        bloom = fade,
-                        matchConnectedSourcePeak = true
-                    )
-                }
-            }
-        } finally {
-            corePaint.strokeCap = Paint.Cap.ROUND
-            canvas.restoreToCount(save)
-        }
+        conventionalRenderer.draw(canvas, baseAlpha, effectPhase, gradientPhase)
     }
 
     /** Keeps normal Impulse on the app's existing solid/palette/gradient paint path. */
-    private fun prepareImpulsePaint(alpha: Int, effectPhase: Float, gradientPhase: Float) {
+    internal fun prepareLightImpulsePaint(alpha: Int, effectPhase: Float, gradientPhase: Float) {
         if (impulseUsesNormalColorTreatment(config)) {
-            preparePaint(alpha, effectPhase, gradientPhase)
+            prepareConventionalPaint(alpha, effectPhase, gradientPhase)
         } else {
             corePaint.shader = null
             corePaint.color = colorWithAlpha(alpha, colorRgb)
         }
-    }
-
-    private fun lightImpulseEndpointsFor(geometry: StyleGeometry): LightImpulseEndpoints =
-        geometry.lightImpulseEndpoints ?: lightImpulseEndpoints(
-            measure = geometry.measure,
-            length = geometry.length,
-            bounds = geometry.bounds
-        ).also { geometry.lightImpulseEndpoints = it }
-
-    /**
-     * Draws one optical field centred on a source and split into two butt-to-butt owned halves.
-     * No bloom/core/tail pass overlaps another here: every longitudinal sample owns one interval.
-     */
-    private fun drawConnectedImpulseField(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        forwardDistance: Float,
-        reverseDistance: Float,
-        forwardDirection: Int,
-        reverseDirection: Int,
-        alpha: Int,
-        sourceStrength: Float,
-        frontStrength: Float,
-        sourceAnchored: Boolean = false,
-        birthSourceRadius: Float = 0f
-    ) {
-        val safeSource = sourceStrength.coerceIn(0f, 1f)
-        val safeFront = frontStrength.coerceIn(0f, 1f)
-        corePaint.strokeCap = lightImpulseOwnedBeamCap()
-        drawConnectedImpulseHalf(
-            canvas, geometry, origin, forwardDistance, forwardDirection, alpha, safeSource, safeFront,
-            sourceAnchored, birthSourceRadius
-        )
-        drawConnectedImpulseHalf(
-            canvas, geometry, origin, reverseDistance, reverseDirection, alpha, safeSource, safeFront,
-            sourceAnchored, birthSourceRadius
-        )
-    }
-
-    private fun drawConnectedImpulseHalf(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        distance: Float,
-        direction: Int,
-        alpha: Int,
-        sourceStrength: Float,
-        frontStrength: Float,
-        sourceAnchored: Boolean,
-        birthSourceRadius: Float
-    ) {
-        if (distance <= 0f || (direction != 1 && direction != -1)) return
-        val sampleLength = distance / LIGHT_BLOOM_SAMPLES
-        var sample = 0
-        while (sample < LIGHT_BLOOM_SAMPLES) {
-            val position = (sample + 0.5f) / LIGHT_BLOOM_SAMPLES
-            val strength = if (birthSourceRadius > 0f) {
-                lightImpulseBirthFieldStrength(
-                    position = position,
-                    sourceRadiusFraction = birthSourceRadius / distance,
-                    sourceStrength = sourceStrength,
-                    frontStrength = frontStrength
-                )
-            } else {
-                lightImpulseConnectedFieldStrength(
-                    position = position,
-                    sourceStrength = sourceStrength,
-                    edgeStrength = frontStrength,
-                    sourceAnchored = sourceAnchored
-                )
-            }
-            drawSourceAnchoredImpulseSample(
-                canvas = canvas,
-                geometry = geometry,
-                origin = origin,
-                maxDistance = distance,
-                direction = direction,
-                distanceFromSource = sample * sampleLength,
-                length = sampleLength,
-                alpha = (alpha * strength.alphaFraction).roundToInt(),
-                strokeWidth = renderStrokeWidth * strength.widthFactor
-            )
-            sample++
-        }
-    }
-
-    /** Draws one physical-edge-only tail with a core-owned head and a softly released body. */
-    private fun drawImpulseFlow(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        frontDistance: Float,
-        maxDistance: Float,
-        direction: Int,
-        alpha: Int,
-        timeline: Float,
-        tailLimit: Float,
-        sourceExclusionDistance: Float = 0f,
-        fieldEnergy: Float = 1f,
-        coreEnergy: Float = 1f
-    ) {
-        val tailLength = min(geometry.length * LIGHT_TAIL_FRACTION, tailLimit)
-        val safeFieldEnergy = fieldEnergy.coerceIn(0f, 1f)
-        val safeCoreEnergy = coreEnergy.coerceIn(0f, 1f)
-        if (tailLength <= 0f || (safeFieldEnergy <= 0f && safeCoreEnergy <= 0f)) return
-        // A round cap extends beyond its path end; owned beams must end at the source boundary.
-        corePaint.strokeCap = lightImpulseOwnedBeamCap()
-        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, tailLength * 0.60f)
-        val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-        // The body begins after the core's occupied interval. This is a spatial partition, not
-        // an alpha trick: no high-energy tail sample is rasterized underneath the core.
-        val bodyLength = (tailLength - coreSpan).coerceAtLeast(0f) *
-                LIGHT_ATTACHED_TAIL_BODY_SHARE
-        // Each interior sample overlaps its successor by 12%, but the final footprint must stay
-        // inside the field length selected by the production plan.
-        val sampleLength = bodyLength / (LIGHT_TAIL_SAMPLES - 1 + 1.12f)
-        // The shared-birth field has no independent pulse. Keep the subsequent core deterministic
-        // too, so its emission meets the connected front without a brightness step.
-        val organicPulse = 1f
-        var sample = 0
-        while (sample < LIGHT_TAIL_SAMPLES && sampleLength > 0f) {
-            val position = (sample + 0.5f) / LIGHT_TAIL_SAMPLES
-            // Leave the head to the core. This removes the former tail-plus-core pile-up at
-            // the moving source while letting the released body fade close behind that core.
-            val taperedEnergy = lightImpulseTailSampleStrength(position)
-            val fieldAlpha = (
-                alpha * safeFieldEnergy *
-                        (0.46f * taperedEnergy) *
-                        organicPulse
-                )
-                .roundToInt()
-            val fieldWidth = renderStrokeWidth *
-                    (0.46f + 0.76f * taperedEnergy) * (0.60f + 0.40f * safeFieldEnergy)
-            drawDirectionalImpulseSample(
-                canvas = canvas,
-                geometry = geometry,
-                origin = origin,
-                frontDistance = frontDistance,
-                maxDistance = maxDistance,
-                direction = direction,
-                distanceBehindFront = coreSpan + sample * sampleLength,
-                // A small overlap prevents raster seams without repeatedly summing the same
-                // energy into visibly striped or thick bands.
-                length = sampleLength * 1.12f,
-                minSourceDistance = sourceExclusionDistance,
-                alpha = fieldAlpha,
-                strokeWidth = fieldWidth
-            )
-            sample++
-        }
-
-        if (safeCoreEnergy <= 0f) return
-        drawContinuousImpulseCore(
-            canvas, geometry, origin, frontDistance, maxDistance, direction, alpha, organicPulse,
-            coreLength, safeCoreEnergy, sourceExclusionDistance
-        )
-    }
-
-    /**
-     * Mirrors travel's field around the bottom source. At the handoff, each sample has the same
-     * path interval and pulse as its arriving counterpart; it can then shorten into that source.
-     */
-    private fun drawSourceAnchoredImpulseFlow(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        maxDistance: Float,
-        direction: Int,
-        pulseDirection: Int,
-        alpha: Int,
-        timeline: Float,
-        tailLimit: Float,
-        sourceExclusionDistance: Float,
-        fieldEnergy: Float
-    ) {
-        val resolvedTailLength = min(geometry.length * LIGHT_TAIL_FRACTION, tailLimit)
-        val safeFieldEnergy = fieldEnergy.coerceIn(0f, 1f)
-        val availableOwnedLength = (resolvedTailLength - sourceExclusionDistance).coerceAtLeast(0f)
-        if (availableOwnedLength <= 0f || safeFieldEnergy <= 0f) return
-        corePaint.strokeCap = lightImpulseOwnedBeamCap()
-        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, availableOwnedLength * 0.60f)
-        val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-        val bodyLength = (availableOwnedLength - coreSpan).coerceAtLeast(0f) *
-                LIGHT_ATTACHED_TAIL_BODY_SHARE
-        val sampleLength = bodyLength / (LIGHT_TAIL_SAMPLES - 1 + 1.12f)
-        val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + pulseDirection * 0.7f)
-        var sample = 0
-        while (sample < LIGHT_TAIL_SAMPLES && sampleLength > 0f) {
-            val position = (sample + 0.5f) / LIGHT_TAIL_SAMPLES
-            val taperedEnergy = lightImpulseTailSampleStrength(position)
-            drawSourceAnchoredImpulseSample(
-                canvas = canvas,
-                geometry = geometry,
-                origin = origin,
-                maxDistance = maxDistance,
-                direction = direction,
-                distanceFromSource = sourceExclusionDistance + coreSpan + sample * sampleLength,
-                length = sampleLength * 1.12f,
-                alpha = (alpha * safeFieldEnergy * 0.46f * taperedEnergy * organicPulse).roundToInt(),
-                strokeWidth = renderStrokeWidth * (0.46f + 0.76f * taperedEnergy) *
-                        (0.60f + 0.40f * safeFieldEnergy)
-            )
-            sample++
-        }
-    }
-
-    private fun drawImpulseBloom(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        center: Float,
-        alpha: Int,
-        radius: Float,
-        bloom: Float,
-        matchConnectedSourcePeak: Boolean = false,
-        matchSharedSourcePeak: Boolean = false
-    ) {
-        val safeBloom = bloom.coerceIn(0f, 1f)
-        if (safeBloom <= 0f || radius <= 0f) return
-        // A butt cap makes the raster footprint end exactly at the reserved source radius.
-        // ROUND would add half a stroke width outside it, underneath the owned core.
-        corePaint.strokeCap = lightImpulseBloomCap()
-        val sampleLength = radius * 2f / LIGHT_BLOOM_SAMPLES
-        var sample = 0
-        while (sample < LIGHT_BLOOM_SAMPLES) {
-            val normalized = ((sample + 0.5f) / LIGHT_BLOOM_SAMPLES) * 2f - 1f
-            val energy = (1f - normalized * normalized).coerceAtLeast(0f)
-            val softenedEnergy = energy * energy
-            val terminalStrength = if (matchConnectedSourcePeak) {
-                lightImpulseTerminalBloomStrength(normalized, safeBloom)
-            } else if (matchSharedSourcePeak) {
-                lightImpulseSharedSourceBloomStrength(normalized, safeBloom)
-            } else {
-                null
-            }
-            drawImpulseSegment(
-                canvas = canvas,
-                geometry = geometry,
-                center = center + normalized * radius,
-                // Keep bloom inside its reserved source interval. Adjacent source samples meet
-                // at their bounds instead of bleeding underneath an owned core outside radius.
-                length = sampleLength,
-                alpha = if (terminalStrength != null) {
-                    (alpha * terminalStrength.alphaFraction).roundToInt()
-                } else {
-                    (alpha * safeBloom * (0.025f + 0.58f * softenedEnergy)).roundToInt()
-                },
-                strokeWidth = renderStrokeWidth * (terminalStrength?.widthFactor
-                    ?: (0.72f + 1.75f * softenedEnergy))
-            )
-            sample++
-        }
-    }
-
-    /** A one-pass longitudinal energy distribution replaces concentric core strokes. */
-    private fun drawContinuousImpulseCore(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        frontDistance: Float,
-        maxDistance: Float,
-        direction: Int,
-        alpha: Int,
-        organicPulse: Float,
-        coreLength: Float,
-        coreEnergy: Float,
-        minSourceDistance: Float
-    ) {
-        val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-        val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
-        var sample = 0
-        while (sample < LIGHT_CORE_SAMPLES) {
-            val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
-            // Start at zero at the physical leading edge, then bloom into a compact peak. This
-            // keeps the front tapered from the first frame rather than only at convergence.
-            val softenedEnergy = lightImpulseTaperedFrontStrength(position)
-            drawDirectionalImpulseSample(
-                canvas = canvas,
-                geometry = geometry,
-                origin = origin,
-                frontDistance = frontDistance,
-                maxDistance = maxDistance,
-                direction = direction,
-                distanceBehindFront = sample * sampleLength,
-                // Core and tail own adjacent, not overlapping, intervals. Internal tail samples
-                // retain their own small overlap; it never crosses this ownership seam.
-                length = sampleLength,
-                minSourceDistance = minSourceDistance,
-                alpha = (alpha * coreEnergy * organicPulse * softenedEnergy).roundToInt(),
-                strokeWidth = renderStrokeWidth * (0.70f + 1.20f * softenedEnergy) *
-                        (0.58f + 0.42f * coreEnergy)
-            )
-            sample++
-        }
-    }
-
-    /**
-     * The final cores shrink toward a shared bottom source. Its sample coordinates are measured
-     * from that source, preserving the arrival position from the preceding travel frame.
-     */
-    private fun drawSourceAnchoredImpulseCore(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        maxDistance: Float,
-        direction: Int,
-        pulseDirection: Int,
-        alpha: Int,
-        timeline: Float,
-        tailLength: Float,
-        sourceExclusionDistance: Float,
-        coreEnergy: Float
-    ) {
-        val availableOwnedLength = (tailLength - sourceExclusionDistance).coerceAtLeast(0f)
-        if (availableOwnedLength <= 0f || coreEnergy <= 0f) return
-        corePaint.strokeCap = lightImpulseOwnedBeamCap()
-        val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, availableOwnedLength * 0.60f)
-        val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-        val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
-        val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + pulseDirection * 0.7f)
-        var sample = 0
-        while (sample < LIGHT_CORE_SAMPLES) {
-            val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
-            // The same pointed profile is measured outward from the bottom source. The two
-            // low-energy tips meet the reserved bloom, which turns their reunion into one local
-            // glint instead of two blunt caps stacking at the endpoint.
-            val softenedEnergy = lightImpulseTaperedFrontStrength(position)
-            drawSourceAnchoredImpulseSample(
-                canvas = canvas,
-                geometry = geometry,
-                origin = origin,
-                maxDistance = maxDistance,
-                direction = direction,
-                distanceFromSource = sourceExclusionDistance + sample * sampleLength,
-                // Match travel's butt-to-butt core/tail ownership boundary.
-                length = sampleLength,
-                alpha = (alpha * coreEnergy * organicPulse * softenedEnergy).roundToInt(),
-                strokeWidth = renderStrokeWidth * (0.70f + 1.20f * softenedEnergy) *
-                        (0.58f + 0.42f * coreEnergy)
-            )
-            sample++
-        }
-    }
-
-    private fun drawDirectionalImpulseSample(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        frontDistance: Float,
-        maxDistance: Float,
-        direction: Int,
-        distanceBehindFront: Float,
-        length: Float,
-        minSourceDistance: Float,
-        alpha: Int,
-        strokeWidth: Float
-    ) {
-        val segment = lightImpulseOwnedSegment(
-            origin = origin,
-            direction = direction,
-            frontDistance = frontDistance,
-            distanceBehindFront = distanceBehindFront,
-            requestedLength = length,
-            maxDistance = maxDistance,
-            minSourceDistance = minSourceDistance,
-            out = impulseOwnedSegment
-        ) ?: return
-        drawImpulseSegment(
-            canvas = canvas,
-            geometry = geometry,
-            center = segment.pathCenter,
-            length = segment.endDistance - segment.startDistance,
-            alpha = alpha,
-            strokeWidth = strokeWidth
-        )
-    }
-
-    private fun drawSourceAnchoredImpulseSample(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        origin: Float,
-        maxDistance: Float,
-        direction: Int,
-        distanceFromSource: Float,
-        length: Float,
-        alpha: Int,
-        strokeWidth: Float
-    ) {
-        val segment = lightImpulseOwnedSegment(
-            origin = origin,
-            direction = direction,
-            frontDistance = distanceFromSource + length,
-            distanceBehindFront = 0f,
-            requestedLength = length,
-            maxDistance = maxDistance,
-            out = impulseOwnedSegment
-        ) ?: return
-        drawImpulseSegment(
-            canvas = canvas,
-            geometry = geometry,
-            center = segment.pathCenter,
-            length = segment.endDistance - segment.startDistance,
-            alpha = alpha,
-            strokeWidth = strokeWidth
-        )
-    }
-
-    private fun drawImpulseSegment(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        center: Float,
-        length: Float,
-        alpha: Int,
-        strokeWidth: Float
-    ) {
-        if (alpha <= 0 || !lightImpulseTravellingSegmentIsSafe(length, geometry.length)) return
-        if (corePaint.shader == null) {
-            corePaint.color = colorWithAlpha(alpha, colorRgb)
-        } else {
-            corePaint.alpha = alpha
-        }
-        corePaint.strokeWidth = strokeWidth
-        drawWrappedSegment(canvas, geometry.measure, geometry.length, center - length / 2f, length, corePaint)
     }
 
     /** Complete calibrated frame used by the static calibration preview. */
@@ -1519,116 +945,20 @@ internal class HaloRenderer(
             clearStylePathCache()
             cachedOutlineVersion = outline.version
         }
-        val saveCount = canvas.save()
-        try {
-            canvas.clipPath(outline.path)
-            preparePaint((255f * config.intensity).roundToInt().coerceIn(0, 255), 0f, 0f)
-            canvas.drawPath(staticPreviewPathForCurrentConfig(), corePaint)
-        } finally {
-            canvas.restoreToCount(saveCount)
-        }
+        prepareConventionalPaint((255f * config.intensity).roundToInt().coerceIn(0, 255), 0f, 0f)
+        calibrationRenderer.drawStaticFrame(canvas, staticPreviewPathForCurrentConfig(), corePaint)
     }
 
     /** Calibration-only witnesses; never called by the animated renderer. */
     fun drawCalibrationDiagnostics(canvas: Canvas, rulerLegend: String, registrationLabel: String) {
-        if (outline.path.isEmpty) return
-
-        val runtimeCentrelinePaint = createPaint().apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-            color = 0xFFFFD54F.toInt()
-        }
-        val rulerPaint = createPaint().apply {
-            style = Paint.Style.STROKE
-            strokeWidth = 1f
-            color = 0x99FFFFFF.toInt()
-        }
-
         val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
-        val rulerDepth = CalibrationDiagnostics.rulerDepthPx(edgeCalibrationPx)
-        val saveCount = canvas.save()
-        try {
-            // Match static-frame clipping so OUT never becomes a fabricated outer frame.
-            canvas.clipPath(outline.path)
-            canvas.drawPath(staticPreviewPathForCurrentConfig(), runtimeCentrelinePaint)
-            var offset = 0f
-            while (offset <= rulerDepth) {
-                rulerPaint.strokeWidth = if (offset.toInt() % 5 == 0) 2f else 1f
-                canvas.drawLine(offset, 0f, offset, rulerDepth, rulerPaint)
-                canvas.drawLine(canvas.width - offset, 0f, canvas.width - offset, rulerDepth, rulerPaint)
-                canvas.drawLine(offset, canvas.height.toFloat(), offset, canvas.height - rulerDepth, rulerPaint)
-                canvas.drawLine(canvas.width - offset, canvas.height.toFloat(), canvas.width - offset, canvas.height - rulerDepth, rulerPaint)
-                offset += 1f
-            }
-        } finally {
-            canvas.restoreToCount(saveCount)
-        }
-
-        val registration = CalibrationDiagnostics.registration(edgeCalibrationPx)
-        drawRegistrationWitness(
-            canvas,
-            registration,
-            "$rulerLegend · $registrationLabel",
-            edgeCalibrationPx,
-            rulerDepth,
-            rulerPaint
-        )
+        calibrationRenderer.drawDiagnostics(canvas, staticPreviewPathForCurrentConfig(), edgeCalibrationPx, rulerLegend, registrationLabel)
     }
 
     fun calibrationEdgePx(): Float = outline.dpToPx(config.edgeCalibrationDp)
 
-    private fun drawRegistrationWitness(
-        canvas: Canvas,
-        registration: CalibrationDiagnostics.Registration,
-        label: String,
-        edgeCalibrationPx: Float,
-        rulerDepth: Float,
-        paint: Paint
-    ) {
-        val midX = canvas.width / 2f
-        val edgeY = 0f
-        val labelPaint = Paint(paint).apply {
-            style = Paint.Style.FILL
-            color = 0xFFFFFFFF.toInt()
-            textSize = outline.dpToPx(12f).coerceAtLeast(16f)
-            textAlign = Paint.Align.CENTER
-        }
-        val labelBaseline = labelPaint.textSize + 5f
-        val labelWidth = labelPaint.measureText(label)
-        val labelBackground = Paint(labelPaint).apply {
-            color = 0xD9000000.toInt()
-        }
-        canvas.drawRoundRect(
-            RectF(
-                midX - labelWidth / 2f - 6f,
-                0f,
-                midX + labelWidth / 2f + 6f,
-                labelBaseline + 4f
-            ),
-            4f,
-            4f,
-            labelBackground
-        )
-        canvas.drawText(label, midX, labelBaseline, labelPaint)
-        when (registration) {
-            CalibrationDiagnostics.Registration.ZERO -> {
-                canvas.drawCircle(midX, edgeY, 2f, paint)
-            }
-            CalibrationDiagnostics.Registration.IN -> {
-                val markerY = CalibrationDiagnostics.rulerMarkerPx(edgeCalibrationPx).coerceIn(0f, rulerDepth)
-                canvas.drawLine(midX, edgeY, midX, markerY, paint)
-                canvas.drawLine(midX, markerY, midX - 3f, markerY - 4f, paint)
-                canvas.drawLine(midX, markerY, midX + 3f, markerY - 4f, paint)
-            }
-            // The display boundary is the outward reference; do not draw a fictional outer frame.
-            CalibrationDiagnostics.Registration.OUT -> {
-                canvas.drawLine(midX - 4f, edgeY + 4f, midX, edgeY, paint)
-                canvas.drawLine(midX, edgeY, midX + 4f, edgeY + 4f, paint)
-            }
-        }
-    }
-
-    private fun preparePaint(
+    /** Shared paint primitive consumed by conventional and dedicated-impulse renderers. */
+    internal fun prepareConventionalPaint(
         baseAlpha: Int,
         effectPhase: Float,
         gradientPhase: Float
@@ -1680,433 +1010,20 @@ internal class HaloRenderer(
             )
     }
 
-    private fun drawStylePath(
-        canvas: Canvas,
-        paint: Paint,
-        phase: Float
-    ) {
-        val key = ConventionalPathCacheKey(
-            outlineVersion = outline.version,
-            strokeWidth = renderStrokeWidth,
-            edgeCalibrationDp = config.edgeCalibrationDp,
-            cornerCalibrationDp = config.cornerCalibrationDp
-            , cornerShape = config.cornerShape
-        )
-        val path =
-            cachedStylePath
-                ?.takeIf {
-                    cachedStyleKey == key
-                }
-                ?: buildStylePath()
-                    .also { generatedPath ->
-                        cachedStyleKey = key
-
-                        cachedStylePath =
-                            generatedPath
-                    }
-
-        when (config.motion) {
-            HaloMotion.PULSE ->
-                canvas.drawPath(
-                    path,
-                    paint
-                )
-
-            HaloMotion.SNAKE ->
-                drawSnakePath(
-                    canvas,
-                    styleGeometryFor(path),
-                    paint,
-                    phase
-                )
-
-            HaloMotion.CORNER_PULSE ->
-                drawCornerPulsePath(
-                    canvas,
-                    styleGeometryFor(path),
-                    paint,
-                    phase
-                )
-
-            HaloMotion.RAIN ->
-                drawRain(
-                    canvas,
-                    styleGeometryFor(path),
-                    paint,
-                    phase
-                )
-
-            HaloMotion.AZURE_BLADE,
-            HaloMotion.CRIMSON_BLADE,
-            HaloMotion.FORCE_CLASH,
-            HaloMotion.IMPULSE -> Unit
-        }
-    }
-
     internal fun stylePathForCurrentConfig(): Path {
-        val key = ConventionalPathCacheKey(outline.version, renderStrokeWidth, config.edgeCalibrationDp, config.cornerCalibrationDp, config.cornerShape)
-        return cachedStylePath?.takeIf { cachedStyleKey == key } ?: buildStylePath().also {
-            cachedStyleKey = key
-            cachedStylePath = it
-        }
+        val edgeCalibrationPx = outline.opticalInsetPx + outline.dpToPx(config.edgeCalibrationDp)
+        return conventionalPathCache.pathFor(
+            strokeWidth = renderStrokeWidth,
+            edgeCalibrationPx = edgeCalibrationPx,
+            cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp),
+            cornerShape = config.cornerShape,
+            extraEnvelopePx = 0f
+        )
     }
 
     /** Static calibration intentionally reuses the normal runtime contour. */
     internal fun staticPreviewPathForCurrentConfig(): Path =
         stylePathForCurrentConfig()
-
-    private fun drawSnakePath(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        paint: Paint,
-        phase: Float
-    ) {
-        val measure =
-            geometry.measure
-
-        val length =
-            geometry.length
-
-        if (length <= 0f) {
-            return
-        }
-
-        val start =
-            normalizedPhase(
-                phase
-            ) *
-                    length
-
-        val segmentLength =
-            length *
-                    SNAKE_SEGMENT_FRACTION
-
-        drawWrappedSegment(
-            canvas = canvas,
-            measure = measure,
-            length = length,
-            start = start,
-            segmentLength = segmentLength,
-            paint = paint
-        )
-    }
-
-    private fun drawCornerPulsePath(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        paint: Paint,
-        phase: Float
-    ) {
-        val measure =
-            geometry.measure
-
-        val length =
-            geometry.length
-
-        if (length <= 0f) {
-            return
-        }
-
-        val normalizedPhase =
-            normalizedPhase(
-                phase
-            )
-
-        val cornerProgress =
-            normalizedPhase *
-                    CORNER_COUNT
-
-        val cornerIndex =
-            cornerProgress
-                .toInt()
-                .coerceIn(
-                    0,
-                    CORNER_COUNT - 1
-                )
-
-        val cornerAlpha =
-            sin(
-                (
-                        cornerProgress -
-                                cornerIndex
-                        ) *
-                        PI
-            )
-                .toFloat()
-                .coerceIn(
-                    0f,
-                    1f
-                )
-
-        if (cornerAlpha <= 0f) {
-            return
-        }
-
-        val center =
-            cornerFractionsFor(
-                geometry
-            )[cornerIndex] *
-                    length
-
-        val baseAlpha =
-            paint.alpha
-
-        paint.alpha =
-            (
-                    baseAlpha *
-                            cornerAlpha
-                    )
-                .roundToInt()
-
-        drawWrappedSegment(
-            canvas = canvas,
-            measure = measure,
-            length = length,
-            start =
-                center -
-                        length *
-                        CORNER_SEGMENT_FRACTION /
-                        2f,
-            segmentLength =
-                length *
-                        CORNER_SEGMENT_FRACTION,
-            paint = paint
-        )
-
-        paint.alpha =
-            baseAlpha
-    }
-
-    private fun drawRain(
-        canvas: Canvas,
-        geometry: StyleGeometry,
-        paint: Paint,
-        phase: Float
-    ) {
-        val bounds =
-            geometry.bounds
-
-        val height =
-            bounds.height()
-
-        if (height <= 0f) {
-            return
-        }
-
-        val normalizedPhase =
-            normalizedPhase(
-                phase
-            )
-
-        val dropLength =
-            height *
-                    RAIN_DROP_LENGTH_FRACTION
-
-        for (
-        index in
-        RAIN_OFFSETS.indices
-        ) {
-            val offset =
-                RAIN_OFFSETS[index]
-
-            val dropProgress =
-                (
-                        normalizedPhase +
-                                offset
-                        ) %
-                        1f
-
-            val bottom =
-                bounds.top +
-                        dropProgress *
-                        (
-                                height +
-                                        dropLength
-                                )
-
-            val top =
-                bottom -
-                        dropLength
-
-            val laneX =
-                if (
-                    index %
-                    2 ==
-                    0
-                ) {
-                    bounds.left
-                } else {
-                    bounds.right
-                }
-
-            canvas.drawLine(
-                laneX,
-                top,
-                laneX,
-                bottom,
-                paint
-            )
-        }
-    }
-
-    private fun drawWrappedSegment(
-        canvas: Canvas,
-        measure: PathMeasure,
-        length: Float,
-        start: Float,
-        segmentLength: Float,
-        paint: Paint
-    ) {
-        val range = renderableWrappedSegmentRange(start, length, segmentLength) ?: return
-        val normalizedStart = range.start
-        val end = normalizedStart + range.length
-
-        segmentPath.reset()
-
-        if (end <= length) {
-            measure.getSegment(
-                normalizedStart,
-                end,
-                segmentPath,
-                true
-            )
-        } else {
-            measure.getSegment(
-                normalizedStart,
-                length,
-                segmentPath,
-                true
-            )
-
-            measure.getSegment(
-                0f,
-                end - length,
-                segmentPath,
-                true
-            )
-        }
-
-        canvas.drawPath(
-            segmentPath,
-            paint
-        )
-    }
-
-    private fun cornerFractionsFor(
-        geometry: StyleGeometry
-    ): FloatArray {
-        geometry.cornerFractions
-            ?.let {
-                return it
-            }
-
-        val bounds =
-            geometry.bounds
-
-        val targets =
-            floatArrayOf(
-                bounds.left,
-                bounds.top,
-                bounds.right,
-                bounds.top,
-                bounds.right,
-                bounds.bottom,
-                bounds.left,
-                bounds.bottom
-            )
-
-        val position =
-            FloatArray(
-                2
-            )
-
-        return FloatArray(
-            CORNER_COUNT
-        ) { cornerIndex ->
-
-            val targetX =
-                targets[
-                    cornerIndex *
-                            2
-                ]
-
-            val targetY =
-                targets[
-                    cornerIndex *
-                            2 +
-                            1
-                ]
-
-            var nearestFraction =
-                0f
-
-            var nearestDistance =
-                Float.MAX_VALUE
-
-            for (
-            sample in
-            0..CORNER_PATH_SAMPLES
-            ) {
-                val fraction =
-                    sample.toFloat() /
-                            CORNER_PATH_SAMPLES
-
-                geometry.measure
-                    .getPosTan(
-                        geometry.length *
-                                fraction,
-                        position,
-                        null
-                    )
-
-                val deltaX =
-                    position[0] -
-                            targetX
-
-                val deltaY =
-                    position[1] -
-                            targetY
-
-                val distance =
-                    deltaX *
-                            deltaX +
-                            deltaY *
-                            deltaY
-
-                if (
-                    distance <
-                    nearestDistance
-                ) {
-                    nearestDistance =
-                        distance
-
-                    nearestFraction =
-                        fraction
-                }
-            }
-
-            nearestFraction
-        }.also { fractions ->
-            geometry.cornerFractions =
-                fractions
-        }
-    }
-
-    /** The DisplayOutline owns the physical centreline and its zero-default calibration. */
-    private fun buildStylePath(): Path {
-        val strokePath =
-            outline.centerlinePath(
-                renderStrokeWidth,
-                outline.opticalInsetPx + outline.dpToPx(config.edgeCalibrationDp),
-                outline.dpToPx(config.cornerCalibrationDp)
-                , config.cornerShape
-            )
-
-        return when (config.frame) {
-            HaloFrame.CLASSIC ->
-                strokePath
-        }
-    }
 
     private fun updateStrokeParameters() {
         coreStrokeWidth =
@@ -2142,11 +1059,6 @@ internal class HaloRenderer(
         strokeWidth
 
     private fun clearStylePathCache() {
-        cachedStyleKey = null
-
-        cachedStylePath =
-            null
-
         cachedStyleGeometry =
             null
     }
@@ -2463,44 +1375,12 @@ internal class HaloRenderer(
                 Paint.Join.ROUND
         }
 
-    private class StyleGeometry(
-        val path: Path,
-        val measure: PathMeasure,
-        val bounds: RectF,
-        var length: Float = 0f,
-        var cornerFractions: FloatArray? = null,
-        var lightImpulseEndpoints: LightImpulseEndpoints? = null
-    )
-
     private companion object {
         private const val BASE_STROKE_WIDTH =
             4f
 
         private const val STROKE_WIDTH_RANGE =
             10f
-
-        private const val SNAKE_SEGMENT_FRACTION =
-            0.18f
-
-        private const val CORNER_SEGMENT_FRACTION =
-            0.14f
-
-        private const val CORNER_COUNT =
-            4
-
-        private const val CORNER_PATH_SAMPLES =
-            240
-
-        private const val RAIN_DROP_LENGTH_FRACTION =
-            0.14f
-
-        private val RAIN_OFFSETS =
-            floatArrayOf(
-                0f,
-                0.18f,
-                0.43f,
-                0.67f
-            )
 
         private const val GRADIENT_ROTATION_PER_CYCLE_DEGREES =
             220f
@@ -2528,14 +1408,30 @@ internal class HaloRenderer(
     }
 }
 
-/** Cache identity for conventional (non-Force-Blades) paths. */
-internal data class ConventionalPathCacheKey(
-    val outlineVersion: Int,
-    val strokeWidth: Float,
-    val edgeCalibrationDp: Float,
-    val cornerCalibrationDp: Float
-    , val cornerShape: Float = 0.5f
-)
+/**
+ * Public renderer lifecycle. Rendering families and their mutable paint/path state live in
+ * [EdgeRenderPipeline], leaving this type as the explicit config/lifecycle entry point used by
+ * HaloView and preview callers.
+ */
+internal class HaloRenderer(config: HaloConfig, outline: DisplayOutline) {
+    private val pipeline = EdgeRenderPipeline(config, outline)
+
+    fun update(config: HaloConfig) = pipeline.update(config)
+
+    fun draw(canvas: Canvas, animationProgress: Float, effectPhase: Float, gradientPhase: Float) =
+        pipeline.draw(canvas, animationProgress, effectPhase, gradientPhase)
+
+    fun drawStaticFrame(canvas: Canvas) = pipeline.drawStaticFrame(canvas)
+
+    fun drawCalibrationDiagnostics(canvas: Canvas, rulerLegend: String, registrationLabel: String) =
+        pipeline.drawCalibrationDiagnostics(canvas, rulerLegend, registrationLabel)
+
+    fun calibrationEdgePx(): Float = pipeline.calibrationEdgePx()
+
+    internal fun stylePathForCurrentConfig(): Path = pipeline.stylePathForCurrentConfig()
+
+    internal fun staticPreviewPathForCurrentConfig(): Path = pipeline.staticPreviewPathForCurrentConfig()
+}
 
 private val HaloMotion.isForceBlade: Boolean
     get() = this == HaloMotion.AZURE_BLADE ||

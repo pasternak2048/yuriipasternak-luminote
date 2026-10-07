@@ -14,8 +14,8 @@ import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +42,7 @@ fun SettingsScreen(onBackClick: () -> Unit, onAppearanceClick: () -> Unit, onLan
 
 @Composable
 fun AppearanceScreen(onBackClick: () -> Unit, viewModel: LuminoteSettingsViewModel) {
-    val settings by viewModel.settings.collectAsState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     SettingsPage(title = stringResource(R.string.appearance), onBackClick = onBackClick) {
         LuminoteSettingsCard {
             Column(Modifier.padding(20.dp)) {

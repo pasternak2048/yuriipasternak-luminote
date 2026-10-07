@@ -4,8 +4,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.remember
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -225,7 +225,7 @@ fun LuminoteNavHost(
         ) {
             val settings by
             settingsViewModel.settings
-                .collectAsState()
+                .collectAsStateWithLifecycle()
 
             EasterEggScreen(
                 ambientSettings =

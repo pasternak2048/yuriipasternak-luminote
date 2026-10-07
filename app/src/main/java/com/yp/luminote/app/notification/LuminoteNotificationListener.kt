@@ -98,16 +98,6 @@ class LuminoteNotificationListener :
         )
     }
 
-    /*
-     * Last persistent KEEP_VISIBLE state actually sent to the renderer.
-     *
-     * Notification-heavy apps such as Spotify can update the same
-     * notification many times per second. Re-dispatching an identical
-     * persistent Halo for every update is unnecessary.
-     */
-    private var lastPersistentHaloState:
-            PersistentHaloState? = null
-
     override fun onCreate() {
         super.onCreate()
 
@@ -130,8 +120,6 @@ class LuminoteNotificationListener :
                 reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
 
                 if (settings.ambientEnabled) {
-                    clearPersistentHaloState()
-
                     HaloOverlayService.start(
                         this@LuminoteNotificationListener,
                         HaloOverlayService.createAmbientIntent(
@@ -152,8 +140,6 @@ class LuminoteNotificationListener :
                         previous?.ambientEnabled == true ||
                         previous?.haloEnabled == true
                     ) {
-                        clearPersistentHaloState()
-
                         HaloOverlayService.start(
                             this@LuminoteNotificationListener,
                             HaloOverlayService.createStopAllIntent(
@@ -172,8 +158,6 @@ class LuminoteNotificationListener :
                 if (
                     previous?.ambientEnabled == true
                 ) {
-                    clearPersistentHaloState()
-
                     HaloOverlayService.start(
                         this@LuminoteNotificationListener,
                         HaloOverlayService.createStopAmbientIntent(
@@ -698,12 +682,6 @@ class LuminoteNotificationListener :
         )
     }
 
-
-    private fun clearPersistentHaloState() {
-        lastPersistentHaloState =
-            null
-    }
-
     private fun hasActiveNotifications(): Boolean =
         synchronized(activeNotificationsLock) {
             activeNotificationPackages.isNotEmpty()
@@ -873,7 +851,6 @@ class LuminoteNotificationListener :
             activePaletteNotificationPackages.clear()
         }
 
-        clearPersistentHaloState()
         reminderCoordinator.onNoRelevantNotifications()
         HaloReminderRuntime.detach(reminderCoordinator)
 
@@ -916,10 +893,5 @@ class LuminoteNotificationListener :
         val key: String,
         val timestamp: Long,
         val postTime: Long
-    )
-
-    private data class PersistentHaloState(
-        val settings: LuminoteSettings,
-        val paletteColors: List<Int>
     )
 }
