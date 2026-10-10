@@ -286,6 +286,14 @@ internal class EdgeRenderPipeline(
         }
     }
 
+    /** Explicit host boundary for size/inset changes; dispatch resolution remains config-owned. */
+    fun invalidateSurface() {
+        clearStylePathCache()
+        cachedOutlineVersion = -1
+        gradientOutlineVersion = -1
+        outline.clearRenderCaches()
+    }
+
     fun draw(
         canvas: Canvas,
         animationProgress: Float,
@@ -813,6 +821,9 @@ internal class HaloRenderer(config: HaloConfig, outline: DisplayOutline) {
     private val pipeline = EdgeRenderPipeline(config, outline)
 
     fun update(config: HaloConfig) = pipeline.update(config)
+
+    /** Host calls this after it changes DisplayOutline size or insets. */
+    fun invalidateSurface() = pipeline.invalidateSurface()
 
     fun draw(canvas: Canvas, animationProgress: Float, effectPhase: Float, gradientPhase: Float, frameTimeNanos: Long = 0L) =
         pipeline.draw(canvas, animationProgress, effectPhase, gradientPhase, frameTimeNanos)
