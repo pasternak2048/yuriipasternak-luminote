@@ -7,7 +7,12 @@ import com.yp.luminote.app.animation.HaloAnimationEngine
 import com.yp.luminote.app.animation.HaloAnimationState
 import com.yp.luminote.app.animation.HaloAnimationRequest
 import com.yp.luminote.app.animation.HaloAmbientAnimationRequest
-import com.yp.luminote.app.rendering.canvas.HaloRenderer
+import com.yp.luminote.app.rendering.HaloRenderingPipeline
+import com.yp.luminote.app.rendering.api.RenderFrame
+import com.yp.luminote.app.rendering.api.RenderMode
+import com.yp.luminote.app.rendering.api.RenderOutcome
+import com.yp.luminote.app.rendering.canvas.CanvasRenderBackend
+import com.yp.luminote.app.rendering.canvas.CanvasRenderTarget
 import com.yp.luminote.app.rendering.canvas.CalibrationDiagnostics
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 
@@ -46,11 +51,14 @@ internal class HaloView(
             resources.displayMetrics.density
         )
 
-    private val renderer =
-        HaloRenderer(
-            config,
-            outline
-        )
+    /** Composition remains at the Android host; animation remains backend-neutral. */
+    private val renderingPipeline = HaloRenderingPipeline(CanvasRenderBackend(config, outline))
+
+    private val renderFrame = RenderFrame()
+
+    private val canvasTarget = CanvasRenderTarget()
+
+    private var currentConfig = config.sanitized()
 
     private var animationState =
         HaloAnimationState()
@@ -120,9 +128,8 @@ internal class HaloView(
     fun update(
         config: HaloConfig
     ) {
-        renderer.update(
-            config
-        )
+        currentConfig = config.sanitized()
+        renderingPipeline.updateConfig(config)
         renderMode = config.renderMode
 
         ambientEffectSpeed =
@@ -305,6 +312,8 @@ internal class HaloView(
             h
         )
 
+        renderingPipeline.invalidateSurface()
+
         requestApplyInsets()
 
         startPendingFiniteAnimationIfReady()
@@ -327,6 +336,8 @@ internal class HaloView(
             insets
         )
 
+        renderingPipeline.invalidateSurface()
+
         invalidate()
 
         return super.onApplyWindowInsets(
@@ -338,6 +349,8 @@ internal class HaloView(
         Choreographer.getInstance().removeFrameCallback(frameTimeSampler)
 
         cancelAnimation()
+
+        renderingPipeline.dispose()
 
         super.onDetachedFromWindow()
     }
@@ -353,31 +366,29 @@ internal class HaloView(
             canvas
         )
 
+        renderFrame.mode = if (staticFrameMode) RenderMode.STATIC_CALIBRATION else RenderMode.ANIMATION
+        renderFrame.animationProgress = animationState.progress
+        renderFrame.effectPhase = animationState.phase
+        renderFrame.gradientPhase = animationState.gradientPhase
+        renderFrame.frameTimeNanos = lastFrameTimeNanos
+        renderFrame.viewportWidth = width
+        renderFrame.viewportHeight = height
         if (staticFrameMode) {
-            renderer.drawStaticFrame(canvas)
-            if (CalibrationDiagnostics.shouldRender(staticFrameMode, width, height)) {
-                renderer.drawCalibrationDiagnostics(
-                    canvas,
-                    resources.getString(R.string.calibration_ruler_legend),
-                    localizedCalibrationRegistrationLabel(renderer.calibrationEdgePx())
-                )
-            }
-            return
+            renderFrame.calibrationRulerLegend = resources.getString(R.string.calibration_ruler_legend)
+            renderFrame.calibrationRegistrationLabel = localizedCalibrationRegistrationLabel()
         }
-        renderer.draw(
-            canvas =
-                canvas,
-            animationProgress =
-                animationState.progress,
-            effectPhase =
-                animationState.phase,
-            gradientPhase =
-                animationState.gradientPhase,
-            frameTimeNanos = lastFrameTimeNanos
-        )
+        val outcome = canvasTarget.withCanvas(canvas) {
+            renderingPipeline.render(canvasTarget, renderFrame)
+        }
+        when (outcome) {
+            is RenderOutcome.Error -> Log.e(TAG, "Render backend failed", outcome.cause)
+            is RenderOutcome.Unsupported -> Log.w(TAG, "Render backend unsupported: ${outcome.reason}")
+            RenderOutcome.Rendered -> Unit
+        }
     }
 
-    private fun localizedCalibrationRegistrationLabel(edgeCalibrationPx: Float): String {
+    private fun localizedCalibrationRegistrationLabel(): String {
+        val edgeCalibrationPx = outline.dpToPx(currentConfig.edgeCalibrationDp)
         val magnitude = String.format(
             resources.configuration.locales[0],
             "%.1f",
