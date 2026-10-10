@@ -1,4 +1,8 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.model.HaloRenderMode
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.overlay.host.finiteDurationFor
+import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 
 import com.yp.luminote.app.data.settings.HaloMotion
 import org.junit.Assert.assertEquals

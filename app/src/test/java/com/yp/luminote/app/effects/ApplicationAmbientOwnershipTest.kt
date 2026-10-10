@@ -1,4 +1,5 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.overlay.coordination.ApplicationAmbientOwnership
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull

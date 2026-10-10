@@ -2,8 +2,6 @@ package com.yp.luminote.app.data.settings
 
 import androidx.annotation.StringRes
 import com.yp.luminote.app.R
-import kotlin.math.PI
-import kotlin.math.sin
 
 enum class HaloFrame { CLASSIC }
 
@@ -23,58 +21,8 @@ enum class HaloMotion {
 
 data class HaloFrameDefinition(val frame: HaloFrame, @get:StringRes val titleRes: Int, val supportedMotions: List<HaloMotion>)
 
-internal data class HaloAnimationEnvelopePolicy(val fadeInMs: Long, val fadeOutMs: Long)
-
-/** Definition-owned policy; selected once when an ambient session starts. */
-internal fun interface AmbientProgressPolicy { fun alphaAt(elapsedSeconds: Double): Float }
-
-internal object AmbientProgressPolicies {
-    val continuous = AmbientProgressPolicy { 1f }
-    val pulseWithSilence = AmbientProgressPolicy { elapsedSeconds ->
-        val position = elapsedSeconds % PULSE_CYCLE_SECONDS
-        if (position < PULSE_SILENCE_SECONDS) 0f
-        else sin(PI * ((position - PULSE_SILENCE_SECONDS) / PULSE_DURATION_SECONDS)).toFloat()
-    }
-
-    private const val PULSE_SILENCE_SECONDS = 10.0
-    private const val PULSE_DURATION_SECONDS = 2.5
-    private const val PULSE_CYCLE_SECONDS = PULSE_SILENCE_SECONDS + PULSE_DURATION_SECONDS
-}
-
-/** Reused render-session payload. Definitions invoke their bound delegate directly on VSYNC. */
-internal class HaloRenderFrame {
-    var phase: Float = 0f
-    var alpha: Int = 0
-    var gradientPhase: Float = 0f
-}
-
-/** Implemented by the renderer's cached surface; it contains no motion identifier. */
-internal interface HaloRenderSurface {
-    fun drawSpecializedField(frame: HaloRenderFrame)
-    fun drawFullContour(frame: HaloRenderFrame)
-    fun drawLuminousSegment(frame: HaloRenderFrame, startFraction: Float, lengthFraction: Float)
-    fun drawBlade(frame: HaloRenderFrame, variant: HaloBladeVariant)
-}
-
-internal enum class HaloBladeVariant { AZURE, CRIMSON, CLASH }
-
-internal fun interface HaloRenderDelegate {
-    fun draw(surface: HaloRenderSurface, frame: HaloRenderFrame)
-}
-
-private object HaloRenderDelegates {
-    val impulse = HaloRenderDelegate { surface, frame -> surface.drawSpecializedField(frame) }
-    val pulse = HaloRenderDelegate { surface, frame -> surface.drawFullContour(frame) }
-    val snake = HaloRenderDelegate { surface, frame ->
-        surface.drawLuminousSegment(frame, normalizedFraction(frame.phase), SNAKE_SEGMENT_FRACTION)
-    }
-    val azureBlade = HaloRenderDelegate { surface, frame -> surface.drawBlade(frame, HaloBladeVariant.AZURE) }
-    val crimsonBlade = HaloRenderDelegate { surface, frame -> surface.drawBlade(frame, HaloBladeVariant.CRIMSON) }
-    val forceClash = HaloRenderDelegate { surface, frame -> surface.drawBlade(frame, HaloBladeVariant.CLASH) }
-}
-
-private fun normalizedFraction(value: Float): Float = (value % 1f + 1f) % 1f
-private const val SNAKE_SEGMENT_FRACTION = 0.18f
+/** Stable catalog key; the executable policy is resolved by animation at session start. */
+enum class AmbientPolicyKey { CONTINUOUS, PULSE_WITH_SILENCE }
 
 /** Immutable pre-resolved metadata and timing entry. */
 data class HaloMotionDefinition internal constructor(
@@ -82,21 +30,20 @@ data class HaloMotionDefinition internal constructor(
     @get:StringRes val titleRes: Int,
     val baseDurationSeconds: Float,
     val ambientEligible: Boolean,
-    internal val envelope: HaloAnimationEnvelopePolicy,
-    internal val ambientProgressPolicy: AmbientProgressPolicy,
-    /** Pre-bound choreography; no ID dispatch is permitted during rendering. */
-    internal val renderDelegate: HaloRenderDelegate
+    val fadeInMs: Long,
+    val fadeOutMs: Long,
+    val ambientPolicyKey: AmbientPolicyKey
 )
 
 /** Sole ordered catalog. Its derived lists are cached and never built during a frame. */
 object HaloAnimationRegistry {
     val definitions: List<HaloMotionDefinition> = listOf(
-        definition(HaloMotion.IMPULSE, R.string.motion_impulse, 2.2f, false, 0L, 0L, delegate = HaloRenderDelegates.impulse),
-        definition(HaloMotion.PULSE, R.string.motion_pulse, 2.5f, true, 250L, 350L, AmbientProgressPolicies.pulseWithSilence, HaloRenderDelegates.pulse),
-        definition(HaloMotion.SNAKE, R.string.motion_snake, 2.5f, true, 160L, 460L, delegate = HaloRenderDelegates.snake),
-        definition(HaloMotion.AZURE_BLADE, R.string.motion_azure_blade, 3.4f, false, 80L, 220L, delegate = HaloRenderDelegates.azureBlade),
-        definition(HaloMotion.CRIMSON_BLADE, R.string.motion_crimson_blade, 3.0f, false, 55L, 160L, delegate = HaloRenderDelegates.crimsonBlade),
-        definition(HaloMotion.FORCE_CLASH, R.string.motion_force_clash, 3.6f, false, 70L, 180L, delegate = HaloRenderDelegates.forceClash)
+        definition(HaloMotion.IMPULSE, R.string.motion_impulse, 2.2f, false, 0L, 0L),
+        definition(HaloMotion.PULSE, R.string.motion_pulse, 2.5f, true, 250L, 350L, AmbientPolicyKey.PULSE_WITH_SILENCE),
+        definition(HaloMotion.SNAKE, R.string.motion_snake, 2.5f, true, 160L, 460L),
+        definition(HaloMotion.AZURE_BLADE, R.string.motion_azure_blade, 3.4f, false, 80L, 220L),
+        definition(HaloMotion.CRIMSON_BLADE, R.string.motion_crimson_blade, 3.0f, false, 55L, 160L),
+        definition(HaloMotion.FORCE_CLASH, R.string.motion_force_clash, 3.6f, false, 70L, 180L)
     )
     private val byMotion = definitions.associateBy(HaloMotionDefinition::motion)
 
@@ -110,8 +57,8 @@ object HaloAnimationRegistry {
     /** Ambient only accepts ambient definitions; invalid/non-ambient IDs keep Ambient safe. */
     fun resolveAmbient(value: String?): HaloMotion = HaloMotion.fromStorage(value)?.takeIf { definition(it).ambientEligible } ?: HaloMotion.PULSE
 
-    private fun definition(motion: HaloMotion, @StringRes titleRes: Int, duration: Float, ambientEligible: Boolean, fadeInMs: Long, fadeOutMs: Long, ambientPolicy: AmbientProgressPolicy = AmbientProgressPolicies.continuous, delegate: HaloRenderDelegate) =
-        HaloMotionDefinition(motion, titleRes, duration, ambientEligible, HaloAnimationEnvelopePolicy(fadeInMs, fadeOutMs), ambientPolicy, delegate)
+    private fun definition(motion: HaloMotion, @StringRes titleRes: Int, duration: Float, ambientEligible: Boolean, fadeInMs: Long, fadeOutMs: Long, ambientPolicyKey: AmbientPolicyKey = AmbientPolicyKey.CONTINUOUS) =
+        HaloMotionDefinition(motion, titleRes, duration, ambientEligible, fadeInMs, fadeOutMs, ambientPolicyKey)
 }
 
 /** Compatibility facade while callers migrate to the registry's definition lists. */

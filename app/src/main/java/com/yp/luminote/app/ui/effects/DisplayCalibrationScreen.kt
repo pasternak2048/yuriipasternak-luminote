@@ -1,4 +1,5 @@
 package com.yp.luminote.app.ui.effects
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
@@ -35,7 +36,6 @@ import com.yp.luminote.app.data.settings.MIN_DISPLAY_CORNER_SHAPE
 import com.yp.luminote.app.data.settings.MAX_DISPLAY_CORNER_SHAPE
 import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
 import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
-import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 import com.yp.luminote.app.ui.components.LuminoteSliderSetting

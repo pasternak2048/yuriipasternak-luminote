@@ -1,4 +1,5 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.animation.HaloAnimationStrategies
 
 import com.yp.luminote.app.data.settings.HaloMotion
 import org.junit.Assert.assertEquals

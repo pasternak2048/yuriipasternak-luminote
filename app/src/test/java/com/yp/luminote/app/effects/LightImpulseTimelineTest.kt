@@ -1,4 +1,51 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.model.HaloRenderMode
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.effects.geometry.DisplayOutline
+import com.yp.luminote.app.animation.LightImpulsePhase
+import com.yp.luminote.app.animation.lightImpulsePhase
+import com.yp.luminote.app.animation.lightImpulseProductionDrawPlan
+import com.yp.luminote.app.animation.lightImpulsePassEnergy
+import com.yp.luminote.app.animation.lightImpulseOwnedSegment
+import com.yp.luminote.app.animation.lightImpulseConvergenceOwnership
+import com.yp.luminote.app.rendering.canvas.lightImpulseEndpoints
+import com.yp.luminote.app.rendering.canvas.usesLightImpulseRenderer
+import com.yp.luminote.app.rendering.canvas.impulseUsesNormalColorTreatment
+import com.yp.luminote.app.animation.lightImpulseTravelProgress
+import com.yp.luminote.app.animation.lightImpulseBranchEnergy
+import com.yp.luminote.app.animation.lightImpulseOriginGlow
+import com.yp.luminote.app.animation.lightImpulseConvergenceEnergy
+import com.yp.luminote.app.animation.lightImpulseUsesSharedBirthField
+import com.yp.luminote.app.animation.lightImpulseConnectedFieldStrength
+import com.yp.luminote.app.animation.lightImpulseSharedSourceBloomStrength
+import com.yp.luminote.app.animation.lightImpulseProductionBirthFieldStrength
+import com.yp.luminote.app.animation.lightImpulseConvergenceSourceStrength
+import com.yp.luminote.app.animation.lightImpulseConvergenceFieldRadiusFraction
+import com.yp.luminote.app.animation.lightImpulseTravellingCoverageFraction
+import com.yp.luminote.app.animation.LightImpulseDrawMode
+import com.yp.luminote.app.animation.LightImpulseProductionDrawPlan
+import com.yp.luminote.app.animation.renderableWrappedSegmentRange
+import com.yp.luminote.app.animation.lightImpulseTravellingSegmentIsSafe
+import com.yp.luminote.app.animation.lightImpulseTerminalBloomRadiusFraction
+import com.yp.luminote.app.animation.lightImpulseCorePeakOffsetFraction
+import com.yp.luminote.app.animation.lightImpulseTerminalBloomStrength
+import com.yp.luminote.app.animation.lightImpulseBottomBloom
+import com.yp.luminote.app.animation.lightImpulseBottomBloomRadiusFraction
+import com.yp.luminote.app.animation.lightImpulseFadeEnergy
+import com.yp.luminote.app.animation.lightImpulseTailSampleStrength
+import com.yp.luminote.app.animation.lightImpulseTaperedFrontStrength
+import com.yp.luminote.app.animation.LightImpulsePassEnergy
+import com.yp.luminote.app.animation.lightImpulseCoreSpanFraction
+import com.yp.luminote.app.animation.lightImpulseAttachedTailSpanFraction
+import com.yp.luminote.app.animation.lightImpulseConvergenceCoverage
+import com.yp.luminote.app.animation.lightImpulseIgnitionDurationMs
+import com.yp.luminote.app.animation.LightImpulseEndpoints
+import com.yp.luminote.app.animation.LightImpulseOwnedSegment
+import com.yp.luminote.app.animation.LightImpulseConvergenceOwnership
+import com.yp.luminote.app.rendering.canvas.lightImpulseOwnedBeamCap
+import com.yp.luminote.app.rendering.canvas.lightImpulseBloomCap
+import com.yp.luminote.app.overlay.host.finiteDurationFor
+import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 
 import android.graphics.Paint
 import com.yp.luminote.app.data.settings.HaloColorMode
@@ -8,6 +55,17 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LightImpulseTimelineTest {
+
+    @Test
+    fun `timeline boundaries transfer ownership to the following phase`() {
+        val epsilon = 0.0001f
+        assertEquals(LightImpulsePhase.IGNITION, lightImpulsePhase(0.09f - epsilon))
+        assertEquals(LightImpulsePhase.TRAVEL, lightImpulsePhase(0.09f))
+        assertEquals(LightImpulsePhase.TRAVEL, lightImpulsePhase(0.80f - epsilon))
+        assertEquals(LightImpulsePhase.CONVERGE, lightImpulsePhase(0.80f))
+        assertEquals(LightImpulsePhase.CONVERGE, lightImpulsePhase(0.92f - epsilon))
+        assertEquals(LightImpulsePhase.FADE, lightImpulsePhase(0.92f))
+    }
 
     @Test
     fun `timeline keeps one ignition before split travel and terminal convergence`() {

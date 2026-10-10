@@ -1,4 +1,7 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.animation.HaloFiniteFrameScheduler
+import com.yp.luminote.app.animation.HaloAnimation
+import com.yp.luminote.app.animation.HaloAnimationRequest
 
 import com.yp.luminote.app.data.settings.HaloMotion
 import org.junit.Assert.assertEquals

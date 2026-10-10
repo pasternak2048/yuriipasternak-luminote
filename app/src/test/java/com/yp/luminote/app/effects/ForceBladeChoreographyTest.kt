@@ -1,4 +1,13 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.animation.BladeRetraction
+import com.yp.luminote.app.animation.MutableRetractionSegment
+import com.yp.luminote.app.animation.DuelRetraction
+import com.yp.luminote.app.animation.BladeState
+import com.yp.luminote.app.animation.BladeLifecycle
+import com.yp.luminote.app.animation.DuelState
+import com.yp.luminote.app.animation.DuelLifecycle
+import com.yp.luminote.app.animation.DuelBoundaries
+import com.yp.luminote.app.rendering.canvas.BladeClash
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -12,6 +21,16 @@ class ForceBladeChoreographyTest {
         assertEquals(BladeState.SEALED, BladeLifecycle.azure(0.58f).state)
         assertEquals(BladeState.HOLDING, BladeLifecycle.azure(0.70f).state)
         assertEquals(BladeState.RETRACTING, BladeLifecycle.azure(0.90f).state)
+    }
+
+    @Test
+    fun `blade phase boundaries retain their inclusive ownership`() {
+        val epsilon = 0.0001f
+        assertEquals(BladeState.EXTENDING, BladeLifecycle.azure(0.55f - epsilon).state)
+        assertEquals(BladeState.SEALED, BladeLifecycle.azure(0.55f).state)
+        assertEquals(BladeState.SEALED, BladeLifecycle.azure(0.63f - epsilon).state)
+        assertEquals(BladeState.HOLDING, BladeLifecycle.azure(0.63f).state)
+        assertEquals(BladeState.RETRACTING, BladeLifecycle.azure(0.82f).state)
     }
 
     @Test
@@ -45,6 +64,15 @@ class ForceBladeChoreographyTest {
         assertEquals(DuelState.OVERLOADING, DuelLifecycle.at(0.80f).state)
         assertEquals(DuelState.RETRACTING, DuelLifecycle.at(0.93f).state)
         assertTrue(DuelLifecycle.at(0.80f).energy > 1f)
+    }
+
+    @Test
+    fun `duel boundaries are deterministic at a repeated phase`() {
+        val first = DuelLifecycle.at(0.76f)
+        val second = DuelLifecycle.at(0.76f)
+        assertEquals(DuelState.OVERLOADING, first.state)
+        assertEquals(first.energy, second.energy, 0f)
+        assertEquals(first.clashPhase, second.clashPhase, 0f)
     }
 
     @Test
