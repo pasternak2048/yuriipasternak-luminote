@@ -1,7 +1,7 @@
 package com.yp.luminote.app.animation
 
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 
 /**
  * Compatibility seam for focused timing tests. Runtime sessions bind the
@@ -14,8 +14,8 @@ internal fun interface HaloAnimationStrategy {
 internal data class HaloAnimationEnvelope(val fadeInMs: Long, val fadeOutMs: Long)
 
 internal object HaloAnimationStrategies {
-    fun forMotion(motion: HaloMotion): HaloAnimationStrategy {
-        val policy = HaloAnimationRegistry.definition(motion).runtimeEnvelope()
+    fun forMotion(motion: HaloAnimationId): HaloAnimationStrategy {
+        val policy = LuminoteHaloAnimations.registry.definition(motion).runtimeEnvelope()
         return HaloAnimationStrategy { HaloAnimationEnvelope(policy.fadeInMs, policy.fadeOutMs) }
     }
 }

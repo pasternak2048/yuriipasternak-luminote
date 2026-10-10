@@ -1,8 +1,8 @@
 package com.yp.luminote.app.animation
 
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.HaloMotionDefinition
-import com.yp.luminote.app.data.settings.definition
+import com.yp.luminote.app.animation.definitions.HaloAnimationDefinition
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 
 data class HaloAnimationState(
     val progress: Float = 0f,
@@ -18,18 +18,18 @@ data class HaloAnimationRequest(
     val repeat: Boolean = false,
     val maxCycles: Int? = null,
     val preservePhase: Boolean = false,
-    val motion: HaloMotion,
+    val motion: HaloAnimationId,
     /** Resolved once at request construction; the frame engine never discovers by ID. */
-    val definition: HaloMotionDefinition = motion.definition
+    val definition: HaloAnimationDefinition = LuminoteHaloAnimations.registry.definition(motion)
 )
 
 data class HaloAmbientAnimationRequest(
     val effectSpeed: Float,
     val phaseStart: Float,
     val gradientPhaseStart: Float,
-    val motion: HaloMotion,
+    val motion: HaloAnimationId,
     /** Resolved once at request construction; carries the ambient alpha policy. */
-    val definition: HaloMotionDefinition = motion.definition
+    val definition: HaloAnimationDefinition = LuminoteHaloAnimations.registry.definition(motion)
 )
 
 internal interface HaloAnimationEngine {

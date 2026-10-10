@@ -1,5 +1,7 @@
 package com.yp.luminote.app.data.settings
 
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+
 const val MIN_HALO_VALUE = 0f
 const val MAX_HALO_VALUE = 1f
 const val MIN_HALO_INTERVAL_SECONDS = 0f
@@ -77,7 +79,7 @@ data class LuminoteSettings(
 
     val haloFrame: HaloFrame = HaloFrame.CLASSIC,
 
-    val haloMotion: HaloMotion = HaloMotion.PULSE,
+    val haloMotion: HaloAnimationId = HaloAnimationStorage.ambientFallback,
 
     /** Tempo for the selected effect, independent of gradient color flow. */
     val haloEffectSpeed: Float = 1f,
@@ -101,7 +103,7 @@ data class LuminoteSettings(
 
     val ambientThickness: Float = 0.5f,
 
-    val ambientMotion: HaloMotion = HaloMotion.PULSE,
+    val ambientMotion: HaloAnimationId = HaloAnimationStorage.ambientFallback,
 
     val ambientEffectSpeed: Float = 1f,
 

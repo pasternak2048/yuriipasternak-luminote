@@ -44,7 +44,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import com.yp.luminote.app.data.settings.LuminoteSettings
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.R
@@ -197,9 +197,9 @@ private fun CompactHaloContent(
                         .fillMaxWidth()
                         .luminoteSafeHorizontalPadding(),
                 frame = settings.haloFrame,
-                motion = settings.haloMotion,
-                availableDefinitions = HaloAnimationRegistry.normalDefinitions,
-                onMotionSelected = viewModel::setHaloMotion,
+                animationId = settings.haloMotion,
+                availableDefinitions = LuminoteHaloAnimations.all,
+                onAnimationSelected = viewModel::setHaloMotion,
             )
         }
 
@@ -252,9 +252,9 @@ private fun WideHaloContent(
                 HaloAppearancePicker(
                     modifier = Modifier.weight(1f),
                     frame = settings.haloFrame,
-                    motion = settings.haloMotion,
-                    availableDefinitions = HaloAnimationRegistry.normalDefinitions,
-                    onMotionSelected = viewModel::setHaloMotion,
+                    animationId = settings.haloMotion,
+                    availableDefinitions = LuminoteHaloAnimations.all,
+                    onAnimationSelected = viewModel::setHaloMotion,
                 )
                 Column(
                     modifier = Modifier.weight(1f),

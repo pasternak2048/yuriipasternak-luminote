@@ -13,9 +13,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
-import com.yp.luminote.app.data.settings.HaloMotionDefinition
+import com.yp.luminote.app.animation.definitions.HaloAnimationDefinition
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import com.yp.luminote.app.data.settings.definition
 import com.yp.luminote.app.R
 
@@ -23,9 +23,9 @@ import com.yp.luminote.app.R
 fun HaloAppearancePicker(
     modifier: Modifier = Modifier,
     frame: HaloFrame,
-    motion: HaloMotion,
-    availableDefinitions: List<HaloMotionDefinition> = HaloAnimationRegistry.normalDefinitions,
-    onMotionSelected: (HaloMotion) -> Unit,
+    animationId: HaloAnimationId,
+    availableDefinitions: List<HaloAnimationDefinition> = LuminoteHaloAnimations.all,
+    onAnimationSelected: (HaloAnimationId) -> Unit,
 ) {
     LuminoteSettingsCard(modifier = modifier) {
         Column(
@@ -55,8 +55,8 @@ fun HaloAppearancePicker(
                 availableDefinitions.forEach { candidate ->
                     LuminoteSelectionRow(
                         title = stringResource(candidate.titleRes),
-                        selected = motion == candidate.motion,
-                        onClick = { onMotionSelected(candidate.motion) },
+                        selected = animationId == candidate.id,
+                        onClick = { onAnimationSelected(candidate.id) },
                         control = LuminoteSelectionControl.Radio
                     )
                 }

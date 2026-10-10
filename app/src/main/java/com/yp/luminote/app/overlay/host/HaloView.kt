@@ -19,7 +19,7 @@ import android.view.Choreographer
 import android.view.View
 import android.view.WindowInsets
 import com.yp.luminote.app.R
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import java.util.Locale
 
 internal fun finiteDurationFor(renderMode: HaloRenderMode, requestedDuration: Float): Float =
@@ -162,7 +162,7 @@ internal class HaloView(
         duration: Float,
         interval: Float,
         count: Int,
-        motion: HaloMotion
+        motion: HaloAnimationId
     ) {
         staticFrameMode = false
         stopAmbientEffect()
@@ -392,7 +392,7 @@ internal class HaloView(
 
     fun startAmbientEffect(
         effectSpeed: Float,
-        motion: HaloMotion
+        motion: HaloAnimationId
     ) {
         staticFrameMode = false
         animationStartToken++
@@ -521,7 +521,7 @@ internal class HaloView(
         val duration: Float,
         val interval: Float,
         val count: Int,
-        val motion: HaloMotion
+        val motion: HaloAnimationId
     )
 
     private companion object {

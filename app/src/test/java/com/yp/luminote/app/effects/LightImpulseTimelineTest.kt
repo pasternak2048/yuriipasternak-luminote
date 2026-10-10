@@ -49,7 +49,7 @@ import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 
 import android.graphics.Paint
 import com.yp.luminote.app.data.settings.HaloColorMode
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -565,15 +565,15 @@ class LightImpulseTimelineTest {
 
     @Test
     fun `only dedicated reminder mode uses the light impulse override`() {
-        assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.IMPULSE)))
+        assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloAnimationId("IMPULSE"))))
         assertTrue(usesLightImpulseRenderer(HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE)))
-        assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloMotion.SNAKE)))
+        assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloAnimationId("SNAKE"))))
     }
 
     @Test
     fun `normal impulse preserves app color treatment while dedicated impulse keeps source color`() {
         val normalGradient = HaloConfig(
-            motion = HaloMotion.IMPULSE,
+            motion = HaloAnimationId("IMPULSE"),
             colorMode = HaloColorMode.GRADIENT,
             palette = intArrayOf(0xFF0077FF.toInt(), 0xFFFF33AA.toInt())
         )

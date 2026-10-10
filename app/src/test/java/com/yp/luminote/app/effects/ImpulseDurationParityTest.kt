@@ -4,7 +4,7 @@ import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.overlay.host.finiteDurationFor
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -12,7 +12,7 @@ class ImpulseDurationParityTest {
 
     @Test
     fun `normal impulse shares the reminder base choreography duration`() {
-        val impulse = HaloConfig(motion = HaloMotion.IMPULSE).sanitized()
+        val impulse = HaloConfig(motion = HaloAnimationId("IMPULSE")).sanitized()
 
         assertEquals(LIGHT_IMPULSE_DURATION_SECONDS, impulse.durationSeconds, 0f)
         assertEquals(
@@ -35,7 +35,7 @@ class ImpulseDurationParityTest {
             2f to 1.1f
         ).forEach { (speed, expectedDuration) ->
             val impulse = HaloConfig(
-                motion = HaloMotion.IMPULSE,
+                motion = HaloAnimationId("IMPULSE"),
                 effectSpeed = speed
             ).sanitized()
 
@@ -50,7 +50,7 @@ class ImpulseDurationParityTest {
 
     @Test
     fun `non impulse normal motions retain their own resolved finite durations`() {
-        val pulse = HaloConfig(motion = HaloMotion.PULSE).sanitized()
+        val pulse = HaloConfig(motion = HaloAnimationId("PULSE")).sanitized()
 
         assertEquals(2.5f, pulse.durationSeconds, 0f)
         assertEquals(2.5f, finiteDurationFor(HaloRenderMode.NORMAL, pulse.durationSeconds), 0f)

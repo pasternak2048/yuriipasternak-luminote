@@ -1,8 +1,9 @@
 package com.yp.luminote.app.animation
 
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.HaloMotionDefinition
+import com.yp.luminote.app.animation.definitions.HaloAnimationDefinition
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
+import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Test
@@ -10,8 +11,8 @@ import org.junit.Test
 class HaloRuntimePolicyTest {
     @Test
     fun `catalog scalar policies resolve once with preserved timings`() {
-        val pulse = HaloAnimationRegistry.definition(HaloMotion.PULSE)
-        val impulse = HaloAnimationRegistry.definition(HaloMotion.IMPULSE)
+        val pulse = LuminoteHaloAnimations.registry.definition(HaloAnimationId("PULSE"))
+        val impulse = LuminoteHaloAnimations.registry.definition(HaloAnimationId("IMPULSE"))
 
         assertEquals(250L, pulse.runtimeEnvelope().fadeInMs)
         assertEquals(350L, pulse.runtimeEnvelope().fadeOutMs)
@@ -20,20 +21,22 @@ class HaloRuntimePolicyTest {
     }
 
     @Test
-    fun `settings definition has no animation runtime field dependency`() {
-        HaloMotionDefinition::class.java.declaredFields.forEach { field ->
-            assertFalse(field.type.name.startsWith("com.yp.luminote.app.animation"))
+    fun `resolved definition has no canvas or lifecycle field dependency`() {
+        HaloAnimationDefinition::class.java.declaredMethods.forEach { method ->
+            assertFalse(method.returnType.name.startsWith("android.graphics"))
+            assertFalse(method.returnType.name.startsWith("android.view"))
+            assertFalse(method.returnType.name.contains(".overlay."))
         }
     }
 
     @Test
     fun `fallback motions retain the expected resolved runtime policy`() {
-        val normal = HaloAnimationRegistry.resolveNormal("unknown")
-        val ambient = HaloAnimationRegistry.resolveAmbient("FORCE_CLASH")
+        val normal = HaloAnimationStorage.resolveNormal("unknown")
+        val ambient = HaloAnimationStorage.resolveAmbient("FORCE_CLASH")
 
-        assertEquals(HaloMotion.IMPULSE, normal)
-        assertEquals(HaloMotion.PULSE, ambient)
-        assertEquals(0L, HaloAnimationRegistry.definition(normal).runtimeEnvelope().fadeInMs)
-        assertEquals(0f, HaloAnimationRegistry.definition(ambient).runtimeAmbientPolicy().alphaAt(0.0), 0f)
+        assertEquals(HaloAnimationId("IMPULSE"), normal)
+        assertEquals(HaloAnimationId("PULSE"), ambient)
+        assertEquals(0L, LuminoteHaloAnimations.registry.definition(normal).runtimeEnvelope().fadeInMs)
+        assertEquals(0f, LuminoteHaloAnimations.registry.definition(ambient).runtimeAmbientPolicy().alphaAt(0.0), 0f)
     }
 }

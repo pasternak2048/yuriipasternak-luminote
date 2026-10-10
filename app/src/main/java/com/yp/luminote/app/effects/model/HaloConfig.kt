@@ -2,7 +2,8 @@ package com.yp.luminote.app.effects.model
 
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.durationFor
 import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
 import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
@@ -17,7 +18,7 @@ data class HaloConfig(
     val intensity: Float = 0.7f,
     val thickness: Float = 0.5f,
     val frame: HaloFrame = HaloFrame.CLASSIC,
-    val motion: HaloMotion = HaloMotion.PULSE,
+    val motion: HaloAnimationId = HaloAnimationStorage.ambientFallback,
     val effectSpeed: Float = 1f,
     val gradientFlowSpeed: Float = 1f,
     val colorMode: HaloColorMode = HaloColorMode.SOLID,
