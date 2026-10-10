@@ -1,5 +1,7 @@
 package com.yp.luminote.app.data.settings
 
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,8 +15,8 @@ class ForceBladeCatalogTest {
         assertTrue(HaloMotion.AZURE_BLADE in supported)
         assertTrue(HaloMotion.CRIMSON_BLADE in supported)
         assertTrue(HaloMotion.FORCE_CLASH in supported)
-        assertEquals(3.4f, HaloMotion.AZURE_BLADE.definition.baseDurationSeconds)
-        assertEquals(3.0f, HaloMotion.CRIMSON_BLADE.definition.baseDurationSeconds)
-        assertEquals(3.6f, HaloMotion.FORCE_CLASH.definition.baseDurationSeconds)
+        assertEquals(3.4f, LuminoteHaloAnimations.registry.definition(HaloAnimationId("AZURE_BLADE")).baseDurationSeconds)
+        assertEquals(3.0f, LuminoteHaloAnimations.registry.definition(HaloAnimationId("CRIMSON_BLADE")).baseDurationSeconds)
+        assertEquals(3.6f, LuminoteHaloAnimations.registry.definition(HaloAnimationId("FORCE_CLASH")).baseDurationSeconds)
     }
 }

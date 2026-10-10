@@ -3,7 +3,7 @@ import com.yp.luminote.app.animation.HaloFiniteFrameScheduler
 import com.yp.luminote.app.animation.HaloAnimation
 import com.yp.luminote.app.animation.HaloAnimationRequest
 
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -83,7 +83,7 @@ class HaloAnimationTest {
             request(
                 interval = 0.1f,
                 cycles = 2,
-                motion = HaloMotion.SNAKE
+                motion = HaloAnimationId("SNAKE")
             )
         )
 
@@ -96,7 +96,7 @@ class HaloAnimationTest {
         duration: Float = 0.6f,
         interval: Float = 0f,
         cycles: Int = 1,
-        motion: HaloMotion = HaloMotion.PULSE
+        motion: HaloAnimationId = HaloAnimationId("PULSE")
     ) = HaloAnimationRequest(
         duration,
         interval,

@@ -38,8 +38,7 @@ import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
+import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.notification.HaloReminderRuntime
 import kotlin.math.max
@@ -492,7 +491,7 @@ class HaloOverlayService : Service() {
             }
         ).let { config ->
             if (config.renderMode == HaloRenderMode.AMBIENT) {
-                config.copy(motion = HaloAnimationRegistry.resolveAmbient(intent?.getStringExtra(EXTRA_MOTION)))
+                config.copy(motion = HaloAnimationStorage.resolveAmbient(intent?.getStringExtra(EXTRA_MOTION)))
             } else config
         }
     }
@@ -1584,7 +1583,7 @@ class HaloOverlayService : Service() {
 
                 putExtra(
                     EXTRA_MOTION,
-                    settings.haloMotion.name
+                    settings.haloMotion.value
                 )
 
                 putExtra(

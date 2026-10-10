@@ -2,9 +2,8 @@ package com.yp.luminote.app.overlay.coordination
 import com.yp.luminote.app.effects.model.HaloConfig
 
 import com.yp.luminote.app.data.settings.HaloColorMode
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
+import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
 
 /**
  * Decodes the configuration payload of a Halo command without owning its
@@ -31,7 +30,7 @@ internal object HaloConfigCommandDecoder {
                     ?: defaults.frame,
             motion =
                 command.motionName
-                    ?.let(HaloAnimationRegistry::resolveNormal)
+                    ?.let(HaloAnimationStorage::resolveNormal)
                     ?: defaults.motion,
             effectSpeed = command.effectSpeed ?: defaults.effectSpeed,
             gradientFlowSpeed =

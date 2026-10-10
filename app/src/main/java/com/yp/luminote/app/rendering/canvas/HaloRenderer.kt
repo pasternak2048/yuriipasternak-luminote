@@ -5,13 +5,9 @@ import com.yp.luminote.app.effects.geometry.WrappedSegmentRange
 import com.yp.luminote.app.effects.geometry.EdgeSegmentRenderer
 import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.effects.model.HaloRenderMode
-import com.yp.luminote.app.effects.model.MotionRenderCommand
-import com.yp.luminote.app.effects.model.MotionRenderCommandKind
-import com.yp.luminote.app.effects.model.MotionRenderEmitter
-import com.yp.luminote.app.effects.model.MotionRenderEmitters
-import com.yp.luminote.app.effects.model.MotionRenderFrame
-import com.yp.luminote.app.effects.model.MotionBladeVariant
-import com.yp.luminote.app.animation.*
+import com.yp.luminote.app.animation.LightImpulseEndpoints
+import com.yp.luminote.app.animation.definitions.HaloEffectSpec
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -22,7 +18,6 @@ import android.graphics.RectF
 import android.graphics.SweepGradient
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
 import kotlin.math.PI
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -34,7 +29,8 @@ internal fun usesLightImpulseRenderer(config: HaloConfig): Boolean =
 
 /** Normal-app Impulse retains the conventional color preparation; dedicated impulse keeps its source color. */
 internal fun impulseUsesNormalColorTreatment(config: HaloConfig): Boolean =
-    config.renderMode != HaloRenderMode.LIGHT_IMPULSE && config.motion == HaloMotion.IMPULSE
+    config.renderMode != HaloRenderMode.LIGHT_IMPULSE &&
+        LuminoteHaloAnimations.registry.definition(config.motion).effectSpec is HaloEffectSpec.SpecializedField
 
 
 
@@ -131,6 +127,10 @@ internal class EdgeRenderPipeline(
             coreStrokeWidth
         )
 
+    /** Bound with the selected effect definition, never inferred during a frame. */
+    private var lightImpulseUsesConventionalColorTreatment =
+        impulseUsesNormalColorTreatment(this.config)
+
     private var cachedOutlineVersion =
         -1
 
@@ -202,10 +202,56 @@ internal class EdgeRenderPipeline(
     private val forceBlades =
         ForceBladesRenderer(outline)
 
-    /** Resolved with the config/session; a VSYNC emits directly without registry lookup. */
-    private var motionEmitter: MotionRenderEmitter = MotionRenderEmitters.resolve(this.config.motion)
-    private val renderFrame = MotionRenderFrame()
-    private val renderCommand = MotionRenderCommand()
+    private val canvasEffectDispatcher = CanvasEffectDispatcher(object : CanvasEffectRenderSurface {
+        override fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame) {
+            // Ordinary Impulse retains its historical full-intensity primitive path.
+            lightImpulseRenderer.draw(canvas, 1f, frame.phase, frame.gradientPhase)
+        }
+
+        override fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame) {
+            conventionalRenderer.drawPulse(canvas, frame.alpha, frame.phase, frame.gradientPhase)
+        }
+
+        override fun drawLuminousSegment(
+            canvas: Canvas,
+            frame: CanvasEffectFrame,
+            startFraction: Float,
+            lengthFraction: Float
+        ) {
+            conventionalRenderer.drawLuminousSegment(
+                canvas,
+                frame.alpha,
+                frame.phase,
+                frame.gradientPhase,
+                startFraction,
+                lengthFraction
+            )
+        }
+
+        override fun drawAzureBlade(canvas: Canvas, frame: CanvasEffectFrame) {
+            val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
+            val cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
+            forceBlades.drawAzure(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, config.cornerShape, frame.frameTimeNanos)
+        }
+
+        override fun drawCrimsonBlade(canvas: Canvas, frame: CanvasEffectFrame) {
+            val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
+            val cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
+            forceBlades.drawCrimson(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, config.cornerShape, frame.frameTimeNanos)
+        }
+
+        override fun drawClashBlade(canvas: Canvas, frame: CanvasEffectFrame) {
+            val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
+            val cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
+            forceBlades.drawClash(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, config.cornerShape, frame.frameTimeNanos)
+        }
+    })
+
+    /** Resolved once per config/session; a VSYNC delegates to this cached target. */
+    private var canvasEffectTarget = canvasEffectDispatcher.resolve(
+        LuminoteHaloAnimations.registry.definition(this.config.motion).effectSpec
+    )
+    private val renderFrame = CanvasEffectFrame()
 
     fun update(
         config: HaloConfig
@@ -223,7 +269,11 @@ internal class EdgeRenderPipeline(
 
         this.config =
             next
-        motionEmitter = MotionRenderEmitters.resolve(next.motion)
+        lightImpulseUsesConventionalColorTreatment =
+            impulseUsesNormalColorTreatment(next)
+        canvasEffectTarget = canvasEffectDispatcher.resolve(
+            LuminoteHaloAnimations.registry.definition(next.motion).effectSpec
+        )
 
         colorRgb =
             next.color and RGB_MASK
@@ -280,37 +330,12 @@ internal class EdgeRenderPipeline(
         renderFrame.alpha = baseAlpha
         renderFrame.gradientPhase = gradientPhase
         renderFrame.frameTimeNanos = frameTimeNanos
-        motionEmitter.emit(renderFrame, renderCommand)
-        when (renderCommand.kind) {
-            MotionRenderCommandKind.SPECIALIZED_FIELD ->
-                lightImpulseRenderer.draw(canvas, 1f, renderFrame.phase, renderFrame.gradientPhase)
-            MotionRenderCommandKind.FULL_CONTOUR ->
-                conventionalRenderer.drawPulse(canvas, renderFrame.alpha, renderFrame.phase, renderFrame.gradientPhase)
-            MotionRenderCommandKind.LUMINOUS_SEGMENT ->
-                conventionalRenderer.drawLuminousSegment(
-                    canvas,
-                    renderFrame.alpha,
-                    renderFrame.phase,
-                    renderFrame.gradientPhase,
-                    renderCommand.segmentStartFraction,
-                    renderCommand.segmentLengthFraction
-                )
-            MotionRenderCommandKind.BLADE ->
-                drawBlade(canvas, renderFrame, renderCommand.bladeVariant, renderFrame.frameTimeNanos)
-        }
-    }
-
-    private fun drawBlade(canvas: Canvas, frame: MotionRenderFrame, variant: MotionBladeVariant, frameTimeNanos: Long) {
-        when (variant) {
-            MotionBladeVariant.AZURE -> forceBlades.drawAzure(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape, frameTimeNanos)
-            MotionBladeVariant.CRIMSON -> forceBlades.drawCrimson(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape, frameTimeNanos)
-            MotionBladeVariant.CLASH -> forceBlades.drawClash(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape, frameTimeNanos)
-        }
+        canvasEffectTarget.draw(canvas, renderFrame)
     }
 
     /** Keeps normal Impulse on the app's existing solid/palette/gradient paint path. */
     internal fun prepareLightImpulsePaint(alpha: Int, effectPhase: Float, gradientPhase: Float) {
-        if (impulseUsesNormalColorTreatment(config)) {
+        if (lightImpulseUsesConventionalColorTreatment) {
             prepareConventionalPaint(alpha, effectPhase, gradientPhase)
         } else {
             corePaint.shader = null

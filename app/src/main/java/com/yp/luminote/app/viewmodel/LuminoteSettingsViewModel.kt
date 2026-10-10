@@ -5,8 +5,8 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.HaloMode
 import com.yp.luminote.app.data.settings.GradientPalette
 import com.yp.luminote.app.data.settings.LuminoteSettings
@@ -170,7 +170,7 @@ class LuminoteSettingsViewModel(
     }
 
     fun setHaloMotion(
-        motion: HaloMotion
+        motion: HaloAnimationId
     ) {
         updateSettings {
             copy(haloMotion = motion)
@@ -334,12 +334,12 @@ class LuminoteSettingsViewModel(
     }
 
     fun setAmbientMotion(
-        motion: HaloMotion
+        motion: HaloAnimationId
     ) {
         updateSettings {
             copy(
                 ambientMotion =
-                    HaloAnimationRegistry.resolveAmbient(motion.name)
+                    HaloAnimationStorage.resolveAmbient(motion.value)
             )
         }
     }

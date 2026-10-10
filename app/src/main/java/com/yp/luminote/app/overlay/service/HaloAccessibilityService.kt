@@ -28,8 +28,7 @@ import android.view.Gravity
 import android.view.WindowManager
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.HaloAnimationRegistry
+import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.notification.HaloReminderRuntime
 import kotlin.math.max
 
@@ -767,7 +766,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 intent?.getStringExtra(
                     HaloOverlayService.EXTRA_MOTION
                 )
-                    ?.let(HaloAnimationRegistry::resolveNormal)
+                    ?.let(HaloAnimationStorage::resolveNormal)
                     ?: defaults.motion,
 
             effectSpeed =
@@ -803,7 +802,7 @@ class HaloAccessibilityService : AccessibilityService() {
             }
         ).let { config ->
             if (config.renderMode == HaloRenderMode.AMBIENT) {
-                config.copy(motion = HaloAnimationRegistry.resolveAmbient(intent?.getStringExtra(HaloOverlayService.EXTRA_MOTION)))
+                config.copy(motion = HaloAnimationStorage.resolveAmbient(intent?.getStringExtra(HaloOverlayService.EXTRA_MOTION)))
             } else config
         }
     }

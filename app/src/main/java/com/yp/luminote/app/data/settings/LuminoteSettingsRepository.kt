@@ -253,7 +253,7 @@ class LuminoteSettingsRepository(
 
                     haloMotion =
                         preferences[Keys.haloMotion]
-                            ?.let(HaloAnimationRegistry::resolveNormal)
+                            ?.let(HaloAnimationStorage::resolveNormal)
                             ?: defaultSettings.haloMotion,
 
                     haloEffectSpeed =
@@ -378,7 +378,7 @@ class LuminoteSettingsRepository(
 
                     ambientMotion =
                         preferences[Keys.ambientMotion]
-                            ?.let(HaloAnimationRegistry::resolveAmbient)
+                            ?.let(HaloAnimationStorage::resolveAmbient)
                             ?: defaultSettings.ambientMotion,
 
                     ambientEffectSpeed =
@@ -473,7 +473,7 @@ class LuminoteSettingsRepository(
                 settings.haloFrame.name
 
             preferences[Keys.haloMotion] =
-                settings.haloMotion.name
+                settings.haloMotion.value
 
             preferences[Keys.haloEffectSpeed] =
                 settings.haloEffectSpeed
@@ -506,7 +506,7 @@ class LuminoteSettingsRepository(
                 settings.ambientThickness
 
             preferences[Keys.ambientMotion] =
-                settings.ambientMotion.name
+                settings.ambientMotion.value
 
             preferences[Keys.ambientEffectSpeed] =
                 settings.ambientEffectSpeed

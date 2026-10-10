@@ -1,12 +1,13 @@
 package com.yp.luminote.app.animation
 
-import com.yp.luminote.app.data.settings.AmbientPolicyKey
-import com.yp.luminote.app.data.settings.HaloMotionDefinition
+import com.yp.luminote.app.animation.definitions.AmbientPlayback
+import com.yp.luminote.app.animation.definitions.HaloAnimationDefinition
+import com.yp.luminote.app.animation.definitions.HaloRuntimePolicy
 import kotlin.math.PI
 import kotlin.math.sin
 
 /** Runtime-only envelopes and ambient progression; persisted catalog entries merely select one. */
-internal data class HaloAnimationEnvelopePolicy(val fadeInMs: Long, val fadeOutMs: Long)
+internal typealias HaloAnimationEnvelopePolicy = HaloRuntimePolicy
 
 internal fun interface AmbientProgressPolicy { fun alphaAt(elapsedSeconds: Double): Float }
 
@@ -24,10 +25,10 @@ internal object AmbientProgressPolicies {
 }
 
 /** Translation occurs once when a finite or ambient session is accepted. */
-internal fun HaloMotionDefinition.runtimeEnvelope(): HaloAnimationEnvelopePolicy =
-    HaloAnimationEnvelopePolicy(fadeInMs, fadeOutMs)
+internal fun HaloAnimationDefinition.runtimeEnvelope(): HaloAnimationEnvelopePolicy =
+    runtimePolicy
 
-internal fun HaloMotionDefinition.runtimeAmbientPolicy(): AmbientProgressPolicy = when (ambientPolicyKey) {
-    AmbientPolicyKey.CONTINUOUS -> AmbientProgressPolicies.continuous
-    AmbientPolicyKey.PULSE_WITH_SILENCE -> AmbientProgressPolicies.pulseWithSilence
+internal fun HaloAnimationDefinition.runtimeAmbientPolicy(): AmbientProgressPolicy = when (runtimePolicy.ambientPlayback) {
+    AmbientPlayback.CONTINUOUS -> AmbientProgressPolicies.continuous
+    AmbientPlayback.PULSE_WITH_SILENCE -> AmbientProgressPolicies.pulseWithSilence
 }

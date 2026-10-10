@@ -1,6 +1,8 @@
 package com.yp.luminote.app.data.settings
 
 import com.yp.luminote.app.R
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,12 +13,12 @@ class ImpulseCatalogTest {
 
     @Test
     fun `registry exposes the locked normal catalog order`() {
-        val motions = HaloAnimationRegistry.normalDefinitions.map { it.motion }
+        val motions = LuminoteHaloAnimations.all.map { it.id }
 
-        assertEquals(listOf(HaloMotion.IMPULSE, HaloMotion.PULSE, HaloMotion.SNAKE, HaloMotion.AZURE_BLADE, HaloMotion.CRIMSON_BLADE, HaloMotion.FORCE_CLASH), motions)
-        assertEquals(1, motions.count { it == HaloMotion.IMPULSE })
-        assertEquals(R.string.motion_impulse, HaloMotion.IMPULSE.definition.titleRes)
-        assertEquals(2.2f, HaloMotion.IMPULSE.definition.baseDurationSeconds)
+        assertEquals(listOf("IMPULSE", "PULSE", "SNAKE", "AZURE_BLADE", "CRIMSON_BLADE", "FORCE_CLASH").map(::HaloAnimationId), motions)
+        assertEquals(1, motions.count { it == HaloAnimationId("IMPULSE") })
+        assertEquals(R.string.motion_impulse, LuminoteHaloAnimations.registry.definition(HaloAnimationId("IMPULSE")).titleRes)
+        assertEquals(2.2f, LuminoteHaloAnimations.registry.definition(HaloAnimationId("IMPULSE")).baseDurationSeconds)
     }
 
     @Test
@@ -37,10 +39,10 @@ class ImpulseCatalogTest {
 
     @Test
     fun `removed unknown and non ambient identifiers normalize by capability`() {
-        assertEquals(HaloMotion.IMPULSE, HaloAnimationRegistry.resolveNormal("CORNER_PULSE"))
-        assertEquals(HaloMotion.IMPULSE, HaloAnimationRegistry.resolveNormal("unknown"))
-        assertEquals(HaloMotion.PULSE, HaloAnimationRegistry.resolveAmbient("FORCE_CLASH"))
-        assertEquals(HaloMotion.PULSE, HaloAnimationRegistry.resolveAmbient("RAIN"))
-        assertEquals(listOf(HaloMotion.PULSE, HaloMotion.SNAKE), HaloAnimationRegistry.ambientDefinitions.map { it.motion })
+        assertEquals(HaloAnimationId("IMPULSE"), HaloAnimationStorage.resolveNormal("CORNER_PULSE"))
+        assertEquals(HaloAnimationId("IMPULSE"), HaloAnimationStorage.resolveNormal("unknown"))
+        assertEquals(HaloAnimationId("PULSE"), HaloAnimationStorage.resolveAmbient("FORCE_CLASH"))
+        assertEquals(HaloAnimationId("PULSE"), HaloAnimationStorage.resolveAmbient("RAIN"))
+        assertEquals(listOf(HaloAnimationId("PULSE"), HaloAnimationId("SNAKE")), LuminoteHaloAnimations.ambient.map { it.id })
     }
 }
