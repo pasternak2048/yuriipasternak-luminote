@@ -66,7 +66,7 @@
         </service>
 
         <service
-            android:name=".effects.HaloOverlayService"
+            android:name=".overlay.service.HaloOverlayService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
 
@@ -77,7 +77,7 @@
         </service>
 
         <service
-            android:name=".effects.HaloAccessibilityService"
+            android:name=".overlay.service.HaloAccessibilityService"
             android:exported="false"
             android:label="@string/accessibility_service_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">

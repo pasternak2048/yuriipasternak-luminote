@@ -1,4 +1,8 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.model.HaloRenderMode
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.overlay.coordination.HaloConfigCommandDecoder
+import com.yp.luminote.app.overlay.coordination.RawHaloConfigCommand
 
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame

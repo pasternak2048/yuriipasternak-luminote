@@ -1,4 +1,6 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.overlay.coordination.CalibrationPreviewCommandPolicy
+import com.yp.luminote.app.overlay.coordination.CalibrationPreviewSession
 
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue

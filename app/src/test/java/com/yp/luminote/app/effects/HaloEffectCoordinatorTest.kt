@@ -1,4 +1,11 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.model.HaloRenderMode
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.overlay.coordination.HaloEffectDelivery
+import com.yp.luminote.app.overlay.coordination.HaloEffectCoordinator
+import com.yp.luminote.app.overlay.coordination.HaloEffectRequest
+import com.yp.luminote.app.overlay.service.HaloAccessibilityService
+import com.yp.luminote.app.overlay.service.HaloOverlayService
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -77,6 +84,10 @@ class HaloEffectCoordinatorTest {
             listOf(request),
             startedByReplacementRenderer.map(HaloEffectDelivery::request)
         )
+        assertEquals(
+            true,
+            startedByFirstRenderer.single().lease != startedByReplacementRenderer.single().lease
+        )
     }
 
     @Test
@@ -119,6 +130,37 @@ class HaloEffectCoordinatorTest {
 
         coordinator.onRequestCompleted(replacement)
         assertEquals(listOf(first, first, next), started.map(HaloEffectDelivery::request))
+    }
+
+    @Test
+    fun `duplicate completion is terminal and cannot advance fifo twice`() {
+        val coordinator = HaloEffectCoordinator()
+        val started = mutableListOf<HaloEffectDelivery>()
+        coordinator.attachRenderer(Any()) { started += it }
+        coordinator.enqueue(request("com.example.first", "first"))
+        coordinator.enqueue(request("com.example.next", "next"))
+
+        val first = started.single()
+        coordinator.onRequestCompleted(first)
+        coordinator.onRequestCompleted(first)
+
+        assertEquals(listOf("first", "next"), started.map { it.request.notificationKey })
+    }
+
+    @Test
+    fun `clear is idempotent and old delivery cannot restart queue`() {
+        val coordinator = HaloEffectCoordinator()
+        val started = mutableListOf<HaloEffectDelivery>()
+        coordinator.attachRenderer(Any()) { started += it }
+        coordinator.enqueue(request("com.example.first", "first"))
+        val delivery = started.single()
+
+        coordinator.clear()
+        coordinator.clear()
+        coordinator.onRequestCompleted(delivery)
+
+        assertEquals(false, coordinator.isBusy())
+        assertEquals(1, started.size)
     }
 
     @Test

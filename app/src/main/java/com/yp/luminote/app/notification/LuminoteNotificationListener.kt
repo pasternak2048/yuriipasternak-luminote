@@ -1,4 +1,6 @@
 package com.yp.luminote.app.notification
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.overlay.service.HaloOverlayService
 
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
@@ -8,8 +10,6 @@ import com.yp.luminote.app.data.settings.GradientPalette
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
-import com.yp.luminote.app.effects.HaloConfig
-import com.yp.luminote.app.effects.HaloOverlayService
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

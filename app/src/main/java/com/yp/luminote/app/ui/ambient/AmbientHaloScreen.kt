@@ -1,4 +1,5 @@
 package com.yp.luminote.app.ui.ambient
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -42,7 +43,6 @@ import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloAnimationRegistry
-import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics

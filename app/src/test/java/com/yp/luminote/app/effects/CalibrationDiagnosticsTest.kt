@@ -1,4 +1,5 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.rendering.canvas.CalibrationDiagnostics
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse

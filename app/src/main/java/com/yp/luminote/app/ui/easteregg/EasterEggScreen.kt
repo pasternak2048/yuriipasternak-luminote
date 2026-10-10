@@ -1,4 +1,5 @@
 package com.yp.luminote.app.ui.easteregg
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import android.app.Activity
 import android.content.Context
@@ -44,7 +45,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.yp.luminote.app.data.settings.LuminoteSettings
-import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.R
 
 @Composable

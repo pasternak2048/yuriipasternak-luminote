@@ -1,4 +1,6 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.rendering.canvas.luminousSnakeDrawPlan
+import com.yp.luminote.app.rendering.canvas.LuminousSnakeDrawPlan
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

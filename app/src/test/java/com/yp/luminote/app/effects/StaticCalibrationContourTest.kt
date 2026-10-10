@@ -1,4 +1,7 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.effects.geometry.DisplayOutline
+import com.yp.luminote.app.rendering.canvas.HaloRenderer
 
 import android.graphics.Path
 import org.junit.Assert.assertSame

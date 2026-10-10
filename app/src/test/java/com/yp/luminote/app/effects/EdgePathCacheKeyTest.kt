@@ -1,4 +1,5 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.geometry.EdgePathCacheKey
 
 import org.junit.Assert.assertNotEquals
 import org.junit.Test

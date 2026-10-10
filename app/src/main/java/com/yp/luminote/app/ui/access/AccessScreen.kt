@@ -1,4 +1,6 @@
 package com.yp.luminote.app.ui.access
+import com.yp.luminote.app.overlay.service.HaloAccessibilityService
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
@@ -50,9 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.yp.luminote.app.effects.HaloAccessibilityService
 import com.yp.luminote.app.R
-import com.yp.luminote.app.effects.HaloEffectController
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.theme.LocalLuminoteStatusColors
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel

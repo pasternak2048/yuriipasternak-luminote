@@ -1,4 +1,9 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.overlay.coordination.CalibrationOperation
+import com.yp.luminote.app.overlay.coordination.HaloEffectHost
+import com.yp.luminote.app.overlay.coordination.HaloEffectHostPort
+import com.yp.luminote.app.overlay.coordination.HaloEffectHostCoordinator
+import com.yp.luminote.app.overlay.coordination.HaloEffectCommand
 
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import org.junit.Assert.assertEquals
