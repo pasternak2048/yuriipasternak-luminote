@@ -50,10 +50,14 @@ internal class HaloRenderFrame {
 
 /** Implemented by the renderer's cached surface; it contains no motion identifier. */
 internal interface HaloRenderSurface {
-    fun drawSpecializedField(frame: HaloRenderFrame)
-    fun drawFullContour(frame: HaloRenderFrame)
-    fun drawLuminousSegment(frame: HaloRenderFrame, startFraction: Float, lengthFraction: Float)
-    fun drawBlade(frame: HaloRenderFrame, variant: HaloBladeVariant)
+    /** Compose a source and paired travelling beams into the shared GPU effect frame. */
+    fun composeImpulse(frame: HaloRenderFrame)
+    /** Compose one closed contour emitter into the shared GPU effect frame. */
+    fun composeClosedPulse(frame: HaloRenderFrame)
+    /** Compose one directed contour beam into the shared GPU effect frame. */
+    fun composeBeam(frame: HaloRenderFrame, startFraction: Float, lengthFraction: Float)
+    /** Compose the laser family without handing a Canvas/path to the registry. */
+    fun composeLaser(frame: HaloRenderFrame, variant: HaloBladeVariant)
 }
 
 internal enum class HaloBladeVariant { AZURE, CRIMSON, CLASH }
@@ -63,14 +67,14 @@ internal fun interface HaloRenderDelegate {
 }
 
 private object HaloRenderDelegates {
-    val impulse = HaloRenderDelegate { surface, frame -> surface.drawSpecializedField(frame) }
-    val pulse = HaloRenderDelegate { surface, frame -> surface.drawFullContour(frame) }
+    val impulse = HaloRenderDelegate { surface, frame -> surface.composeImpulse(frame) }
+    val pulse = HaloRenderDelegate { surface, frame -> surface.composeClosedPulse(frame) }
     val snake = HaloRenderDelegate { surface, frame ->
-        surface.drawLuminousSegment(frame, normalizedFraction(frame.phase), SNAKE_SEGMENT_FRACTION)
+        surface.composeBeam(frame, normalizedFraction(frame.phase), SNAKE_SEGMENT_FRACTION)
     }
-    val azureBlade = HaloRenderDelegate { surface, frame -> surface.drawBlade(frame, HaloBladeVariant.AZURE) }
-    val crimsonBlade = HaloRenderDelegate { surface, frame -> surface.drawBlade(frame, HaloBladeVariant.CRIMSON) }
-    val forceClash = HaloRenderDelegate { surface, frame -> surface.drawBlade(frame, HaloBladeVariant.CLASH) }
+    val azureBlade = HaloRenderDelegate { surface, frame -> surface.composeLaser(frame, HaloBladeVariant.AZURE) }
+    val crimsonBlade = HaloRenderDelegate { surface, frame -> surface.composeLaser(frame, HaloBladeVariant.CRIMSON) }
+    val forceClash = HaloRenderDelegate { surface, frame -> surface.composeLaser(frame, HaloBladeVariant.CLASH) }
 }
 
 private fun normalizedFraction(value: Float): Float = (value % 1f + 1f) % 1f

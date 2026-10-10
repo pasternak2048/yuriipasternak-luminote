@@ -7,6 +7,7 @@ import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.RectF
 import android.graphics.SweepGradient
+import android.util.Log
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloMotionDefinition
 import com.yp.luminote.app.data.settings.HaloRenderFrame
@@ -29,6 +30,19 @@ internal fun usesLightImpulseRenderer(config: HaloConfig): Boolean =
 /** Normal-app Impulse retains the conventional color preparation; dedicated impulse keeps its source color. */
 internal fun impulseUsesNormalColorTreatment(config: HaloConfig): Boolean =
     config.renderMode != HaloRenderMode.LIGHT_IMPULSE && config.motion == HaloMotion.IMPULSE
+
+/** Every registered animation is composed into the shared contour GPU field. */
+internal fun usesContourOpticalBackend(config: HaloConfig): Boolean =
+    config.motion in HaloMotion.entries
+
+/** The legacy base-alpha envelope, expressed as normalized mesh-field intensity. */
+internal fun contourOpticalIntensity(config: HaloConfig, animationProgress: Float): Float =
+    (config.intensity * if (config.renderMode == HaloRenderMode.LIGHT_IMPULSE) 1f else animationProgress.coerceIn(0f, 1f)).coerceIn(0f, 1f)
+
+/** GPU-only animation sessions stop instead of silently continuing after a terminal submission. */
+internal fun isTerminalContourOpticalOutcome(outcome: ContourOpticalDrawResult): Boolean =
+    outcome == ContourOpticalDrawResult.UNSUPPORTED_HARDWARE ||
+        outcome == ContourOpticalDrawResult.GPU_UNAVAILABLE
 
 /** Timeline is deliberately independent from the normal finite-animation envelope. */
 internal fun lightImpulsePhase(progress: Float): LightImpulsePhase = when {
@@ -784,6 +798,15 @@ internal class EdgeRenderPipeline(
     /** Conventional and impulse use the shared 0px-envelope physical surface. */
     private val conventionalPathCache = EdgePathCache(outline)
     private val calibrationRenderer = CalibrationEdgeRenderer(outline)
+    /** Shared GPU field backend for Snake and Ambient Snake. */
+    private val contourRibbonCache = ContourRibbonGeometryCache(outline)
+    private val contourOpticalRenderer = ContourOpticalRenderer()
+    private val gpuEffectFrame = GpuEffectFrame()
+    private val gpuPalette = GpuPalette().configure(this.config.palette)
+    private val contourDebugTrace = ContourOpticalDebugTrace()
+    private val contourImpulseDrawPlan = LightImpulseProductionDrawPlan()
+    private var contourEndpointGeometry: StyleGeometry? = null
+    private var contourEndpoints: LightImpulseEndpoints? = null
 
     private var gradientShader:
             SweepGradient? = null
@@ -809,64 +832,35 @@ internal class EdgeRenderPipeline(
                 renderStrokeWidth
         }
 
-    private val conventionalRenderer = ConventionalEdgeRenderer(object : ConventionalRenderSurface {
-        override val outlinePath: Path
-            get() = this@EdgeRenderPipeline.outlinePath
-        override val corePaint: Paint
-            get() = this@EdgeRenderPipeline.corePaint
-        override fun preparePaint(baseAlpha: Int, effectPhase: Float, gradientPhase: Float) {
-            prepareConventionalPaint(baseAlpha, effectPhase, gradientPhase)
-        }
-
-        override fun stylePath(): Path = stylePathForCurrentConfig()
-
-        override fun styleGeometry(path: Path): StyleGeometry = styleGeometryFor(path)
-    })
-
-    private val lightImpulseRenderer = LightImpulseRenderer(object : LightImpulseRenderSurface {
-        override val outlinePath: Path
-            get() = this@EdgeRenderPipeline.outlinePath
-        override val corePaint: Paint
-            get() = this@EdgeRenderPipeline.corePaint
-        override val renderStrokeWidth: Float
-            get() = this@EdgeRenderPipeline.renderStrokeWidth
-        override val colorRgb: Int
-            get() = this@EdgeRenderPipeline.colorRgb
-
-        override fun geometry(): StyleGeometry? = lightImpulseGeometry()
-
-        override fun alpha(): Int = lightImpulseAlpha()
-
-        override fun preparePaint(alpha: Int, effectPhase: Float, gradientPhase: Float) {
-            prepareLightImpulsePaint(alpha, effectPhase, gradientPhase)
-        }
-    })
-
-    /** Separate multi-head surface; conventional motions keep their established renderer path. */
-    private val forceBlades =
-        ForceBladesRenderer(outline)
-
     private var activeDefinition: HaloMotionDefinition = this.config.motion.definition
-    private var delegateCanvas: Canvas? = null
+    private var composingGpuFrame: GpuEffectFrame? = null
     private val renderFrame = HaloRenderFrame()
     private val renderSurface = object : HaloRenderSurface {
-        override fun drawFullContour(frame: HaloRenderFrame) {
-            val canvas = delegateCanvas ?: return
-            conventionalRenderer.drawPulse(canvas, frame.alpha, frame.phase, frame.gradientPhase)
+        override fun composeClosedPulse(frame: HaloRenderFrame) {
+            composingGpuFrame?.let { GpuEffectPrograms.closedPulse(it, energy = 1f) }
         }
 
-        override fun drawSpecializedField(frame: HaloRenderFrame) {
-            val canvas = delegateCanvas ?: return
-            lightImpulseRenderer.draw(canvas, 1f, frame.phase, frame.gradientPhase)
+        override fun composeImpulse(frame: HaloRenderFrame) {
+            val effect = composingGpuFrame ?: return
+            val endpoints = contourImpulseEndpoints()
+            GpuEffectPrograms.impulse(effect, frame.phase, endpoints.topFraction, endpoints.bottomFraction, energy = 1f)
         }
 
-        override fun drawLuminousSegment(frame: HaloRenderFrame, startFraction: Float, lengthFraction: Float) {
-            val canvas = delegateCanvas ?: return
-            conventionalRenderer.drawLuminousSegment(canvas, frame.alpha, frame.phase, frame.gradientPhase, startFraction, lengthFraction)
+        override fun composeBeam(frame: HaloRenderFrame, startFraction: Float, lengthFraction: Float) {
+            // The program owns its contour length; the delegate's start preserves registry timing.
+            composingGpuFrame?.let { GpuEffectPrograms.snake(it, (startFraction + lengthFraction) % 1f, energy = 1f) }
         }
 
-        override fun drawBlade(frame: HaloRenderFrame, variant: HaloBladeVariant) =
-            this@EdgeRenderPipeline.drawBlade(frame, variant)
+        override fun composeLaser(frame: HaloRenderFrame, variant: HaloBladeVariant) {
+            composingGpuFrame?.let {
+                GpuEffectPrograms.laser(
+                    frame = it,
+                    phase = frame.phase,
+                    energy = 1f,
+                    variant = variant
+                )
+            }
+        }
     }
 
     fun update(
@@ -874,6 +868,9 @@ internal class EdgeRenderPipeline(
     ) {
         val next =
             config.sanitized()
+
+        val paletteChanged =
+            !this.config.palette.contentEquals(next.palette)
 
         val geometryChanged =
             this.config.thickness !=
@@ -890,10 +887,18 @@ internal class EdgeRenderPipeline(
         colorRgb =
             next.color and RGB_MASK
 
+        if (paletteChanged) {
+            gpuPalette.configure(next.palette)
+        }
+
         if (geometryChanged) {
             updateStrokeParameters()
 
             clearStylePathCache()
+            contourEndpointGeometry = null
+            contourEndpoints = null
+            contourOpticalRenderer.clear()
+            contourDebugTrace.reset()
             outline.clearRenderCaches()
         }
     }
@@ -903,57 +908,65 @@ internal class EdgeRenderPipeline(
         animationProgress: Float,
         effectPhase: Float,
         gradientPhase: Float
-    ) {
-        if (usesLightImpulseRenderer(config)) {
-            lightImpulseRenderer.draw(canvas, animationProgress, effectPhase, gradientPhase)
-            return
+    ): Boolean = drawContourOpticalField(canvas, animationProgress, effectPhase, gradientPhase)
+
+    /** Migrated motions are always consumed here; unavailable GPU work ends the visual safely. */
+    private fun drawContourOpticalField(canvas: Canvas, animationProgress: Float, effectPhase: Float, gradientPhase: Float): Boolean {
+        if (!usesContourOpticalBackend(config)) return false
+        contourDebugTrace.routeEntered()
+        if (!canvas.isHardwareAccelerated) {
+            contourDebugTrace.hardwareRejected()
+            Log.e(CONTOUR_OPTICAL_LOG_TAG, "terminal preflight=hardware canvasHw=${canvas.isHardwareAccelerated} size=${canvas.width}x${canvas.height} outlineVersion=${outline.version}")
+            ContourOpticalRenderMetrics.recordSubmissionFailure()
+            return true
         }
-        val baseAlpha =
-            (
-                    255f *
-                            config.intensity *
-                            animationProgress.coerceIn(
-                                0f,
-                                1f
-                            )
-                    )
-                .roundToInt()
-                .coerceIn(
-                    0,
-                    255
-                )
-
-        if (baseAlpha == 0) {
-            return
+        if (contourOpticalIntensity(config, animationProgress) <= 0f) return false
+        val maxEnvelopePx = renderStrokeWidth * CONTOUR_OPTICAL_ENVELOPE_MULTIPLIER
+        val ribbon = contourRibbonCache.geometryFor(
+            strokeWidth = renderStrokeWidth,
+            edgeCalibrationPx = outline.opticalInsetPx + outline.dpToPx(config.edgeCalibrationDp),
+            cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp),
+            cornerShape = config.cornerShape,
+            // The physical centerline reserves the portion of the field that exceeds the
+            // baseline half-stroke. This is geometry containment, not a draw-time clip.
+            extraEnvelopePx = contourRibbonExtraEnvelopePx(renderStrokeWidth, maxEnvelopePx),
+            maxEnvelopePx = maxEnvelopePx
+        ) ?: run {
+            contourDebugTrace.geometryUnavailable()
+            Log.e(CONTOUR_OPTICAL_LOG_TAG, "terminal preflight=geometry canvasHw=${canvas.isHardwareAccelerated} size=${canvas.width}x${canvas.height} outlineVersion=${outline.version} rejection=${contourRibbonCache.lastRejectionReason}")
+            ContourOpticalRenderMetrics.recordSubmissionFailure()
+            return true
         }
-
-        if (
-            cachedOutlineVersion !=
-            outline.version
-        ) {
-            clearStylePathCache()
-
-            cachedOutlineVersion =
-                outline.version
+        val field = gpuEffectFrame.reset(colorRgb, contourOpticalIntensity(config, animationProgress))
+        if (gpuPalette.size >= 2) {
+            val palettePhase = if (config.colorMode == HaloColorMode.GRADIENT) {
+                gradientPhase * config.gradientFlowSpeed
+            } else {
+                effectPhase
+            }
+            field.setPalette(gpuPalette, palettePhase)
         }
-
-        delegateCanvas = canvas
+        renderFrame.phase = effectPhase
+        renderFrame.alpha = 255
+        renderFrame.gradientPhase = gradientPhase
+        composingGpuFrame = field
         try {
-            renderFrame.phase = effectPhase
-            renderFrame.alpha = baseAlpha
-            renderFrame.gradientPhase = gradientPhase
             activeDefinition.renderDelegate.draw(renderSurface, renderFrame)
         } finally {
-            delegateCanvas = null
+            composingGpuFrame = null
         }
+        if (field.emitterCount() == 0) return false
+        // The ribbon geometry is already contained by its envelope-aware centerline.  Keeping an
+        // outline clip here would erase the outer half of the bloom and conceal seam/corner bugs.
+        return isTerminalContourOpticalOutcome(contourOpticalRenderer.drawResult(canvas, ribbon, field).outcome)
     }
 
-    private fun drawBlade(frame: HaloRenderFrame, variant: HaloBladeVariant) {
-        val canvas = delegateCanvas ?: return
-        when (variant) {
-            HaloBladeVariant.AZURE -> forceBlades.drawAzure(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape)
-            HaloBladeVariant.CRIMSON -> forceBlades.drawCrimson(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape)
-            HaloBladeVariant.CLASH -> forceBlades.drawClash(canvas, frame.phase, frame.alpha, renderStrokeWidth, outline.dpToPx(config.edgeCalibrationDp), outline.dpToPx(config.cornerCalibrationDp), config.cornerShape)
+    private fun contourImpulseEndpoints(): LightImpulseEndpoints {
+        val geometry = lightImpulseGeometry() ?: return LightImpulseEndpoints(0f, 0f, 0f, 0f)
+        contourEndpoints?.takeIf { contourEndpointGeometry === geometry }?.let { return it }
+        return lightImpulseEndpoints(geometry.measure, geometry.length, geometry.bounds).also {
+            contourEndpointGeometry = geometry
+            contourEndpoints = it
         }
     }
 
@@ -1434,6 +1447,8 @@ internal class EdgeRenderPipeline(
 
         private const val OPAQUE_ALPHA =
             -0x1000000
+
+        private const val CONTOUR_OPTICAL_ENVELOPE_MULTIPLIER = 1.50f
     }
 }
 
@@ -1447,7 +1462,8 @@ internal class HaloRenderer(config: HaloConfig, outline: DisplayOutline) {
 
     fun update(config: HaloConfig) = pipeline.update(config)
 
-    fun draw(canvas: Canvas, animationProgress: Float, effectPhase: Float, gradientPhase: Float) =
+    /** Returns true only when this GPU render session entered a terminal state. */
+    fun draw(canvas: Canvas, animationProgress: Float, effectPhase: Float, gradientPhase: Float): Boolean =
         pipeline.draw(canvas, animationProgress, effectPhase, gradientPhase)
 
     fun drawStaticFrame(canvas: Canvas) = pipeline.drawStaticFrame(canvas)

@@ -8,7 +8,13 @@ import android.graphics.PathMeasure
  * [DisplayOutline]: that class remains the owner of display-shape semantics.
  */
 internal class EdgePathCache(private val outline: DisplayOutline) {
-    private var key: EdgePathCacheKey? = null
+    private var hasGeometry = false
+    private var outlineVersion = Int.MIN_VALUE
+    private var strokeWidth = Float.NaN
+    private var edgeCalibrationPx = Float.NaN
+    private var cornerCalibrationPx = Float.NaN
+    private var cornerShape = Float.NaN
+    private var extraEnvelopePx = Float.NaN
     private var geometry: EdgePathGeometry? = null
 
     fun geometryFor(
@@ -18,15 +24,7 @@ internal class EdgePathCache(private val outline: DisplayOutline) {
         cornerShape: Float,
         extraEnvelopePx: Float
     ): EdgePathGeometry? {
-        val requestedKey = EdgePathCacheKey(
-            outlineVersion = outline.version,
-            strokeWidth = strokeWidth,
-            edgeCalibrationPx = edgeCalibrationPx,
-            cornerCalibrationPx = cornerCalibrationPx,
-            cornerShape = cornerShape,
-            extraEnvelopePx = extraEnvelopePx
-        )
-        if (key != requestedKey) {
+        if (!matches(strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape, extraEnvelopePx)) {
             geometry = EdgePathGeometry(outline.centerlinePath(
                 strokeWidth = strokeWidth,
                 edgeCalibrationPx = edgeCalibrationPx,
@@ -34,7 +32,7 @@ internal class EdgePathCache(private val outline: DisplayOutline) {
                 cornerShape = cornerShape,
                 extraEnvelopePx = extraEnvelopePx
             ))
-            key = requestedKey
+            remember(strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape, extraEnvelopePx)
         }
         return geometry?.takeIf { it.length > 0f }
     }
@@ -47,16 +45,43 @@ internal class EdgePathCache(private val outline: DisplayOutline) {
         cornerShape: Float,
         extraEnvelopePx: Float
     ): Path {
-        val requestedKey = EdgePathCacheKey(
-            outline.version, strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape, extraEnvelopePx
-        )
-        if (key != requestedKey) {
+        if (!matches(strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape, extraEnvelopePx)) {
             geometry = EdgePathGeometry(outline.centerlinePath(
                 strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape, extraEnvelopePx
             ))
-            key = requestedKey
+            remember(strokeWidth, edgeCalibrationPx, cornerCalibrationPx, cornerShape, extraEnvelopePx)
         }
         return geometry!!.path
+    }
+
+    private fun matches(
+        strokeWidth: Float,
+        edgeCalibrationPx: Float,
+        cornerCalibrationPx: Float,
+        cornerShape: Float,
+        extraEnvelopePx: Float
+    ): Boolean = hasGeometry &&
+        outlineVersion == outline.version &&
+        this.strokeWidth == strokeWidth &&
+        this.edgeCalibrationPx == edgeCalibrationPx &&
+        this.cornerCalibrationPx == cornerCalibrationPx &&
+        this.cornerShape == cornerShape &&
+        this.extraEnvelopePx == extraEnvelopePx
+
+    private fun remember(
+        strokeWidth: Float,
+        edgeCalibrationPx: Float,
+        cornerCalibrationPx: Float,
+        cornerShape: Float,
+        extraEnvelopePx: Float
+    ) {
+        hasGeometry = true
+        outlineVersion = outline.version
+        this.strokeWidth = strokeWidth
+        this.edgeCalibrationPx = edgeCalibrationPx
+        this.cornerCalibrationPx = cornerCalibrationPx
+        this.cornerShape = cornerShape
+        this.extraEnvelopePx = extraEnvelopePx
     }
 }
 

@@ -71,6 +71,13 @@ internal class HaloView(
     private var onFiniteAnimationStarted:
             (() -> Unit)? = null
 
+    /** The host owns overlay teardown; the View stops a failed GPU generation first. */
+    private var onGpuTerminalFailure:
+            (() -> Unit)? = null
+
+    private var gpuTerminalFailureDelivered =
+        false
+
     private var hardwareAccelerationLogged =
         false
 
@@ -96,6 +103,7 @@ internal class HaloView(
     fun update(
         config: HaloConfig
     ) {
+        gpuTerminalFailureDelivered = false
         renderer.update(
             config
         )
@@ -134,12 +142,20 @@ internal class HaloView(
             listener
     }
 
+    /** Called once when GPU submission is terminally unavailable for this render session. */
+    fun setOnGpuTerminalFailureListener(
+        listener: (() -> Unit)?
+    ) {
+        onGpuTerminalFailure = listener
+    }
+
     fun repeatAnimation(
         duration: Float,
         interval: Float,
         count: Int,
         motion: HaloMotion
     ) {
+        gpuTerminalFailureDelivered = false
         staticFrameMode = false
         stopAmbientEffect()
 
@@ -336,7 +352,7 @@ internal class HaloView(
             }
             return
         }
-        renderer.draw(
+        if (renderer.draw(
             canvas =
                 canvas,
             animationProgress =
@@ -345,7 +361,19 @@ internal class HaloView(
                 animationState.phase,
             gradientPhase =
                 animationState.gradientPhase
-        )
+        )) {
+            terminateGpuRenderSession()
+        }
+    }
+
+    private fun terminateGpuRenderSession() {
+        if (gpuTerminalFailureDelivered) return
+        gpuTerminalFailureDelivered = true
+        animationStartToken++
+        pendingFiniteAnimation = null
+        ambientPaused = false
+        animationEngine.cancel()
+        onGpuTerminalFailure?.invoke()
     }
 
     private fun localizedCalibrationRegistrationLabel(edgeCalibrationPx: Float): String {
@@ -365,6 +393,7 @@ internal class HaloView(
         effectSpeed: Float,
         motion: HaloMotion
     ) {
+        gpuTerminalFailureDelivered = false
         staticFrameMode = false
         animationStartToken++
 
@@ -473,6 +502,7 @@ internal class HaloView(
         Log.d(
             TAG,
             "Render pipeline: " +
+                    "size=${canvas.width}x${canvas.height}, " +
                     "viewHw=$isHardwareAccelerated, " +
                     "canvasHw=${canvas.isHardwareAccelerated}, " +
                     "attached=$isAttachedToWindow"

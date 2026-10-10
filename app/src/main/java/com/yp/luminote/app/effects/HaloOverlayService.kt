@@ -639,6 +639,10 @@ class HaloOverlayService : Service() {
             onFiniteAnimationStarted
         )
 
+        view.setOnGpuTerminalFailureListener {
+            terminateGpuOverlay(view)
+        }
+
         val params =
             WindowManager.LayoutParams(
                 metrics.widthPixels,
@@ -996,6 +1000,20 @@ class HaloOverlayService : Service() {
 
         activeConfig =
             null
+    }
+
+    /** A failed GPU session has no drawable recovery path; detach its exact View generation. */
+    private fun terminateGpuOverlay(view: HaloView) {
+        handler.post {
+            if (overlayView !== view) return@post
+            Log.e(TAG, "Terminal GPU failure; removing overlay renderer")
+            handler.removeCallbacks(removeOverlayTask)
+            view.setOnFiniteAnimationCompletedListener(null)
+            view.setOnFiniteAnimationStartedListener(null)
+            view.setOnGpuTerminalFailureListener(null)
+            removeOverlay(immediately = true)
+            stopSelf()
+        }
     }
 
     override fun onDestroy() {

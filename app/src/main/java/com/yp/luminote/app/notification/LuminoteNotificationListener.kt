@@ -19,6 +19,9 @@ import kotlinx.coroutines.launch
 import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicReference
 
+/** Framework snapshots may throw while a notification-listener connection is changing state. */
+internal fun <T> safeFrameworkSnapshot(read: () -> T): T? = runCatching(read).getOrNull()
+
 class LuminoteNotificationListener :
     NotificationListenerService() {
 
@@ -188,7 +191,7 @@ class LuminoteNotificationListener :
             activeNotifications
 
         val rankingMap =
-            currentRanking
+            safeFrameworkSnapshot { currentRanking }
 
         serviceScope.launch {
             val settings =
@@ -219,7 +222,7 @@ class LuminoteNotificationListener :
 
     override fun onNotificationPosted(
         sbn: StatusBarNotification,
-        rankingMap: NotificationListenerService.RankingMap
+        rankingMap: NotificationListenerService.RankingMap?
     ) {
         super.onNotificationPosted(
             sbn,
@@ -257,22 +260,12 @@ class LuminoteNotificationListener :
             return
         }
 
-        val ranking =
-            NotificationListenerService.Ranking()
-
-        val hasRanking =
-            rankingMap.getRanking(
-                sbn.key,
-                ranking
-            )
+        val ranking = rankingFor(rankingMap, sbn.key)
 
         val event =
             notificationEventClassifier.classify(
                 sbn = sbn,
-                ranking =
-                    ranking.takeIf {
-                        hasRanking
-                    }
+                ranking = ranking
             )
 
         /*
@@ -288,7 +281,7 @@ class LuminoteNotificationListener :
                     "key=${sbn.key}, " +
                     "category=${sbn.notification.category}, " +
                     "flags=0x${sbn.notification.flags.toString(16)}, " +
-                    "importance=${ranking.takeIf { hasRanking }?.importance}, " +
+                    "importance=${ranking?.importance}, " +
                     "event=${event::class.simpleName}"
         )
 
@@ -574,6 +567,23 @@ class LuminoteNotificationListener :
                 .toIntArray()
         }
 
+    /**
+     * Ranking data is supplied by the system process and can be absent or stale while the
+     * listener reconnects. A missing ranking is valid input to the classifier; a framework
+     * ranking failure must not terminate notification delivery or the overlay host.
+     */
+    private fun rankingFor(
+        rankingMap: NotificationListenerService.RankingMap?,
+        notificationKey: String
+    ): NotificationListenerService.Ranking? {
+        if (rankingMap == null) return null
+        return runCatching {
+            NotificationListenerService.Ranking().also { ranking ->
+                if (!rankingMap.getRanking(notificationKey, ranking)) return null
+            }
+        }.getOrNull()
+    }
+
     /*
      * Rebuilds persistent notification state without mutating the live media
      * fingerprint cache.
@@ -584,7 +594,7 @@ class LuminoteNotificationListener :
      */
     private fun restoreActiveNotifications(
         notifications: Array<StatusBarNotification>,
-        rankingMap: NotificationListenerService.RankingMap,
+        rankingMap: NotificationListenerService.RankingMap?,
         settings: LuminoteSettings
     ) {
         if (
@@ -608,22 +618,12 @@ class LuminoteNotificationListener :
                     return@forEach
                 }
 
-                val ranking =
-                    NotificationListenerService.Ranking()
-
-                val hasRanking =
-                    rankingMap.getRanking(
-                        notification.key,
-                        ranking
-                    )
+                val ranking = rankingFor(rankingMap, notification.key)
 
                 val snapshotEvent =
                     notificationEventClassifier.classifySnapshot(
                         sbn = notification,
-                        ranking =
-                            ranking.takeIf {
-                                hasRanking
-                            }
+                    ranking = ranking
                     )
 
                 if (
@@ -677,7 +677,7 @@ class LuminoteNotificationListener :
     ) {
         restoreActiveNotifications(
             notifications = activeNotifications,
-            rankingMap = currentRanking,
+            rankingMap = safeFrameworkSnapshot { currentRanking },
             settings = settings
         )
     }

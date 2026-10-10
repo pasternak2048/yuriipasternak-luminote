@@ -421,6 +421,10 @@ class HaloAccessibilityService : AccessibilityService() {
             onFiniteAnimationCompleted
         )
 
+        view.setOnGpuTerminalFailureListener {
+            terminateGpuOverlay(view)
+        }
+
         val params =
             WindowManager.LayoutParams(
                 metrics.widthPixels,
@@ -679,6 +683,17 @@ class HaloAccessibilityService : AccessibilityService() {
 
         if (queuedTerminalClaimed) {
             completeQueuedTerminal(queuedCompletion)
+        }
+    }
+
+    /** The accessibility host stays alive, but the failed GPU overlay must not remain attached. */
+    private fun terminateGpuOverlay(view: HaloView) {
+        handler.post {
+            if (overlayView !== view) return@post
+            Log.e(TAG, "Terminal GPU failure; removing accessibility overlay renderer")
+            handler.removeCallbacks(removeOverlayTask)
+            view.setOnGpuTerminalFailureListener(null)
+            removeOverlay()
         }
     }
 
@@ -1096,6 +1111,10 @@ class HaloAccessibilityService : AccessibilityService() {
                 setOnFiniteAnimationCompletedListener(
                     complete
                 )
+
+                setOnGpuTerminalFailureListener {
+                    terminateGpuOverlay(this@apply)
+                }
 
                 setOnFiniteAnimationStartedListener {
                     queuedCompletionLease.onStarted(
