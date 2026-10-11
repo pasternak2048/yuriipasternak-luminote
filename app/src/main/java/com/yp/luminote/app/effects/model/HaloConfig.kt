@@ -7,6 +7,10 @@ import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.durationFor
 import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
 import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
+import com.yp.luminote.app.animation.definitions.AnimationPropertyOverrides
+import com.yp.luminote.app.animation.definitions.AnimationPropertyResolver
+import com.yp.luminote.app.animation.definitions.HaloEffectSpec
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 
 enum class HaloRenderMode { NORMAL, LIGHT_IMPULSE, AMBIENT }
 
@@ -25,6 +29,8 @@ data class HaloConfig(
     val edgeCalibrationDp: Float = 0f,
     val cornerCalibrationDp: Float = 0f,
     val cornerShape: Float = 0.5f,
+    /** Resolved by a host at command/settings assembly; renderer never resolves properties. */
+    val effectPlan: HaloEffectSpec = defaultEffectPlan(motion),
     /** Colors used by a gradient treatment. */
     val palette: IntArray = intArrayOf(),
     val renderMode: HaloRenderMode = HaloRenderMode.NORMAL
@@ -70,6 +76,13 @@ data class HaloConfig(
     }
 
     companion object {
+        fun resolveEffectPlan(motion: HaloAnimationId, overrides: AnimationPropertyOverrides): HaloEffectSpec {
+            val definition = LuminoteHaloAnimations.registry.definition(motion)
+            return definition.resolveEffectSpec(AnimationPropertyResolver.resolve(definition, overrides))
+        }
+
+        private fun defaultEffectPlan(motion: HaloAnimationId): HaloEffectSpec =
+            resolveEffectPlan(motion, AnimationPropertyOverrides())
         private const val MIN_EFFECT_SPEED = 0.25f
         private const val MAX_EFFECT_SPEED = 2f
         private const val DEFAULT_EFFECT_SPEED = 1f

@@ -408,7 +408,8 @@ class LuminoteSettingsRepository(
                             ?: defaultSettings.ambientGradientFlowSpeed,
                     displayEdgeCalibrationDp = sanitizeDisplayCalibration(preferences[Keys.displayEdgeCalibrationDp] ?: 0f),
                     displayCornerCalibrationDp = sanitizeDisplayCalibration(preferences[Keys.displayCornerCalibrationDp] ?: 0f),
-                    displayCornerShape = sanitizeDisplayCornerShape(preferences[Keys.displayCornerShape] ?: DEFAULT_DISPLAY_CORNER_SHAPE)
+                    displayCornerShape = sanitizeDisplayCornerShape(preferences[Keys.displayCornerShape] ?: DEFAULT_DISPLAY_CORNER_SHAPE),
+                    animationPropertyOverrides = AnimationPropertyStorage.read(preferences)
                 )
             }
             .distinctUntilChanged()
@@ -517,6 +518,7 @@ class LuminoteSettingsRepository(
             preferences[Keys.displayEdgeCalibrationDp] = sanitizeDisplayCalibration(settings.displayEdgeCalibrationDp)
             preferences[Keys.displayCornerCalibrationDp] = sanitizeDisplayCalibration(settings.displayCornerCalibrationDp)
             preferences[Keys.displayCornerShape] = sanitizeDisplayCornerShape(settings.displayCornerShape)
+            AnimationPropertyStorage.write(preferences, settings.animationPropertyOverrides)
         }
     }
 }

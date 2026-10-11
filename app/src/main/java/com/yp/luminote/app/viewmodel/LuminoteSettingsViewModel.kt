@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.AnimationPropertySpec
+import com.yp.luminote.app.animation.definitions.AnimationPropertyValue
 import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.HaloMode
 import com.yp.luminote.app.data.settings.GradientPalette
@@ -369,6 +371,13 @@ class LuminoteSettingsViewModel(
                         2.5f
                     )
             )
+        }
+    }
+
+    /** Generic mutation for definition-discovered controls; no animation-ID branching. */
+    fun <T : Any> setAnimationProperty(animation: HaloAnimationId, spec: AnimationPropertySpec<T>, value: T) {
+        updateSettings {
+            copy(animationPropertyOverrides = animationPropertyOverrides.withValue(animation, spec.key, spec.write(value)))
         }
     }
 

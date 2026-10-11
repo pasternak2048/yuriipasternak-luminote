@@ -1,6 +1,7 @@
 package com.yp.luminote.app.data.settings
 
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.AnimationPropertyOverrides
 
 const val MIN_HALO_VALUE = 0f
 const val MAX_HALO_VALUE = 1f
@@ -111,7 +112,9 @@ data class LuminoteSettings(
     /** Shared by notification, ambient and calibration rendering. */
     val displayEdgeCalibrationDp: Float = 0f,
     val displayCornerCalibrationDp: Float = 0f,
-    val displayCornerShape: Float = DEFAULT_DISPLAY_CORNER_SHAPE
+    val displayCornerShape: Float = DEFAULT_DISPLAY_CORNER_SHAPE,
+    /** Typed per-animation user overrides. Defaults remain owned by definitions. */
+    val animationPropertyOverrides: AnimationPropertyOverrides = AnimationPropertyOverrides()
 ) {
     val haloEnabled: Boolean
         get() = haloMode == HaloMode.NOTIFICATIONS

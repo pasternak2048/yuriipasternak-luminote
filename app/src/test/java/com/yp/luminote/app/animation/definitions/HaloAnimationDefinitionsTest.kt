@@ -36,6 +36,13 @@ class HaloAnimationDefinitionsTest {
     fun `definitions own preserved runtime and effect behavior`() {
         assertEquals(HaloRuntimePolicy(250L, 350L, AmbientPlayback.PULSE_WITH_SILENCE), PulseAnimation.runtimePolicy)
         assertEquals(HaloEffectSpec.LuminousSegment(0.18f), SnakeAnimation.effectSpec)
+        assertEquals(
+            listOf(SnakeAnimation.segmentLength),
+            SnakeAnimation.properties
+        )
+        assertEquals(0.18f, SnakeAnimation.segmentLength.defaultValue)
+        assertEquals(0.05f, SnakeAnimation.segmentLength.min)
+        assertEquals(0.50f, SnakeAnimation.segmentLength.max)
         assertEquals(HaloEffectSpec.Blade(BladeVariant.CLASH), ForceClashAnimation.effectSpec)
         assertTrue(PulseAnimation.ambientEligible)
         assertTrue(SnakeAnimation.ambientEligible)

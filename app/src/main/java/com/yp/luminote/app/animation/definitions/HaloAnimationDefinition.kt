@@ -29,4 +29,9 @@ interface HaloAnimationDefinition {
     val ambientEligible: Boolean
     val runtimePolicy: HaloRuntimePolicy
     val effectSpec: HaloEffectSpec
+    /** Empty by default so existing definitions remain source compatible. */
+    val properties: List<AnimationPropertySpec<*>> get() = emptyList()
+
+    /** Called once when a host assembles its configuration, never on VSYNC. */
+    fun resolveEffectSpec(properties: ResolvedAnimationProperties): HaloEffectSpec = effectSpec
 }
