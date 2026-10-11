@@ -45,6 +45,30 @@ import com.yp.luminote.app.notification.HaloReminderRuntime
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import kotlin.math.max
 
+/**
+ * Executes the narrow host actions required before a cached overlay is reused.
+ * Scheduling and window ownership remain with [HaloOverlayService].
+ */
+internal class ApplicationOverlayReuseLifecycle(
+    private val cancelPendingFiniteRemoval: () -> Unit,
+    private val discardDetachedCachedView: () -> Unit
+) {
+    fun prepareForShow(
+        staticCalibration: Boolean,
+        cachedViewAttached: Boolean?
+    ) {
+        if (staticCalibration) cancelPendingFiniteRemoval()
+        if (cachedViewAttached == false) discardDetachedCachedView()
+    }
+
+    fun removeOwnedStaticCalibration(
+        ownsStaticCalibration: Boolean,
+        removeOverlay: () -> Unit
+    ) {
+        if (ownsStaticCalibration) removeOverlay()
+    }
+}
+
 /** Owns only the overlay window, incoming configuration and service lifetime. */
 class HaloOverlayService : Service() {
 
@@ -97,6 +121,17 @@ class HaloOverlayService : Service() {
             removeOverlay()
             stopSelf()
         }
+
+    private val overlayReuseLifecycle =
+        ApplicationOverlayReuseLifecycle(
+            cancelPendingFiniteRemoval = { handler.removeCallbacks(removeOverlayTask) },
+            discardDetachedCachedView = {
+                overlayView = null
+                overlayLayoutParams = null
+                previewMode = false
+                activeConfig = null
+            }
+        )
 
     private var queuedCompletionWatchdog:
             Runnable? = null
@@ -281,10 +316,14 @@ class HaloOverlayService : Service() {
                 return START_NOT_STICKY
             }
             clearPendingCalibrationIfOwned(commandCalibrationToken, commandCalibrationGeneration)
-            if (ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)) {
+            val ownsStaticCalibration =
+                ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)
+            if (ownsStaticCalibration) {
                 calibrationToken = null
                 calibrationGeneration = null
                 lastCalibrationIntent = null
+            }
+            overlayReuseLifecycle.removeOwnedStaticCalibration(ownsStaticCalibration) {
                 removeOverlay()
                 stopSelf()
             }
@@ -294,10 +333,14 @@ class HaloOverlayService : Service() {
             if (commandCalibrationGeneration != null &&
                 CalibrationPreviewSession.stop(commandCalibrationToken, commandCalibrationGeneration)) {
                 clearPendingCalibrationIfOwned(commandCalibrationToken, commandCalibrationGeneration)
-                if (ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)) {
+                val ownsStaticCalibration =
+                    ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)
+                if (ownsStaticCalibration) {
                     calibrationToken = null
                     calibrationGeneration = null
                     lastCalibrationIntent = null
+                }
+                overlayReuseLifecycle.removeOwnedStaticCalibration(ownsStaticCalibration) {
                     removeOverlay()
                     stopSelf()
                 }
@@ -519,6 +562,11 @@ class HaloOverlayService : Service() {
                 stopSelf()
             }
         }
+
+        overlayReuseLifecycle.prepareForShow(
+            staticCalibration = hasCurrentStaticCalibration(),
+            cachedViewAttached = overlayView?.isAttachedToWindow
+        )
 
         overlayView?.let { view ->
             if (hasCurrentStaticCalibration()) {
