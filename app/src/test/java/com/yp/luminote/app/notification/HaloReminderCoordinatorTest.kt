@@ -105,6 +105,30 @@ class HaloReminderCoordinatorTest {
     }
 
     @Test
+    fun `normal playback settled after a reminder rearms the next reminder interval`() {
+        val scheduler = FakeReminderTaskScheduler()
+        var dispatches = 0
+        val coordinator = coordinator(scheduler) { dispatches++; true }
+
+        coordinator.update(settings(), ::unreadApps)
+        scheduler.runNext()
+        scheduler.runNext()
+        assertEquals(1, dispatches)
+
+        // The reminder ends while a queued normal notification still owns FIFO.
+        coordinator.onPlaybackCompleted(reminder = true, coordinatorDrained = false)
+        coordinator.onNormalEnqueued()
+        scheduler.runAll()
+        assertEquals(emptyList<Long>(), scheduler.delays())
+
+        // The notification's accepted terminal completion drains FIFO and rearms reminders.
+        coordinator.onPlaybackCompleted(reminder = false, coordinatorDrained = true)
+        scheduler.runAll()
+
+        assertEquals(listOf(10_000L), scheduler.delays())
+    }
+
+    @Test
     fun `armed deadline cannot dispatch after global off`() {
         val scheduler = FakeReminderTaskScheduler()
         var dispatches = 0
