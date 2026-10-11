@@ -5,8 +5,18 @@ import android.graphics.PathMeasure
 import android.graphics.RectF
 
 /**
- * The cache boundary for every physical edge surface.  It deliberately sits above
- * [DisplayOutline]: that class remains the owner of display-shape semantics.
+ * Renderer-local cache boundary for a [DisplayOutline]'s physical edge surface.
+ *
+ * [DisplayOutline] retains ownership of display/inset semantics and resolved overlay-pixel
+ * geometry. This provider only memoizes that result for a renderer on the UI thread. Its
+ * snapshot is valid exactly for the complete [EdgePathCacheKey]: outline version, stroke,
+ * resolved edge and corner calibration, corner shape, and family-specific envelope. A size or
+ * inset update that causes an outline version-changing rebuild replaces this cache on the next
+ * request.
+ *
+ * [EdgePathGeometry.path] is an Android [Path], not an immutable or thread-safe value. The
+ * provider and its returned geometry are UI-thread-lifetime objects; callers must treat paths as
+ * read-only and provide their own scratch paths for segment extraction.
  */
 internal class EdgePathGeometryProvider(private val outline: DisplayOutline) {
     private var key: EdgePathCacheKey? = null
