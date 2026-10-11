@@ -552,6 +552,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 (
                         finiteDurationFor(
                             config.renderMode,
+                            config.effectPlan,
                             config.durationSeconds
                         ) *
                                 1000f
@@ -1222,6 +1223,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 (
                         finiteDurationFor(
                             config.renderMode,
+                            config.effectPlan,
                             config.durationSeconds
                         ) *
                                 1000f

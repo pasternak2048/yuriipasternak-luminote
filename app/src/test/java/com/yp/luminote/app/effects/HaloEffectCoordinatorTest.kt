@@ -1,6 +1,8 @@
 package com.yp.luminote.app.effects
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.animation.definitions.HaloEffectSpec
+import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.overlay.coordination.HaloEffectDelivery
 import com.yp.luminote.app.overlay.coordination.HaloEffectCoordinator
 import com.yp.luminote.app.overlay.coordination.HaloEffectRequest
@@ -301,6 +303,21 @@ class HaloEffectCoordinatorTest {
             lightImpulse = false,
             reminderColors = null
         ))
+    }
+
+    @Test
+    fun `reminder settings select supernova while preserving light impulse lifecycle marker`() {
+        val reminderSettings = HaloOverlayService.reminderSettings(
+            settings = LuminoteSettings(),
+            colors = intArrayOf(0xFF0066CC.toInt())
+        )
+        val config = HaloConfig(motion = reminderSettings.haloMotion).sanitized().copy(
+            renderMode = HaloRenderMode.LIGHT_IMPULSE
+        )
+
+        assertEquals("SUPERNOVA", reminderSettings.haloMotion.value)
+        assertEquals(HaloRenderMode.LIGHT_IMPULSE, config.renderMode)
+        assertEquals(HaloEffectSpec.Supernova, config.effectPlan)
     }
 
     private fun request(

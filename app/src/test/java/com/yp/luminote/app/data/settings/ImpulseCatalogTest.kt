@@ -15,7 +15,7 @@ class ImpulseCatalogTest {
     fun `registry exposes the locked normal catalog order`() {
         val motions = LuminoteHaloAnimations.all.map { it.id }
 
-        assertEquals(listOf("IMPULSE", "PULSE", "SNAKE", "AZURE_BLADE", "CRIMSON_BLADE", "FORCE_CLASH").map(::HaloAnimationId), motions)
+        assertEquals(listOf("IMPULSE", "PULSE", "SNAKE", "AZURE_BLADE", "CRIMSON_BLADE", "FORCE_CLASH", "SUPERNOVA").map(::HaloAnimationId), motions)
         assertEquals(1, motions.count { it == HaloAnimationId("IMPULSE") })
         assertEquals(R.string.motion_impulse, LuminoteHaloAnimations.registry.definition(HaloAnimationId("IMPULSE")).titleRes)
         assertEquals(2.2f, LuminoteHaloAnimations.registry.definition(HaloAnimationId("IMPULSE")).baseDurationSeconds)

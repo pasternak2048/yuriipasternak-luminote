@@ -16,7 +16,8 @@ class HaloAnimationDefinitionsTest {
                 "SNAKE",
                 "AZURE_BLADE",
                 "CRIMSON_BLADE",
-                "FORCE_CLASH"
+                "FORCE_CLASH",
+                "SUPERNOVA"
             ),
             LuminoteHaloAnimations.all.map { it.id.value }
         )
@@ -30,6 +31,7 @@ class HaloAnimationDefinitionsTest {
         assertSame(AzureBladeAnimation, LuminoteHaloAnimations.registry.definition(HaloAnimationId("AZURE_BLADE")))
         assertSame(CrimsonBladeAnimation, LuminoteHaloAnimations.registry.definition(HaloAnimationId("CRIMSON_BLADE")))
         assertSame(ForceClashAnimation, LuminoteHaloAnimations.registry.definition(HaloAnimationId("FORCE_CLASH")))
+        assertSame(SupernovaAnimation, LuminoteHaloAnimations.registry.definition(HaloAnimationId("SUPERNOVA")))
     }
 
     @Test
@@ -44,6 +46,8 @@ class HaloAnimationDefinitionsTest {
         assertEquals(0.05f, SnakeAnimation.segmentLength.min)
         assertEquals(0.50f, SnakeAnimation.segmentLength.max)
         assertEquals(HaloEffectSpec.Blade(BladeVariant.CLASH), ForceClashAnimation.effectSpec)
+        assertEquals(HaloEffectSpec.Supernova, SupernovaAnimation.effectSpec)
+        assertEquals(0.6f, SupernovaAnimation.baseDurationSeconds)
         assertTrue(PulseAnimation.ambientEligible)
         assertTrue(SnakeAnimation.ambientEligible)
         assertEquals(listOf(PulseAnimation, SnakeAnimation), LuminoteHaloAnimations.ambient)

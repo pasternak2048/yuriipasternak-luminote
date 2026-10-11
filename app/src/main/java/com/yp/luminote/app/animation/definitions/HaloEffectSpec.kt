@@ -7,6 +7,7 @@ package com.yp.luminote.app.animation.definitions
  */
 sealed interface HaloEffectSpec {
     object SpecializedField : HaloEffectSpec
+    object Supernova : HaloEffectSpec
     object FullContour : HaloEffectSpec
     data class LuminousSegment(val lengthFraction: Float) : HaloEffectSpec
     data class Blade(val variant: BladeVariant) : HaloEffectSpec

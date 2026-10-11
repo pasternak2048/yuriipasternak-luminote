@@ -15,6 +15,7 @@ import com.yp.luminote.app.rendering.canvas.CanvasRenderBackend
 import com.yp.luminote.app.rendering.canvas.CanvasRenderTarget
 import com.yp.luminote.app.rendering.canvas.CalibrationDiagnostics
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
+import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -32,6 +33,21 @@ internal fun finiteDurationFor(renderMode: HaloRenderMode, requestedDuration: Fl
         LIGHT_IMPULSE_DURATION_SECONDS
     } else {
         requestedDuration
+    }
+
+/**
+ * Reminder lifecycle remains Light Impulse, while its resolved visual plan may
+ * own a shorter finite timeline.
+ */
+internal fun finiteDurationFor(
+    renderMode: HaloRenderMode,
+    effectPlan: HaloEffectSpec,
+    requestedDuration: Float
+): Float =
+    if (effectPlan is HaloEffectSpec.Supernova) {
+        requestedDuration
+    } else {
+        finiteDurationFor(renderMode, requestedDuration)
     }
 
 /**
@@ -176,7 +192,7 @@ internal class HaloView(
 
         val request =
             FiniteAnimation(
-                duration = finiteDurationFor(renderMode, duration),
+                duration = finiteDurationFor(renderMode, currentConfig.effectPlan, duration),
                 interval = interval,
                 count = count,
                 motion = motion

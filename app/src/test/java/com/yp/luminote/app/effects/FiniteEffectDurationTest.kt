@@ -2,6 +2,7 @@ package com.yp.luminote.app.effects
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.overlay.host.finiteDurationFor
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
+import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -22,6 +23,19 @@ class FiniteEffectDurationTest {
         assertEquals(
             0.25f,
             finiteDurationFor(HaloRenderMode.NORMAL, 0.25f),
+            0f
+        )
+    }
+
+    @Test
+    fun `supernova effect plan uses its definition duration for reminder lifecycle`() {
+        assertEquals(
+            0.6f,
+            finiteDurationFor(
+                HaloRenderMode.LIGHT_IMPULSE,
+                HaloEffectSpec.Supernova,
+                0.6f
+            ),
             0f
         )
     }

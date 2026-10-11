@@ -9,7 +9,8 @@ object LuminoteHaloAnimations {
             SnakeAnimation,
             AzureBladeAnimation,
             CrimsonBladeAnimation,
-            ForceClashAnimation
+            ForceClashAnimation,
+            SupernovaAnimation
         )
     )
 
