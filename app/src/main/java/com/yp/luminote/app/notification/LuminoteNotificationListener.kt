@@ -432,49 +432,41 @@ class LuminoteNotificationListener :
         sbn: StatusBarNotification,
         settings: LuminoteSettings
     ) {
-        if (
-            sbn.packageName == "android" &&
-            sbn.key.contains(
-                "AlertWindowNotification - $packageName"
+        when (
+            val admission = NotificationEffectAdmissionPolicy.evaluate(
+                notificationPackageName = sbn.packageName,
+                notificationKey = sbn.key,
+                listenerPackageName = packageName,
+                settings = settings
             )
         ) {
-            Log.d(
-                TAG,
-                "Ignoring own alert-window notification: " +
-                        "key=${sbn.key}"
-            )
+            NotificationEffectAdmission.Accepted -> Unit
+            is NotificationEffectAdmission.Rejected -> {
+                when (admission.reason) {
+                    NotificationEffectRejectionReason.OWN_ALERT_WINDOW_NOTIFICATION ->
+                        Log.d(
+                            TAG,
+                            "Ignoring own alert-window notification: " +
+                                    "key=${sbn.key}"
+                        )
 
-            return
-        }
+                    NotificationEffectRejectionReason.ZERO_INTENSITY ->
+                        Log.d(
+                            TAG,
+                            "Skipped: halo intensity is zero"
+                        )
 
-        if (
-            !settings.haloEnabled ||
-            settings.ambientEnabled
-        ) {
-            return
-        }
+                    NotificationEffectRejectionReason.EXCLUDED_SOURCE ->
+                        Log.d(
+                            TAG,
+                            "Skipped: package is not selected"
+                        )
 
-        if (settings.haloIntensity <= 0f) {
-            Log.d(
-                TAG,
-                "Skipped: halo intensity is zero"
-            )
-
-            return
-        }
-
-        if (
-            !shouldHandleSource(
-                sbn,
-                settings
-            )
-        ) {
-            Log.d(
-                TAG,
-                "Skipped: package is not selected"
-            )
-
-            return
+                    NotificationEffectRejectionReason.NOTIFICATION_MODE_DISABLED_OR_AMBIENT ->
+                        Unit
+                }
+                return
+            }
         }
 
         val effectSettings =
