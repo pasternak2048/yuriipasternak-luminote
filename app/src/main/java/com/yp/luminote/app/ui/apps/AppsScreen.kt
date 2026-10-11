@@ -42,7 +42,6 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yp.luminote.app.data.apps.InstalledApp
 import com.yp.luminote.app.R
 import com.yp.luminote.app.data.apps.InstalledAppsRepository
@@ -124,7 +124,7 @@ fun AppsScreen(
     }
 
     val settings by
-    viewModel.settings.collectAsState()
+    viewModel.settings.collectAsStateWithLifecycle()
 
     val installedApps by produceState<List<InstalledApp>>(
         initialValue = emptyList(),

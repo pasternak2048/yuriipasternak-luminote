@@ -1,4 +1,5 @@
 package com.yp.luminote.app.ui.ambient
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,8 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,8 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.effects.HaloOverlayService
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
@@ -60,7 +60,7 @@ fun AmbientHaloScreen(
 ) {
     val context = LocalContext.current
     val backDescription = stringResource(R.string.back)
-    val settings by viewModel.settings.collectAsState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val uiMetrics = rememberLuminoteUiMetrics()
 
     LaunchedEffect(
@@ -74,7 +74,7 @@ fun AmbientHaloScreen(
         settings.ambientGradientFlowSpeed
     ) {
         if (settings.ambientEnabled) {
-            HaloOverlayService.start(context, HaloOverlayService.createAmbientIntent(context, settings))
+            HaloEffectController.ambient(context, settings)
         }
     }
 
@@ -111,9 +111,9 @@ fun AmbientHaloScreen(
                     HaloAppearancePicker(
                         modifier = Modifier.fillMaxWidth(),
                         frame = HaloFrame.CLASSIC,
-                        motion = settings.ambientMotion,
-                        availableMotions = listOf(HaloMotion.PULSE, HaloMotion.SNAKE),
-                        onMotionSelected = viewModel::setAmbientMotion
+                        animationId = settings.ambientMotion,
+                        availableDefinitions = LuminoteHaloAnimations.ambient,
+                        onAnimationSelected = viewModel::setAmbientMotion
                     )
                 }
             }

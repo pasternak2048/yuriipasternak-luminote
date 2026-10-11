@@ -5,7 +5,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
-import com.yp.luminote.app.data.settings.HaloMotion
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.AnimationPropertySpec
+import com.yp.luminote.app.animation.definitions.AnimationPropertyValue
+import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.HaloMode
 import com.yp.luminote.app.data.settings.GradientPalette
 import com.yp.luminote.app.data.settings.LuminoteSettings
@@ -14,9 +17,13 @@ import com.yp.luminote.app.data.settings.MAX_HALO_INTERVAL_SECONDS
 import com.yp.luminote.app.data.settings.MAX_HALO_VALUE
 import com.yp.luminote.app.data.settings.MIN_HALO_INTERVAL_SECONDS
 import com.yp.luminote.app.data.settings.MIN_HALO_VALUE
+import com.yp.luminote.app.data.settings.MIN_REMINDER_INTERVAL_SECONDS
+import com.yp.luminote.app.data.settings.MAX_REMINDER_INTERVAL_SECONDS
+import com.yp.luminote.app.data.settings.sanitizeReminderIntervalSeconds
 import com.yp.luminote.app.data.settings.NotificationSource
-import com.yp.luminote.app.data.settings.NotificationPlayback
 import com.yp.luminote.app.data.settings.ThemeMode
+import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
+import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -165,7 +172,7 @@ class LuminoteSettingsViewModel(
     }
 
     fun setHaloMotion(
-        motion: HaloMotion
+        motion: HaloAnimationId
     ) {
         updateSettings {
             copy(haloMotion = motion)
@@ -268,37 +275,13 @@ class LuminoteSettingsViewModel(
         }
     }
 
-    fun setHaloRepeatCount(
-        count: Int
-    ) {
-        updateSettings {
-            copy(
-                haloRepeatCount =
-                    count.coerceIn(
-                        2,
-                        5
-                    )
-            )
-        }
+    fun setRemindersEnabled(enabled: Boolean) {
+        updateSettings { copy(remindersEnabled = enabled) }
     }
 
-    fun setNotificationPlayback(
-        playback: NotificationPlayback
-    ) {
-        updateSettings {
-            copy(
-                notificationPlayback = playback,
-                haloRepeatCount =
-                    if (
-                        playback ==
-                        NotificationPlayback.REPEAT &&
-                        haloRepeatCount < 2
-                    ) {
-                        2
-                    } else {
-                        haloRepeatCount
-                    }
-            )
+    fun setReminderIntervalSeconds(interval: Int) {
+        updateSettings(debounce = true) {
+            copy(reminderIntervalSeconds = sanitizeReminderIntervalSeconds(interval))
         }
     }
 
@@ -353,15 +336,12 @@ class LuminoteSettingsViewModel(
     }
 
     fun setAmbientMotion(
-        motion: HaloMotion
+        motion: HaloAnimationId
     ) {
         updateSettings {
             copy(
                 ambientMotion =
-                    motion.takeIf {
-                        it == HaloMotion.PULSE ||
-                                it == HaloMotion.SNAKE
-                    } ?: HaloMotion.PULSE
+                    HaloAnimationStorage.resolveAmbient(motion.value)
             )
         }
     }
@@ -390,6 +370,24 @@ class LuminoteSettingsViewModel(
                         0.5f,
                         2.5f
                     )
+            )
+        }
+    }
+
+    /** Generic mutation for definition-discovered controls; no animation-ID branching. */
+    fun <T : Any> setAnimationProperty(animation: HaloAnimationId, spec: AnimationPropertySpec<T>, value: T) {
+        updateSettings {
+            copy(animationPropertyOverrides = animationPropertyOverrides.withValue(animation, spec.key, spec.write(value)))
+        }
+    }
+
+    /** Draft values are local until Apply, so Reset/Back cannot persist partial calibration. */
+    fun applyDisplayCalibration(edgeDp: Float, cornerDp: Float, cornerShape: Float) {
+        updateSettings {
+            copy(
+                displayEdgeCalibrationDp = sanitizeDisplayCalibration(edgeDp),
+                displayCornerCalibrationDp = sanitizeDisplayCalibration(cornerDp),
+                displayCornerShape = sanitizeDisplayCornerShape(cornerShape)
             )
         }
     }

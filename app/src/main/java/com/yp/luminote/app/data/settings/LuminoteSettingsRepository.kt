@@ -65,15 +65,8 @@ class LuminoteSettingsRepository(
                 "halo_interval"
             )
 
-        val haloRepeatCount =
-            intPreferencesKey(
-                "halo_repeat_count"
-            )
-
-        val notificationPlayback =
-            stringPreferencesKey(
-                "notification_playback"
-            )
+        val remindersEnabled = booleanPreferencesKey("reminders_enabled")
+        val reminderIntervalSeconds = intPreferencesKey("reminder_interval_seconds")
 
         val notificationSource =
             stringPreferencesKey(
@@ -154,6 +147,10 @@ class LuminoteSettingsRepository(
             floatPreferencesKey(
                 "ambient_gradient_flow_speed"
             )
+
+        val displayEdgeCalibrationDp = floatPreferencesKey("display_edge_calibration_dp")
+        val displayCornerCalibrationDp = floatPreferencesKey("display_corner_calibration_dp")
+        val displayCornerShape = floatPreferencesKey("display_corner_shape")
     }
 
     val settings: Flow<LuminoteSettings> =
@@ -234,27 +231,14 @@ class LuminoteSettingsRepository(
                             )
                             ?: defaultSettings.haloInterval,
 
-                    haloRepeatCount =
-                        preferences[
-                            Keys.haloRepeatCount
-                        ]
-                            ?.takeIf {
-                                it in 1..5
-                            }
-                            ?: defaultSettings.haloRepeatCount,
+                    // Consume legacy playback values without allowing them to affect runtime mode.
+                    // Normal effects are always one cycle; only AMBIENT is persistent.
 
-                    notificationPlayback =
-                        preferences[
-                            Keys.notificationPlayback
-                        ]
-                            ?.let {
-                                runCatching {
-                                    NotificationPlayback.valueOf(
-                                        it
-                                    )
-                                }.getOrNull()
-                            }
-                            ?: NotificationPlayback.ONCE,
+                    remindersEnabled = preferences[Keys.remindersEnabled] ?: false,
+
+                    reminderIntervalSeconds = (preferences[Keys.reminderIntervalSeconds]
+                        ?: defaultSettings.reminderIntervalSeconds)
+                        .let(::sanitizeReminderIntervalSeconds),
 
                     haloFrame =
                         preferences[
@@ -268,21 +252,9 @@ class LuminoteSettingsRepository(
                             ?: HaloFrame.CLASSIC,
 
                     haloMotion =
-                        preferences[
-                            Keys.haloMotion
-                        ]
-                            ?.let {
-                                runCatching {
-                                    HaloMotion.valueOf(it)
-                                }.getOrNull()
-                            }
-                            ?.takeIf {
-                                HaloEffectCatalog.supports(
-                                    HaloFrame.CLASSIC,
-                                    it
-                                )
-                            }
-                            ?: HaloMotion.PULSE,
+                        preferences[Keys.haloMotion]
+                            ?.let(HaloAnimationStorage::resolveNormal)
+                            ?: defaultSettings.haloMotion,
 
                     haloEffectSpeed =
                         preferences[
@@ -405,20 +377,8 @@ class LuminoteSettingsRepository(
                             ?: defaultSettings.ambientThickness,
 
                     ambientMotion =
-                        preferences[
-                            Keys.ambientMotion
-                        ]
-                            ?.let {
-                                runCatching {
-                                    HaloMotion.valueOf(
-                                        it
-                                    )
-                                }.getOrNull()
-                            }
-                            ?.takeIf {
-                                it == HaloMotion.PULSE ||
-                                        it == HaloMotion.SNAKE
-                            }
+                        preferences[Keys.ambientMotion]
+                            ?.let(HaloAnimationStorage::resolveAmbient)
                             ?: defaultSettings.ambientMotion,
 
                     ambientEffectSpeed =
@@ -445,7 +405,11 @@ class LuminoteSettingsRepository(
                                 0.5f,
                                 2.5f
                             )
-                            ?: defaultSettings.ambientGradientFlowSpeed
+                            ?: defaultSettings.ambientGradientFlowSpeed,
+                    displayEdgeCalibrationDp = sanitizeDisplayCalibration(preferences[Keys.displayEdgeCalibrationDp] ?: 0f),
+                    displayCornerCalibrationDp = sanitizeDisplayCalibration(preferences[Keys.displayCornerCalibrationDp] ?: 0f),
+                    displayCornerShape = sanitizeDisplayCornerShape(preferences[Keys.displayCornerShape] ?: DEFAULT_DISPLAY_CORNER_SHAPE),
+                    animationPropertyOverrides = AnimationPropertyStorage.read(preferences)
                 )
             }
             .distinctUntilChanged()
@@ -502,21 +466,15 @@ class LuminoteSettingsRepository(
                     )
                     ?: defaultSettings.haloInterval
 
-            preferences[Keys.haloRepeatCount] =
-                settings.haloRepeatCount
-                    .coerceIn(
-                        1,
-                        5
-                    )
-
-            preferences[Keys.notificationPlayback] =
-                settings.notificationPlayback.name
+            preferences[Keys.remindersEnabled] = settings.remindersEnabled
+            preferences[Keys.reminderIntervalSeconds] = settings.reminderIntervalSeconds
+                .let(::sanitizeReminderIntervalSeconds)
 
             preferences[Keys.haloFrame] =
                 settings.haloFrame.name
 
             preferences[Keys.haloMotion] =
-                settings.haloMotion.name
+                settings.haloMotion.value
 
             preferences[Keys.haloEffectSpeed] =
                 settings.haloEffectSpeed
@@ -549,13 +507,18 @@ class LuminoteSettingsRepository(
                 settings.ambientThickness
 
             preferences[Keys.ambientMotion] =
-                settings.ambientMotion.name
+                settings.ambientMotion.value
 
             preferences[Keys.ambientEffectSpeed] =
                 settings.ambientEffectSpeed
 
             preferences[Keys.ambientGradientFlowSpeed] =
                 settings.ambientGradientFlowSpeed
+
+            preferences[Keys.displayEdgeCalibrationDp] = sanitizeDisplayCalibration(settings.displayEdgeCalibrationDp)
+            preferences[Keys.displayCornerCalibrationDp] = sanitizeDisplayCalibration(settings.displayCornerCalibrationDp)
+            preferences[Keys.displayCornerShape] = sanitizeDisplayCornerShape(settings.displayCornerShape)
+            AnimationPropertyStorage.write(preferences, settings.animationPropertyOverrides)
         }
     }
 }

@@ -1,9 +1,12 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.model.HaloRenderMode
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.overlay.coordination.HaloConfigCommandDecoder
+import com.yp.luminote.app.overlay.coordination.RawHaloConfigCommand
 
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
-import com.yp.luminote.app.data.settings.HaloMotion
-import com.yp.luminote.app.data.settings.NotificationPlayback
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -19,15 +22,14 @@ class HaloConfigCommandDecoderTest {
         assertEquals(0xFF3E91FF.toInt(), config.color)
         assertEquals(2.5f, config.durationSeconds)
         assertEquals(1f, config.intervalSeconds)
-        assertEquals(1, config.repeatCount)
         assertEquals(0.7f, config.intensity)
         assertEquals(0.5f, config.thickness)
         assertEquals(HaloFrame.CLASSIC, config.frame)
-        assertEquals(HaloMotion.PULSE, config.motion)
+        assertEquals(HaloAnimationId("PULSE"), config.motion)
         assertEquals(1f, config.effectSpeed)
         assertEquals(1f, config.gradientFlowSpeed)
         assertEquals(HaloColorMode.SOLID, config.colorMode)
-        assertEquals(NotificationPlayback.ONCE, config.notificationPlayback)
+        assertEquals(HaloRenderMode.NORMAL, config.renderMode)
     }
 
     @Test
@@ -36,7 +38,6 @@ class HaloConfigCommandDecoderTest {
             HaloConfigCommandDecoder.decode(
                 RawHaloConfigCommand(
                     intervalSeconds = Float.NEGATIVE_INFINITY,
-                    repeatCount = 7,
                     intensity = Float.NaN,
                     thickness = 2f,
                     frameName = "missing-frame",
@@ -44,51 +45,58 @@ class HaloConfigCommandDecoderTest {
                     effectSpeed = 4f,
                     gradientFlowSpeed = -1f,
                     colorModeName = "missing-color-mode",
-                    notificationPlaybackName = "missing-playback"
+                    legacyNotificationPlaybackName = "missing-playback"
                 )
             )
 
         assertEquals(1f, config.intervalSeconds)
-        assertEquals(1, config.repeatCount)
         assertEquals(0.7f, config.intensity)
         assertEquals(1f, config.thickness)
         assertEquals(HaloFrame.CLASSIC, config.frame)
-        assertEquals(HaloMotion.PULSE, config.motion)
+        assertEquals(HaloAnimationId("IMPULSE"), config.motion)
         assertEquals(2f, config.effectSpeed)
         assertEquals(0.5f, config.gradientFlowSpeed)
         assertEquals(HaloColorMode.SOLID, config.colorMode)
-        assertEquals(NotificationPlayback.ONCE, config.notificationPlayback)
+        assertEquals(HaloRenderMode.NORMAL, config.renderMode)
     }
 
     @Test
-    fun `valid command names and continuous repetition are preserved`() {
+    fun `legacy repetition payload is migrated to one finite playback`() {
         val config =
             HaloConfigCommandDecoder.decode(
                 RawHaloConfigCommand(
                     color = 0xFF112233.toInt(),
                     intervalSeconds = 1.5f,
-                    repeatCount = -1,
                     intensity = 0.4f,
                     thickness = 0.6f,
                     frameName = HaloFrame.CLASSIC.name,
-                    motionName = HaloMotion.SNAKE.name,
+                    motionName = "SNAKE",
                     effectSpeed = 1.25f,
                     gradientFlowSpeed = 1.75f,
                     colorModeName = HaloColorMode.GRADIENT.name,
-                    notificationPlaybackName = NotificationPlayback.KEEP_VISIBLE.name
+                    legacyNotificationPlaybackName = "KEEP_VISIBLE"
                 )
             )
 
         assertEquals(0xFF112233.toInt(), config.color)
         assertEquals(1.5f, config.intervalSeconds)
-        assertEquals(-1, config.repeatCount)
         assertEquals(0.4f, config.intensity)
         assertEquals(0.6f, config.thickness)
         assertEquals(HaloFrame.CLASSIC, config.frame)
-        assertEquals(HaloMotion.SNAKE, config.motion)
+        assertEquals(HaloAnimationId("SNAKE"), config.motion)
         assertEquals(1.25f, config.effectSpeed)
         assertEquals(1.75f, config.gradientFlowSpeed)
         assertEquals(HaloColorMode.GRADIENT, config.colorMode)
-        assertEquals(NotificationPlayback.KEEP_VISIBLE, config.notificationPlayback)
+        assertEquals(HaloRenderMode.NORMAL, config.renderMode)
+    }
+
+    @Test
+    fun `legacy ripple edge command selects impulse`() {
+        val config =
+            HaloConfigCommandDecoder.decode(
+                RawHaloConfigCommand(motionName = "RIPPLE_EDGE")
+            )
+
+        assertEquals(HaloAnimationId("IMPULSE"), config.motion)
     }
 }

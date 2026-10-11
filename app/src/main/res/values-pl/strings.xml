@@ -82,6 +82,8 @@
     <string name="edge_width">Szerokość krawędzi</string>
     <string name="effect_speed">Szybkość efektu</string>
     <string name="reminders">Przypomnienia</string>
+    <string name="enable_reminders">Włącz przypomnienia</string>
+    <string name="reminder_interval">Interwał przypomnienia</string>
     <string name="repeat">Powtarzaj</string>
     <string name="keep_visible">Pozostaw widoczne</string>
     <string name="reminder_pulses">Pulsacje przypomnienia</string>
@@ -125,7 +127,11 @@
     <string name="motion_snake">Wąż</string>
     <string name="motion_corner_pulse">Pulsowanie narożników</string>
     <string name="motion_rain">Deszcz</string>
-    <string name="motion_ripple_edge">Falująca krawędź</string>
+    <string name="motion_impulse">Impuls</string>
+    <string name="motion_supernova">Supernova</string>
+    <string name="motion_azure_blade">Jasna strona</string>
+    <string name="motion_crimson_blade">Ciemna strona</string>
+    <string name="motion_force_clash">Pojedynek losów</string>
     <string name="color_swatch">Kolor %1$s</string>
     <string name="gradient_color">Kolor gradientu</string>
     <string name="selected_state">Wybrano</string>
@@ -134,4 +140,17 @@
     <string name="collapsed_state">Zwinięto</string>
     <string name="settings">Ustawienia</string>
     <string name="settings_content_description">Otwórz ustawienia</string>
+    <string name="reset">Resetuj</string>
+    <string name="done">Gotowe</string>
+    <string name="display_calibration">Kalibracja ekranu</string>
+    <string name="display_calibration_description">Dopasuj światło do krawędzi ekranu. Wartości ujemne przesuwają je na zewnątrz, dodatnie do środka.</string>
+    <string name="edge_calibration">Pozycja krawędzi</string>
+    <string name="corner_calibration">Zaokrąglenie rogów</string>
+    <string name="corner_shape">Kształt rogów</string>
+    <string name="calibration_decrease_one_px">− 1 px</string>
+    <string name="calibration_increase_one_px">+ 1 px</string>
+    <string name="calibration_ruler_legend">1 kreska = 1 px</string>
+    <string name="calibration_registration_zero">0 px</string>
+    <string name="calibration_registration_in">DO WEWNĄTRZ +%1$s px</string>
+    <string name="calibration_registration_out">NA ZEWNĄTRZ −%1$s px</string>
 </resources>

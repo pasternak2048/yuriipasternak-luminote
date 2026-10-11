@@ -1,4 +1,5 @@
 package com.yp.luminote.app.effects
+import com.yp.luminote.app.effects.model.HaloConfig
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
@@ -51,7 +52,6 @@ class HaloConfigTest {
                 effectSpeed = 9f,
                 gradientFlowSpeed = 9f,
                 intervalSeconds = -2f,
-                repeatCount = 9,
                 intensity = -1f,
                 thickness = 2f
             )
@@ -60,9 +60,21 @@ class HaloConfigTest {
         assertEquals(2f, config.effectSpeed)
         assertEquals(2.5f, config.gradientFlowSpeed)
         assertEquals(0f, config.intervalSeconds)
-        assertEquals(1, config.repeatCount)
         assertEquals(0f, config.intensity)
         assertEquals(1f, config.thickness)
+    }
+
+    @Test
+    fun `sanitized config bounds display calibration and corner shape`() {
+        val config = HaloConfig(
+            edgeCalibrationDp = Float.POSITIVE_INFINITY,
+            cornerCalibrationDp = -100f,
+            cornerShape = Float.NaN
+        ).sanitized()
+
+        assertEquals(0f, config.edgeCalibrationDp)
+        assertEquals(-24f, config.cornerCalibrationDp)
+        assertEquals(0.5f, config.cornerShape)
     }
 
     @Test

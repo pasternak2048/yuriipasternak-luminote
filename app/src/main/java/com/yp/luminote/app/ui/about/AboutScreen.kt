@@ -29,7 +29,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -53,6 +52,7 @@ import com.yp.luminote.app.ui.components.LuminoteScreenHeader
 import com.yp.luminote.app.ui.components.LuminoteSelectionControl
 import com.yp.luminote.app.ui.components.LuminoteSelectionRow
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.R
 import com.yp.luminote.app.update.UpdateChannel
@@ -83,10 +83,10 @@ private fun UpdatesScreen(
 ) {
     val context = LocalContext.current
     val backDescription = stringResource(R.string.back)
-    val updateChannel by updateViewModel.channel.collectAsState()
-    val updateState by updateViewModel.state.collectAsState()
+    val updateChannel by updateViewModel.channel.collectAsStateWithLifecycle()
+    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
     val updateNotificationsEnabled by
-        updateViewModel.notificationsEnabled.collectAsState()
+        updateViewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val notificationPermissionLauncher =
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()

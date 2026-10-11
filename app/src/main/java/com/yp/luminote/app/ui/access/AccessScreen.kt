@@ -1,4 +1,6 @@
 package com.yp.luminote.app.ui.access
+import com.yp.luminote.app.overlay.service.HaloAccessibilityService
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
@@ -33,7 +35,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -50,9 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
-import com.yp.luminote.app.effects.HaloAccessibilityService
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.yp.luminote.app.R
-import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.theme.LocalLuminoteStatusColors
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
@@ -70,7 +70,7 @@ fun AccessScreen(
     var showLockScreenDisclosure by remember { mutableStateOf(false) }
 
     val settings by
-    viewModel.settings.collectAsState()
+    viewModel.settings.collectAsStateWithLifecycle()
 
     val activity = remember(context) { context.findActivity() }
     activity?.let {
@@ -170,13 +170,7 @@ fun AccessScreen(
             AccessStatusCard(
                 haloReady = haloReady,
                 onTestHaloClick = {
-                    HaloOverlayService.start(
-                        context,
-                        HaloOverlayService.createPreviewIntent(
-                            context,
-                            settings
-                        )
-                    )
+                    HaloEffectController.preview(context, settings)
                 }
             )
         }

@@ -1,4 +1,5 @@
 package com.yp.luminote.app.ui.effects
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,8 +19,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -27,8 +26,8 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,11 +44,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import com.yp.luminote.app.data.settings.LuminoteSettings
-import com.yp.luminote.app.data.settings.definition
+import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloColorSource
-import com.yp.luminote.app.data.settings.NotificationPlayback
-import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.R
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
@@ -65,6 +62,7 @@ import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 @Composable
 fun HaloScreen(
     onBackClick: () -> Unit,
+    onDisplayCalibrationClick: () -> Unit,
     windowSizeClass: LuminoteWindowSizeClass,
     viewModel: LuminoteSettingsViewModel
 ) {
@@ -74,12 +72,12 @@ fun HaloScreen(
 
     DisposableEffect(context) {
         onDispose {
-            HaloOverlayService.start(context, HaloOverlayService.createStopPreviewIntent(context))
+            HaloEffectController.stopPreview(context)
         }
     }
 
     val settings by
-    viewModel.settings.collectAsState()
+    viewModel.settings.collectAsStateWithLifecycle()
 
     val selectedColor =
         Color(settings.haloColor)
@@ -166,7 +164,8 @@ fun HaloScreen(
 
         TestEffectButton(
             context = context,
-            settings = settings
+            settings = settings,
+            onDisplayCalibrationClick = onDisplayCalibrationClick
         )
     }
 }
@@ -198,8 +197,9 @@ private fun CompactHaloContent(
                         .fillMaxWidth()
                         .luminoteSafeHorizontalPadding(),
                 frame = settings.haloFrame,
-                motion = settings.haloMotion,
-                onMotionSelected = viewModel::setHaloMotion,
+                animationId = settings.haloMotion,
+                availableDefinitions = LuminoteHaloAnimations.all,
+                onAnimationSelected = viewModel::setHaloMotion,
             )
         }
 
@@ -252,8 +252,9 @@ private fun WideHaloContent(
                 HaloAppearancePicker(
                     modifier = Modifier.weight(1f),
                     frame = settings.haloFrame,
-                    motion = settings.haloMotion,
-                    onMotionSelected = viewModel::setHaloMotion,
+                    animationId = settings.haloMotion,
+                    availableDefinitions = LuminoteHaloAnimations.all,
+                    onAnimationSelected = viewModel::setHaloMotion,
                 )
                 Column(
                     modifier = Modifier.weight(1f),
@@ -414,62 +415,22 @@ private fun TimingGroup(
         title = stringResource(R.string.reminders)
     ) {
 
-        val repeatsEnabled = settings.notificationPlayback != NotificationPlayback.ONCE
         RepeatHaloSetting(
-            enabled = repeatsEnabled,
-            onEnabledChange = { enabled ->
-                viewModel.setNotificationPlayback(if (enabled) NotificationPlayback.REPEAT else NotificationPlayback.ONCE)
-            }
+            enabled = settings.remindersEnabled,
+            onEnabledChange = viewModel::setRemindersEnabled
         )
 
-        if (repeatsEnabled) {
-            Spacer(modifier = Modifier.height(12.dp))
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .selectableGroup(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                PlaybackChoice(
-                    selected = settings.notificationPlayback == NotificationPlayback.REPEAT,
-                    title = stringResource(R.string.repeat),
-                    onClick = { viewModel.setNotificationPlayback(NotificationPlayback.REPEAT) }
-                )
-                PlaybackChoice(
-                    selected = settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE,
-                    title = stringResource(R.string.keep_visible),
-                    onClick = { viewModel.setNotificationPlayback(NotificationPlayback.KEEP_VISIBLE) }
-                )
-            }
-        }
-
-        if (repeatsEnabled && settings.notificationPlayback == NotificationPlayback.REPEAT) {
-            Spacer(modifier = Modifier.height(16.dp))
-            val repeatPosition = settings.haloRepeatCount.toFloat()
-            LuminoteSliderSetting(
-                title = stringResource(R.string.reminder_pulses),
-                value = repeatPosition,
-                valueText = androidx.compose.ui.res.pluralStringResource(R.plurals.times, settings.haloRepeatCount, settings.haloRepeatCount),
-                valueRange = 2f..5f,
-                steps = 3,
-                onValueChange = { value -> viewModel.setHaloRepeatCount(value.toInt()) },
-                onValueChangeFinished = viewModel::flushPendingSettings
-            )
-
+        if (settings.remindersEnabled) {
             Spacer(modifier = Modifier.height(16.dp))
             LuminoteSliderSetting(
-                title = stringResource(R.string.repeat_after),
-                value = settings.haloInterval,
-                valueText = stringResource(R.string.seconds, String.format(androidx.compose.ui.platform.LocalConfiguration.current.locales[0], "%.1f", settings.haloInterval)),
-                valueRange = 0f..10f,
-                onValueChange = viewModel::setHaloInterval,
+                title = stringResource(R.string.reminder_interval),
+                value = settings.reminderIntervalSeconds.toFloat(),
+                valueText = stringResource(R.string.seconds, settings.reminderIntervalSeconds.toString()),
+                valueRange = 10f..120f,
+                steps = 10,
+                onValueChange = { value -> viewModel.setReminderIntervalSeconds(value.toInt()) },
                 onValueChangeFinished = viewModel::flushPendingSettings
             )
-        }
-
-        if (settings.notificationPlayback == NotificationPlayback.KEEP_VISIBLE) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(stringResource(R.string.stops_when_alerts_dismissed), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
 
     }
@@ -479,30 +440,17 @@ private fun TimingGroup(
 private fun RepeatHaloSetting(enabled: Boolean, onEnabledChange: (Boolean) -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.repeat_notification_effect), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+            Text(stringResource(R.string.enable_reminders), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
         }
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
     }
 }
 
 @Composable
-private fun PlaybackChoice(
-    selected: Boolean,
-    title: String,
-    onClick: () -> Unit
-) {
-    LuminoteSelectionRow(
-        title = title,
-        selected = selected,
-        onClick = onClick,
-        control = LuminoteSelectionControl.Radio
-    )
-}
-
-@Composable
 private fun TestEffectButton(
     context: android.content.Context,
-    settings: LuminoteSettings
+    settings: LuminoteSettings,
+    onDisplayCalibrationClick: () -> Unit
 ) {
     val previewAppColor = MaterialTheme.colorScheme.primary.toArgb()
     Column(
@@ -517,20 +465,20 @@ private fun TestEffectButton(
                 )
     ) {
 
+        Button(onClick = onDisplayCalibrationClick, modifier = Modifier.fillMaxWidth()) {
+            Text(stringResource(R.string.display_calibration))
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
         Button(
             onClick = {
-                HaloOverlayService.start(
+                HaloEffectController.preview(
                     context,
-                    HaloOverlayService.createPreviewIntent(
-                        context = context,
-                        settings = settings.copy(
+                    settings.copy(
                             // App icon colors are resolved at notification time. Preview uses the
                             // current theme primary instead, so its default outline remains visible.
                             haloColor = if (settings.colorSource == HaloColorSource.APP_ICON) previewAppColor else settings.haloColor,
-                            haloRepeatCount = if (settings.notificationPlayback == NotificationPlayback.REPEAT) settings.haloRepeatCount else 1,
-                            notificationPlayback = NotificationPlayback.ONCE
                         )
-                    )
                 )
             },
             modifier =

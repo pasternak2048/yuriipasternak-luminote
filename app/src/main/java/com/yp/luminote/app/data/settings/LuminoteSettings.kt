@@ -1,19 +1,37 @@
 package com.yp.luminote.app.data.settings
 
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
+import com.yp.luminote.app.animation.definitions.AnimationPropertyOverrides
+
 const val MIN_HALO_VALUE = 0f
 const val MAX_HALO_VALUE = 1f
 const val MIN_HALO_INTERVAL_SECONDS = 0f
 const val MAX_HALO_INTERVAL_SECONDS = 10f
+const val MIN_REMINDER_INTERVAL_SECONDS = 10
+const val MAX_REMINDER_INTERVAL_SECONDS = 120
+fun sanitizeReminderIntervalSeconds(value: Int): Int =
+    value.coerceIn(MIN_REMINDER_INTERVAL_SECONDS, MAX_REMINDER_INTERVAL_SECONDS)
+/** Display geometry correction in dp. Negative edge values move the line outside the display. */
+const val MIN_DISPLAY_CALIBRATION_DP = -24f
+const val MAX_DISPLAY_CALIBRATION_DP = 24f
+const val MIN_DISPLAY_CORNER_SHAPE = 0f
+const val MAX_DISPLAY_CORNER_SHAPE = 1f
+const val DEFAULT_DISPLAY_CORNER_SHAPE = 0.5f
+
+fun sanitizeDisplayCalibration(value: Float): Float =
+    value.takeIf { it.isFinite() }?.coerceIn(MIN_DISPLAY_CALIBRATION_DP, MAX_DISPLAY_CALIBRATION_DP) ?: 0f
+
+/**
+ * Stable, persisted UI value for the display-corner cubic. Rendering maps this normalized value
+ * to its safe handle interval; it is deliberately not a raw cubic-control-point value.
+ */
+fun sanitizeDisplayCornerShape(value: Float): Float =
+    value.takeIf { it.isFinite() }?.coerceIn(MIN_DISPLAY_CORNER_SHAPE, MAX_DISPLAY_CORNER_SHAPE)
+        ?: DEFAULT_DISPLAY_CORNER_SHAPE
 
 enum class NotificationSource {
     ALL_APPS,
     SELECTED_APPS
-}
-
-enum class NotificationPlayback {
-    ONCE,
-    REPEAT,
-    KEEP_VISIBLE
 }
 
 enum class ThemeMode {
@@ -55,15 +73,14 @@ data class LuminoteSettings(
     val haloInterval: Float =
         1.0f,
 
-    /** Number of replay cycles used only when notificationPlayback is REPEAT. */
-    val haloRepeatCount: Int =
-        1,
+    /** A lightweight, app-coloured reminder, independent of notification playback. */
+    val remindersEnabled: Boolean = false,
 
-    val notificationPlayback: NotificationPlayback = NotificationPlayback.ONCE,
+    val reminderIntervalSeconds: Int = 30,
 
     val haloFrame: HaloFrame = HaloFrame.CLASSIC,
 
-    val haloMotion: HaloMotion = HaloMotion.PULSE,
+    val haloMotion: HaloAnimationId = HaloAnimationStorage.ambientFallback,
 
     /** Tempo for the selected effect, independent of gradient color flow. */
     val haloEffectSpeed: Float = 1f,
@@ -87,11 +104,17 @@ data class LuminoteSettings(
 
     val ambientThickness: Float = 0.5f,
 
-    val ambientMotion: HaloMotion = HaloMotion.PULSE,
+    val ambientMotion: HaloAnimationId = HaloAnimationStorage.ambientFallback,
 
     val ambientEffectSpeed: Float = 1f,
 
-    val ambientGradientFlowSpeed: Float = 1f
+    val ambientGradientFlowSpeed: Float = 1f,
+    /** Shared by notification, ambient and calibration rendering. */
+    val displayEdgeCalibrationDp: Float = 0f,
+    val displayCornerCalibrationDp: Float = 0f,
+    val displayCornerShape: Float = DEFAULT_DISPLAY_CORNER_SHAPE,
+    /** Typed per-animation user overrides. Defaults remain owned by definitions. */
+    val animationPropertyOverrides: AnimationPropertyOverrides = AnimationPropertyOverrides()
 ) {
     val haloEnabled: Boolean
         get() = haloMode == HaloMode.NOTIFICATIONS

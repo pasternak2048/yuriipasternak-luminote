@@ -7,8 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
@@ -30,8 +30,8 @@ class MainActivity : ComponentActivity() {
                         LuminoteSettingsRepository(applicationContext)
                     )
                 )
-            val settingsLoaded by settingsViewModel.settingsLoaded.collectAsState()
-            val settings by settingsViewModel.settings.collectAsState()
+            val settingsLoaded by settingsViewModel.settingsLoaded.collectAsStateWithLifecycle()
+            val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
 
             if (settingsLoaded) {
                 LuminoteTheme(themeMode = settings.themeMode) {

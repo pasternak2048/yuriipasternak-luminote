@@ -84,6 +84,8 @@
     <string name="edge_width">Edge width</string>
     <string name="effect_speed">Effect speed</string>
     <string name="reminders">Reminders</string>
+    <string name="enable_reminders">Enable reminders</string>
+    <string name="reminder_interval">Reminder interval</string>
     <string name="repeat">Repeat</string>
     <string name="keep_visible">Keep visible</string>
     <string name="reminder_pulses">Reminder pulses</string>
@@ -123,7 +125,11 @@
     <string name="motion_snake">Snake</string>
     <string name="motion_corner_pulse">Corner pulse</string>
     <string name="motion_rain">Rain</string>
-    <string name="motion_ripple_edge">Ripple edge</string>
+    <string name="motion_impulse">Impulse</string>
+    <string name="motion_supernova">Supernova</string>
+    <string name="motion_azure_blade">Light Side</string>
+    <string name="motion_crimson_blade">Dark Side</string>
+    <string name="motion_force_clash">Duel of the Fates</string>
     <string name="color_swatch">Color %1$s</string>
     <string name="gradient_color">Gradient color</string>
     <string name="selected_state">Selected</string>
@@ -132,4 +138,17 @@
     <string name="collapsed_state">Collapsed</string>
     <string name="settings">Settings</string>
     <string name="settings_content_description">Open settings</string>
+    <string name="reset">Reset</string>
+    <string name="done">Done</string>
+    <string name="display_calibration">Display calibration</string>
+    <string name="display_calibration_description">Adjust the light to your display edge. Negative values extend outward; positive values move inward.</string>
+    <string name="edge_calibration">Edge position</string>
+    <string name="corner_calibration">Corner roundness</string>
+    <string name="corner_shape">Corner shape</string>
+    <string name="calibration_decrease_one_px">− 1 px</string>
+    <string name="calibration_increase_one_px">+ 1 px</string>
+    <string name="calibration_ruler_legend">1 tick = 1 px</string>
+    <string name="calibration_registration_zero">0 px</string>
+    <string name="calibration_registration_in">IN +%1$s px</string>
+    <string name="calibration_registration_out">OUT −%1$s px</string>
 </resources>

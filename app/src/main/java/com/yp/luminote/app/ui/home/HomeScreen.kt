@@ -1,4 +1,5 @@
 package com.yp.luminote.app.ui.home
+import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,8 +18,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -28,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.HaloMode
-import com.yp.luminote.app.effects.HaloOverlayService
 import com.yp.luminote.app.ui.adaptive.LuminoteWindowSizeClass
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.adaptive.rememberLuminoteUiMetrics
@@ -42,8 +42,8 @@ import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick: () -> Unit,
     onAccessClick: () -> Unit, onSettingsClick: () -> Unit,
     windowSizeClass: LuminoteWindowSizeClass, viewModel: LuminoteSettingsViewModel) {
-    val settings by viewModel.settings.collectAsState()
-    val settingsLoaded by viewModel.settingsLoaded.collectAsState()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val settingsLoaded by viewModel.settingsLoaded.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val uiMetrics = rememberLuminoteUiMetrics()
     val contentModifier = when (windowSizeClass) {
@@ -54,8 +54,9 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
     val onModeSelected: (HaloMode) -> Unit = { mode ->
         viewModel.setHaloMode(mode)
         when (mode) {
-            HaloMode.AMBIENT -> HaloOverlayService.start(context, HaloOverlayService.createAmbientIntent(context, settings.copy(haloMode = HaloMode.AMBIENT)))
-            HaloMode.NOTIFICATIONS, HaloMode.OFF -> HaloOverlayService.start(context, HaloOverlayService.createStopRepeatingIntent(context))
+            HaloMode.AMBIENT -> HaloEffectController.ambient(context, settings.copy(haloMode = HaloMode.AMBIENT))
+            HaloMode.NOTIFICATIONS -> HaloEffectController.stopAmbient(context)
+            HaloMode.OFF -> HaloEffectController.globalOff(context)
         }
     }
     if (!settingsLoaded) {

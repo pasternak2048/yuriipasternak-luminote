@@ -8,6 +8,13 @@ import org.junit.Test
 class LuminoteSettingsContractTest {
 
     @Test
+    fun `reminder interval is constrained to ten through one hundred twenty seconds`() {
+        assertEquals(10, sanitizeReminderIntervalSeconds(-1))
+        assertEquals(120, sanitizeReminderIntervalSeconds(121))
+        assertEquals(30, sanitizeReminderIntervalSeconds(30))
+    }
+
+    @Test
     fun `default settings enable notification halo with stable defaults`() {
         val settings = LuminoteSettings()
 
@@ -15,7 +22,6 @@ class LuminoteSettingsContractTest {
         assertTrue(settings.haloEnabled)
         assertFalse(settings.ambientEnabled)
         assertEquals(NotificationSource.ALL_APPS, settings.notificationSource)
-        assertEquals(NotificationPlayback.ONCE, settings.notificationPlayback)
         assertEquals(ThemeMode.SYSTEM, settings.themeMode)
         assertTrue(settings.selectedApps.isEmpty())
     }

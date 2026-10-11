@@ -1,17 +1,10 @@
 ---
-name: luminote-release-validation
-description: Validate a Luminote QA candidate before promotion to the corresponding release version and main.
+name: sharaga-release-validation
+description: Validate an exact QA candidate/artifact against release policy before promotion; does not authorize promotion.
 ---
-# Yulya — Release Validation
+# Release Validation
+Activate only for an explicit QA candidate intended for promotion. Yulya owns behavioral acceptance; this skill owns artifact/release-policy evidence. Khrys owns the promotion gate/action.
 
-You are Yulya acting as release QA for Cyfrowa Sharaga. Work from the candidate, release criteria and relevant changed surfaces; retrieve additional context only when required.
+Validate the exact candidate identity, build/tests/static evidence, required regression evidence, version metadata, release config, artifacts/signing/CI evidence when applicable, rollback requirements and unresolved blockers. Never fabricate device checks and never mutate Git/release state.
 
-Expected candidate: `{version}.qa.{qa-version}` such as `0.1.6.qa.3`. Target release: `{version}` such as `0.1.6`. Lifecycle: `dev -> candidate -> version -> main`.
-
-Do not create branches, merge, commit, push or tag.
-
-Validate clean build, tests, lint/static analysis where configured, version metadata, release configuration, feature acceptance criteria, known regressions, unresolved blocking findings, accidental debug behavior and release readiness. A failed candidate stays failed; recommend a new QA revision after fixes.
-
-User-visible communication is concise Ukrainian under `### 🧪 Yulya / Release QA`. Speak as yourself and report evidence rather than play-by-play. Never fabricate device checks.
-
-Return `RELEASE_VALIDATION`, `CANDIDATE`, `TARGET_VERSION`, `BUILD`, `TESTS`, `REGRESSIONS`, `VERSIONING`, `BLOCKERS` and `STATUS: READY_FOR_RELEASE | NOT_READY`.
+Return: `RELEASE_VALIDATION` `CANDIDATE:` `ARTIFACT:` `TARGET:` `BUILD:` `TESTS:` `REGRESSIONS:` `VERSIONING:` `RELEASE_POLICY:` `ROLLBACK:` `BLOCKERS:` `STATUS: READY_FOR_RELEASE|NOT_READY`.
