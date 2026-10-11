@@ -15,6 +15,7 @@ internal class CanvasEffectDispatcher(
     private val surface: CanvasEffectRenderSurface
 ) {
     private val specializedField = CanvasSpecializedFieldRenderer(surface)
+    private val supernova = CanvasSupernovaRenderer(surface)
     private val fullContour = CanvasFullContourRenderer(surface)
     private val luminousSegments = mutableMapOf<Float, CanvasEffectTarget>()
     private val azureBlade = CanvasAzureBladeRenderer(surface)
@@ -23,6 +24,7 @@ internal class CanvasEffectDispatcher(
 
     fun resolve(effectSpec: HaloEffectSpec): CanvasEffectTarget = when (effectSpec) {
         HaloEffectSpec.SpecializedField -> specializedField
+        HaloEffectSpec.Supernova -> supernova
         HaloEffectSpec.FullContour -> fullContour
         is HaloEffectSpec.LuminousSegment -> luminousSegments.getOrPut(effectSpec.lengthFraction) {
             CanvasLuminousSegmentRenderer(surface, effectSpec.lengthFraction)
@@ -38,6 +40,7 @@ internal class CanvasEffectDispatcher(
 /** Existing Canvas primitives are exposed without leaking them into definitions. */
 internal interface CanvasEffectRenderSurface {
     fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame)
+    fun drawSupernova(canvas: Canvas, frame: CanvasEffectFrame)
     fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame)
     fun drawLuminousSegment(
         canvas: Canvas,
@@ -67,6 +70,12 @@ private class CanvasSpecializedFieldRenderer(
 ) : CanvasEffectTarget {
     override fun draw(canvas: Canvas, frame: CanvasEffectFrame) =
         surface.drawSpecializedField(canvas, frame)
+}
+
+private class CanvasSupernovaRenderer(
+    private val surface: CanvasEffectRenderSurface
+) : CanvasEffectTarget {
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) = surface.drawSupernova(canvas, frame)
 }
 
 private class CanvasFullContourRenderer(

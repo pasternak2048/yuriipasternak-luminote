@@ -1,6 +1,7 @@
 package com.yp.luminote.app.effects
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.effects.geometry.DisplayOutline
 import com.yp.luminote.app.animation.LightImpulsePhase
 import com.yp.luminote.app.animation.lightImpulsePhase
@@ -567,6 +568,10 @@ class LightImpulseTimelineTest {
     fun `only dedicated reminder mode uses the light impulse override`() {
         assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloAnimationId("IMPULSE"))))
         assertTrue(usesLightImpulseRenderer(HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE)))
+        assertTrue(!usesLightImpulseRenderer(HaloConfig(
+            renderMode = HaloRenderMode.LIGHT_IMPULSE,
+            effectPlan = HaloEffectSpec.Supernova
+        )))
         assertTrue(!usesLightImpulseRenderer(HaloConfig(motion = HaloAnimationId("SNAKE"))))
     }
 

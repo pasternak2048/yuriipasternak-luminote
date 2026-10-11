@@ -33,7 +33,8 @@ class CanvasEffectDispatcherTest {
                 Primitive.LUMINOUS_SEGMENT,
                 Primitive.AZURE_BLADE,
                 Primitive.CRIMSON_BLADE,
-                Primitive.CLASH_BLADE
+                Primitive.CLASH_BLADE,
+                Primitive.SUPERNOVA
             ),
             surface.calls.map(Call::primitive)
         )
@@ -98,7 +99,8 @@ class CanvasEffectDispatcherTest {
         LUMINOUS_SEGMENT,
         AZURE_BLADE,
         CRIMSON_BLADE,
-        CLASH_BLADE
+        CLASH_BLADE,
+        SUPERNOVA
     }
 
     private data class Call(
@@ -113,6 +115,10 @@ class CanvasEffectDispatcherTest {
 
         override fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame) {
             calls += Call(Primitive.SPECIALIZED_FIELD, frame)
+        }
+
+        override fun drawSupernova(canvas: Canvas, frame: CanvasEffectFrame) {
+            calls += Call(Primitive.SUPERNOVA, frame)
         }
 
         override fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame) {

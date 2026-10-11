@@ -42,6 +42,7 @@ import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.notification.HaloReminderRuntime
+import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import kotlin.math.max
 
 /** Owns only the overlay window, incoming configuration and service lifetime. */
@@ -952,6 +953,7 @@ class HaloOverlayService : Service() {
                 (
                         finiteDurationFor(
                             config.renderMode,
+                            config.effectPlan,
                             config.durationSeconds
                         ) *
                                 1000f
@@ -1356,6 +1358,7 @@ class HaloOverlayService : Service() {
                 (
                         finiteDurationFor(
                             config.renderMode,
+                            config.effectPlan,
                             config.durationSeconds
                         ) *
                                 1000f
@@ -1646,13 +1649,21 @@ class HaloOverlayService : Service() {
         fun createReminderIntent(context: Context, settings: LuminoteSettings, packageName: String, colors: IntArray): Intent =
             createIntent(
                 context = context,
-                settings = settings.copy(haloColor = colors.first()),
+                settings = reminderSettings(settings, colors),
                 packageName = packageName,
                 notificationKey = "reminder-${android.os.SystemClock.elapsedRealtime()}"
             ).apply {
                 putExtra(EXTRA_LIGHT_IMPULSE, true)
                 putExtra(EXTRA_REMINDER_COLORS, colors)
             }
+
+        internal fun reminderSettings(
+            settings: LuminoteSettings,
+            colors: IntArray
+        ): LuminoteSettings = settings.copy(
+            haloColor = colors.first(),
+            haloMotion = HaloAnimationId("SUPERNOVA")
+        )
 
         /** Starts the overlay from a notification callback while the app is backgrounded. */
         fun start(

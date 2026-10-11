@@ -24,7 +24,8 @@ import kotlin.math.sin
 
 /** Reminder owns the dedicated Light Impulse route; normal Impulse is registry-dispatched. */
 internal fun usesLightImpulseRenderer(config: HaloConfig): Boolean =
-    config.renderMode == HaloRenderMode.LIGHT_IMPULSE
+    config.renderMode == HaloRenderMode.LIGHT_IMPULSE &&
+        config.effectPlan !is HaloEffectSpec.Supernova
 
 /** Normal-app Impulse retains the conventional color preparation; dedicated impulse keeps its source color. */
 internal fun impulseUsesNormalColorTreatment(config: HaloConfig): Boolean =
@@ -197,6 +198,21 @@ internal class EdgeRenderPipeline(
         }
     })
 
+    private val supernovaRenderer = SupernovaRenderer(object : SupernovaRenderSurface {
+        override val outlinePath: Path
+            get() = this@EdgeRenderPipeline.outlinePath
+        override val corePaint: Paint
+            get() = this@EdgeRenderPipeline.corePaint
+        override val renderStrokeWidth: Float
+            get() = this@EdgeRenderPipeline.renderStrokeWidth
+
+        override fun geometry(): StyleGeometry? = lightImpulseGeometry()
+
+        override fun preparePaint(alpha: Int, effectPhase: Float, gradientPhase: Float) {
+            prepareConventionalPaint(alpha, effectPhase, gradientPhase)
+        }
+    })
+
     /** Separate multi-head surface; conventional motions keep their established renderer path. */
     private val forceBlades =
         ForceBladesRenderer(outline)
@@ -205,6 +221,10 @@ internal class EdgeRenderPipeline(
         override fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame) {
             // Ordinary Impulse retains its historical full-intensity primitive path.
             lightImpulseRenderer.draw(canvas, 1f, frame.phase, frame.gradientPhase)
+        }
+
+        override fun drawSupernova(canvas: Canvas, frame: CanvasEffectFrame) {
+            supernovaRenderer.draw(canvas, frame.phase, frame.alpha, frame.gradientPhase)
         }
 
         override fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame) {
