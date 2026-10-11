@@ -74,6 +74,10 @@ class HaloAccessibilityService : AccessibilityService() {
     private var activeQueuedCompletion:
             (() -> Unit)? = null
 
+    private var activeQueuedBeforeStartFailure: (() -> Unit)? = null
+    private var activeQueuedAfterStartAbandoned: (() -> Unit)? = null
+    private var queuedRendererStarted = false
+
     private var queuedCompletionWatchdog:
             Runnable? = null
 
@@ -183,6 +187,13 @@ class HaloAccessibilityService : AccessibilityService() {
         handler.removeCallbacks(
             removeOverlayTask
         )
+
+        val terminal = if (queuedRendererStarted) activeQueuedAfterStartAbandoned else activeQueuedBeforeStartFailure
+        activeQueuedCompletion = null
+        activeQueuedBeforeStartFailure = null
+        activeQueuedAfterStartAbandoned = null
+        queuedRendererStarted = false
+        terminal?.invoke()
 
         queuedCompletionLease.invalidate(
             queuedRequestToken
@@ -818,6 +829,9 @@ class HaloAccessibilityService : AccessibilityService() {
 
     private fun showQueuedEffect(
         request: HaloEffectRequest,
+        onFiniteAnimationStarted: () -> Unit,
+        onBeforeStartFailure: () -> Unit,
+        onAfterStartAbandoned: () -> Unit,
         onFiniteAnimationCompleted: () -> Unit
     ) {
         if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
@@ -862,6 +876,9 @@ class HaloAccessibilityService : AccessibilityService() {
 
         activeQueuedCompletion =
             onFiniteAnimationCompleted
+        activeQueuedBeforeStartFailure = onBeforeStartFailure
+        activeQueuedAfterStartAbandoned = onAfterStartAbandoned
+        queuedRendererStarted = false
 
         var completed =
             false
@@ -1015,9 +1032,10 @@ class HaloAccessibilityService : AccessibilityService() {
                 )
 
                 view.setOnFiniteAnimationStartedListener {
-                    queuedCompletionLease.onStarted(
-                        requestToken
-                    )
+                    if (queuedCompletionLease.onStarted(requestToken)) {
+                        queuedRendererStarted = true
+                        onFiniteAnimationStarted()
+                    }
 
                     scheduleQueuedCompletionFallback(
                         requestToken,
@@ -1068,7 +1086,10 @@ class HaloAccessibilityService : AccessibilityService() {
             resolvedConfig.intensity <=
             0f
         ) {
-            complete()
+            activeQueuedCompletion = null
+            activeQueuedBeforeStartFailure = null
+            activeQueuedAfterStartAbandoned = null
+            onBeforeStartFailure()
 
             return
         }
@@ -1082,7 +1103,10 @@ class HaloAccessibilityService : AccessibilityService() {
             display ==
             null
         ) {
-            complete()
+            activeQueuedCompletion = null
+            activeQueuedBeforeStartFailure = null
+            activeQueuedAfterStartAbandoned = null
+            onBeforeStartFailure()
 
             return
         }
@@ -1117,9 +1141,10 @@ class HaloAccessibilityService : AccessibilityService() {
                 )
 
                 setOnFiniteAnimationStartedListener {
-                    queuedCompletionLease.onStarted(
-                        requestToken
-                    )
+                    if (queuedCompletionLease.onStarted(requestToken)) {
+                        queuedRendererStarted = true
+                        onFiniteAnimationStarted()
+                    }
 
                     scheduleQueuedCompletionFallback(
                         requestToken,
@@ -1200,7 +1225,10 @@ class HaloAccessibilityService : AccessibilityService() {
                 it
             )
 
-            complete()
+            activeQueuedCompletion = null
+            activeQueuedBeforeStartFailure = null
+            activeQueuedAfterStartAbandoned = null
+            onBeforeStartFailure()
         }
     }
 
@@ -1394,6 +1422,9 @@ class HaloAccessibilityService : AccessibilityService() {
 
         internal fun dispatchQueuedEffect(
             request: HaloEffectRequest,
+        onFiniteAnimationStarted: () -> Unit,
+        onBeforeStartFailure: () -> Unit,
+        onAfterStartAbandoned: () -> Unit,
             onFiniteAnimationCompleted: () -> Unit
         ): Boolean {
             val service =
@@ -1408,11 +1439,14 @@ class HaloAccessibilityService : AccessibilityService() {
                     service.showQueuedEffect(
                         request =
                             request,
+                        onFiniteAnimationStarted = onFiniteAnimationStarted,
+                        onBeforeStartFailure = onBeforeStartFailure,
+                        onAfterStartAbandoned = onAfterStartAbandoned,
                         onFiniteAnimationCompleted =
                             onFiniteAnimationCompleted
                     )
                 } else {
-                    onFiniteAnimationCompleted()
+                    onBeforeStartFailure()
                 }
             }
 

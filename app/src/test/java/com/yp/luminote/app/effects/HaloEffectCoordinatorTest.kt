@@ -6,6 +6,9 @@ import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.overlay.coordination.HaloEffectDelivery
 import com.yp.luminote.app.overlay.coordination.HaloEffectCoordinator
 import com.yp.luminote.app.overlay.coordination.HaloEffectRequest
+import com.yp.luminote.app.overlay.coordination.HaloEffectAttempt
+import com.yp.luminote.app.overlay.coordination.HaloEffectAttemptOutcome
+import com.yp.luminote.app.overlay.coordination.HaloEffectRoute
 import com.yp.luminote.app.overlay.service.HaloAccessibilityService
 import com.yp.luminote.app.overlay.service.HaloOverlayService
 
@@ -13,6 +16,89 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class HaloEffectCoordinatorTest {
+
+    @Test
+    fun `accessibility pre-start loss keeps fifo lease and uses one overlay attempt`() {
+        val coordinator = HaloEffectCoordinator()
+        val attempts = mutableListOf<HaloEffectAttempt>()
+        coordinator.attachAttemptRenderer(Any()) { attempts += it }
+        coordinator.enqueue(request("com.example.first", "first"))
+        val accessibility = attempts.single()
+
+        coordinator.onAttemptOutcome(accessibility, HaloEffectAttemptOutcome.RetryableBeforeStart)
+        val overlay = attempts.last()
+
+        assertEquals(HaloEffectRoute.OVERLAY, overlay.route)
+        assertEquals(accessibility.delivery, overlay.delivery)
+        coordinator.onAttemptOutcome(accessibility, HaloEffectAttemptOutcome.Started)
+        coordinator.onAttemptOutcome(overlay, HaloEffectAttemptOutcome.TerminalBeforeStart)
+        assertEquals(false, coordinator.isBusy())
+    }
+
+    @Test
+    fun `completion before renderer start cannot release fifo`() {
+        val coordinator = HaloEffectCoordinator()
+        val attempts = mutableListOf<HaloEffectAttempt>()
+        coordinator.attachAttemptRenderer(Any()) { attempts += it }
+        coordinator.enqueue(request("com.example.first", "first"))
+        coordinator.enqueue(request("com.example.second", "second"))
+
+        coordinator.onAttemptOutcome(attempts.single(), HaloEffectAttemptOutcome.Completed)
+        assertEquals(1, attempts.size)
+        coordinator.onAttemptOutcome(attempts.single(), HaloEffectAttemptOutcome.Started)
+        coordinator.onAttemptOutcome(attempts.single(), HaloEffectAttemptOutcome.Completed)
+        assertEquals(2, attempts.size)
+    }
+
+    @Test
+    fun `clear makes late attempt callbacks inert`() {
+        val coordinator = HaloEffectCoordinator()
+        val attempts = mutableListOf<HaloEffectAttempt>()
+        coordinator.attachAttemptRenderer(Any()) { attempts += it }
+        coordinator.enqueue(request("com.example.first", "first"))
+        val old = attempts.single()
+        coordinator.clear()
+        coordinator.onAttemptOutcome(old, HaloEffectAttemptOutcome.RetryableBeforeStart)
+        coordinator.onAttemptOutcome(old, HaloEffectAttemptOutcome.Completed)
+        assertEquals(false, coordinator.isBusy())
+        assertEquals(1, attempts.size)
+    }
+
+    @Test
+    fun `reminder completion advances exactly to next colour segment and later segment may fallback`() {
+        val coordinator = HaloEffectCoordinator()
+        val attempts = mutableListOf<HaloEffectAttempt>()
+        coordinator.attachAttemptRenderer(Any()) { attempts += it }
+        val reminder = request("com.yp.luminote.reminder", "cycle").copy(
+            config = HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE),
+            reminderColors = intArrayOf(0xFF0066CC.toInt(), 0xFFFF3366.toInt())
+        )
+        coordinator.enqueue(reminder)
+        coordinator.onAttemptOutcome(attempts[0], HaloEffectAttemptOutcome.Started)
+        coordinator.onAttemptOutcome(attempts[0], HaloEffectAttemptOutcome.Completed)
+
+        assertEquals(1, attempts[1].segment)
+        assertEquals(HaloEffectRoute.ACCESSIBILITY, attempts[1].route)
+        coordinator.onAttemptOutcome(attempts[1], HaloEffectAttemptOutcome.RetryableBeforeStart)
+        assertEquals(1, attempts[2].segment)
+        assertEquals(HaloEffectRoute.OVERLAY, attempts[2].route)
+    }
+
+    @Test
+    fun `terminal host detach releases current delivery but leaves successor queued for replacement host`() {
+        val coordinator = HaloEffectCoordinator()
+        val firstOwner = Any()
+        val firstAttempts = mutableListOf<HaloEffectAttempt>()
+        coordinator.attachAttemptRenderer(firstOwner) { firstAttempts += it }
+        coordinator.enqueue(request("com.example.first", "first"))
+        coordinator.enqueue(request("com.example.next", "next"))
+
+        coordinator.detachRenderer(firstOwner, terminalActiveAttempt = true)
+        assertEquals(true, coordinator.isBusy())
+        val replacement = mutableListOf<HaloEffectAttempt>()
+        coordinator.attachAttemptRenderer(Any()) { replacement += it }
+        assertEquals("next", replacement.single().delivery.request.notificationKey)
+    }
 
     @Test
     fun `coalesces events from an application while its effect is active`() {

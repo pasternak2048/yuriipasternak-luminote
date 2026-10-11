@@ -12,6 +12,9 @@ import com.yp.luminote.app.overlay.coordination.HaloConfigCommandDecoder
 import com.yp.luminote.app.overlay.coordination.HaloEffectHost
 import com.yp.luminote.app.overlay.coordination.HaloEffectCoordinator
 import com.yp.luminote.app.overlay.coordination.HaloEffectDelivery
+import com.yp.luminote.app.overlay.coordination.HaloEffectAttempt
+import com.yp.luminote.app.overlay.coordination.HaloEffectAttemptOutcome
+import com.yp.luminote.app.overlay.coordination.HaloEffectRoute
 import com.yp.luminote.app.overlay.coordination.HaloEffectRequest
 import com.yp.luminote.app.overlay.coordination.RawHaloConfigCommand
 import com.yp.luminote.app.overlay.coordination.AnimationPropertyIntentCodec
@@ -44,6 +47,30 @@ import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.notification.HaloReminderRuntime
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import kotlin.math.max
+
+/**
+ * Executes the narrow host actions required before a cached overlay is reused.
+ * Scheduling and window ownership remain with [HaloOverlayService].
+ */
+internal class ApplicationOverlayReuseLifecycle(
+    private val cancelPendingFiniteRemoval: () -> Unit,
+    private val discardDetachedCachedView: () -> Unit
+) {
+    fun prepareForShow(
+        staticCalibration: Boolean,
+        cachedViewAttached: Boolean?
+    ) {
+        if (staticCalibration) cancelPendingFiniteRemoval()
+        if (cachedViewAttached == false) discardDetachedCachedView()
+    }
+
+    fun removeOwnedStaticCalibration(
+        ownsStaticCalibration: Boolean,
+        removeOverlay: () -> Unit
+    ) {
+        if (ownsStaticCalibration) removeOverlay()
+    }
+}
 
 /** Owns only the overlay window, incoming configuration and service lifetime. */
 class HaloOverlayService : Service() {
@@ -98,6 +125,17 @@ class HaloOverlayService : Service() {
             stopSelf()
         }
 
+    private val overlayReuseLifecycle =
+        ApplicationOverlayReuseLifecycle(
+            cancelPendingFiniteRemoval = { handler.removeCallbacks(removeOverlayTask) },
+            discardDetachedCachedView = {
+                overlayView = null
+                overlayLayoutParams = null
+                previewMode = false
+                activeConfig = null
+            }
+        )
+
     private var queuedCompletionWatchdog:
             Runnable? = null
 
@@ -113,6 +151,9 @@ class HaloOverlayService : Service() {
 
     private var activeCompletionLease:
             Long? = null
+
+    private var activeQueuedAttempt: HaloEffectAttempt? = null
+    private var queuedAttemptStarted = false
 
     /* A reminder keeps one coordinator lease while its per-app impulses advance. */
     private var activeReminderDelivery: HaloEffectDelivery? = null
@@ -281,10 +322,14 @@ class HaloOverlayService : Service() {
                 return START_NOT_STICKY
             }
             clearPendingCalibrationIfOwned(commandCalibrationToken, commandCalibrationGeneration)
-            if (ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)) {
+            val ownsStaticCalibration =
+                ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)
+            if (ownsStaticCalibration) {
                 calibrationToken = null
                 calibrationGeneration = null
                 lastCalibrationIntent = null
+            }
+            overlayReuseLifecycle.removeOwnedStaticCalibration(ownsStaticCalibration) {
                 removeOverlay()
                 stopSelf()
             }
@@ -294,10 +339,14 @@ class HaloOverlayService : Service() {
             if (commandCalibrationGeneration != null &&
                 CalibrationPreviewSession.stop(commandCalibrationToken, commandCalibrationGeneration)) {
                 clearPendingCalibrationIfOwned(commandCalibrationToken, commandCalibrationGeneration)
-                if (ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)) {
+                val ownsStaticCalibration =
+                    ownsStaticCalibration(commandCalibrationToken, commandCalibrationGeneration)
+                if (ownsStaticCalibration) {
                     calibrationToken = null
                     calibrationGeneration = null
                     lastCalibrationIntent = null
+                }
+                overlayReuseLifecycle.removeOwnedStaticCalibration(ownsStaticCalibration) {
                     removeOverlay()
                     stopSelf()
                 }
@@ -385,9 +434,9 @@ class HaloOverlayService : Service() {
              * instance can be destroyed and recreated. Explicit ownership
              * prevents an old Service from detaching a newer renderer.
              */
-            effectCoordinator.attachRenderer(
+            effectCoordinator.attachAttemptRenderer(
                 owner = this,
-                onRequestStarted = ::startQueuedEffect
+                onAttemptStarted = ::startQueuedEffect
             )
 
             effectCoordinator.enqueue(
@@ -507,10 +556,13 @@ class HaloOverlayService : Service() {
         paletteColors: IntArray?,
         scheduleRemoval: Boolean = true,
         onFiniteAnimationCompleted: (() -> Unit)? = null,
-        onFiniteAnimationStarted: (() -> Unit)? = null
+        onFiniteAnimationStarted: (() -> Unit)? = null,
+        onFiniteAnimationFailedBeforeStart: (() -> Unit)? = null
     ) {
         val completeWithoutAnimation = {
-            if (
+            if (onFiniteAnimationFailedBeforeStart != null) {
+                onFiniteAnimationFailedBeforeStart()
+            } else if (
                 onFiniteAnimationCompleted !=
                 null
             ) {
@@ -519,6 +571,11 @@ class HaloOverlayService : Service() {
                 stopSelf()
             }
         }
+
+        overlayReuseLifecycle.prepareForShow(
+            staticCalibration = hasCurrentStaticCalibration(),
+            cachedViewAttached = overlayView?.isAttachedToWindow
+        )
 
         overlayView?.let { view ->
             if (hasCurrentStaticCalibration()) {
@@ -1019,6 +1076,9 @@ class HaloOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        val abandonedReminder = activeQueuedAttempt?.delivery?.request?.reminderColors?.isNotEmpty() == true
+        activeQueuedAttempt = null
+        queuedAttemptStarted = false
         activeCompletionLease?.let(queuedCompletionLease::invalidate)
 
         activeCompletionLease =
@@ -1034,8 +1094,12 @@ class HaloOverlayService : Service() {
          * stale detach instead of disconnecting the newer renderer.
          */
         effectCoordinator.detachRenderer(
-            this
+            owner = this,
+            terminalActiveAttempt = true
         )
+        if (abandonedReminder) {
+            HaloReminderRuntime.onReminderPlaybackCancelled(recoverWithFreshInterval = true)
+        }
 
         displayManager.unregisterDisplayListener(
             displayListener
@@ -1127,12 +1191,15 @@ class HaloOverlayService : Service() {
     }
 
     private fun startQueuedEffect(
-        delivery: HaloEffectDelivery
+        attempt: HaloEffectAttempt
     ) {
+        activeQueuedAttempt = attempt
+        queuedAttemptStarted = false
+        val delivery = attempt.delivery
         val cycleRequest = delivery.request
-        if (cycleRequest.reminderColors.isNotEmpty() && activeReminderDelivery !== delivery) {
+        if (cycleRequest.reminderColors.isNotEmpty()) {
             activeReminderDelivery = delivery
-            activeReminderColorIndex = 0
+            activeReminderColorIndex = attempt.segment
         }
         val request = if (cycleRequest.reminderColors.isNotEmpty()) {
             cycleRequest.copy(
@@ -1148,11 +1215,47 @@ class HaloOverlayService : Service() {
                     "key=${request.notificationKey}"
         )
 
-        if (
+        if (attempt.route == HaloEffectRoute.ACCESSIBILITY &&
             HaloAccessibilityService.dispatchQueuedEffect(
                 request = request,
+                onFiniteAnimationStarted = {
+                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.Started)
+                },
+                onBeforeStartFailure = {
+                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.RetryableBeforeStart)
+                },
+                onAfterStartAbandoned = {
+                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    if (activeQueuedAttempt === attempt) {
+                        activeQueuedAttempt = null
+                        queuedAttemptStarted = false
+                    }
+                    effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.AbandonedAfterStart)
+                    if (request.reminderColors.isNotEmpty()) {
+                        activeReminderDelivery = null
+                        activeReminderColorIndex = 0
+                        HaloReminderRuntime.onReminderPlaybackCancelled(recoverWithFreshInterval = true)
+                    }
+                },
                 onFiniteAnimationCompleted = {
-                    onAccessibilityQueuedEffectCompleted(delivery, request)
+                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    val completedReminder = request.reminderColors.isNotEmpty() &&
+                        attempt.segment == request.reminderColors.lastIndex
+                    if (activeQueuedAttempt === attempt) {
+                        activeQueuedAttempt = null
+                        queuedAttemptStarted = false
+                    }
+                    effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.Completed)
+                    if (completedReminder) {
+                        activeReminderDelivery = null
+                        activeReminderColorIndex = 0
+                    }
+                    HaloReminderRuntime.onPlaybackCompleted(
+                        reminder = request.reminderColors.isNotEmpty(),
+                        coordinatorDrained = !effectCoordinator.isBusy()
+                    )
                 }
             )
         ) {
@@ -1161,6 +1264,11 @@ class HaloOverlayService : Service() {
                 "Queued effect rendered by accessibility overlay"
             )
 
+            return
+        }
+
+        if (attempt.route == HaloEffectRoute.ACCESSIBILITY) {
+            effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.RetryableBeforeStart)
             return
         }
 
@@ -1191,17 +1299,17 @@ class HaloOverlayService : Service() {
                 request.paletteColors,
             scheduleRemoval = false,
             onFiniteAnimationCompleted = {
+                if (activeQueuedAttempt !== attempt) return@showOverlay
                 onQueuedEffectCompleted(
-                    request,
-                    deliveryToken,
-                    delivery,
-                    completionLease
+                    request, deliveryToken, delivery, completionLease, attempt
                 )
             },
             onFiniteAnimationStarted = {
-                queuedCompletionLease.onStarted(
-                    completionLease
-                )
+                if (activeQueuedAttempt !== attempt) return@showOverlay
+                if (queuedCompletionLease.onStarted(completionLease)) {
+                    queuedAttemptStarted = true
+                    effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.Started)
+                }
 
                 scheduleQueuedCompletionWatchdog(
                     request,
@@ -1209,6 +1317,17 @@ class HaloOverlayService : Service() {
                     delivery,
                     completionLease
                 )
+            },
+            onFiniteAnimationFailedBeforeStart = {
+                if (activeQueuedAttempt !== attempt) return@showOverlay
+                val terminalReminder = request.reminderColors.isNotEmpty()
+                activeQueuedAttempt = null
+                effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.TerminalBeforeStart)
+                if (terminalReminder) {
+                    activeReminderDelivery = null
+                    activeReminderColorIndex = 0
+                    HaloReminderRuntime.onReminderPlaybackCancelled(recoverWithFreshInterval = true)
+                }
             }
         )
     }
@@ -1219,7 +1338,7 @@ class HaloOverlayService : Service() {
     ) {
         if (request.reminderColors.isNotEmpty() && activeReminderColorIndex < request.reminderColors.lastIndex) {
             activeReminderColorIndex++
-            startQueuedEffect(delivery)
+            effectCoordinator.onRequestCompleted(delivery)
             return
         }
         if (activeReminderDelivery === delivery) {
@@ -1238,8 +1357,10 @@ class HaloOverlayService : Service() {
         deliveryToken: Long,
         delivery: HaloEffectDelivery,
         completionLease: Long,
+        attempt: HaloEffectAttempt,
         fromWatchdog: Boolean = false
     ) {
+        if (activeQueuedAttempt !== attempt) return
         if (
             queuedWatchdogRequest != null &&
             (
@@ -1294,22 +1415,21 @@ class HaloOverlayService : Service() {
             immediately = true
         )
 
-        if (request.reminderColors.isNotEmpty() &&
-            activeReminderColorIndex < request.reminderColors.lastIndex) {
-            activeReminderColorIndex++
-            startQueuedEffect(delivery)
-            return
-        }
-
-        if (activeReminderDelivery === delivery) {
+        val completedReminder = request.reminderColors.isNotEmpty() &&
+            attempt.segment == request.reminderColors.lastIndex
+        if (completedReminder && activeReminderDelivery === delivery) {
             activeReminderDelivery = null
             activeReminderColorIndex = 0
         }
 
-        effectCoordinator.onRequestCompleted(delivery)
+        if (activeQueuedAttempt === attempt) {
+            activeQueuedAttempt = null
+            queuedAttemptStarted = false
+        }
+        effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.Completed)
 
         HaloReminderRuntime.onPlaybackCompleted(
-            reminder = request.config.renderMode == HaloRenderMode.LIGHT_IMPULSE,
+            reminder = request.reminderColors.isNotEmpty(),
             coordinatorDrained = !effectCoordinator.isBusy()
         )
 
@@ -1320,17 +1440,19 @@ class HaloOverlayService : Service() {
             }
         }
 
-        if (
-            overlayView == null
-        ) {
+        if (overlayView == null && !effectCoordinator.isBusy()) {
             stopSelf()
         }
     }
 
     /** Global Off invalidates the current lease before removing either renderer route. */
     private fun cancelQueuedEffectsForGlobalStop() {
+        // Invalidate coordinator-owned delivery/attempts before any renderer teardown.
+        effectCoordinator.clear()
         activeCompletionLease?.let(queuedCompletionLease::invalidate)
         activeCompletionLease = null
+        activeQueuedAttempt = null
+        queuedAttemptStarted = false
         queuedDeliveryToken++
         cancelQueuedCompletionWatchdog()
         activeReminderDelivery = null
@@ -1340,7 +1462,6 @@ class HaloOverlayService : Service() {
             view.setOnFiniteAnimationStartedListener(null)
             view.cancelAnimation()
         }
-        effectCoordinator.clear()
     }
 
     private fun scheduleQueuedCompletionWatchdog(
@@ -1391,13 +1512,9 @@ class HaloOverlayService : Service() {
                     return@Runnable
                 }
 
-                onQueuedEffectCompleted(
-                    request,
-                    deliveryToken,
-                    delivery,
-                    completionLease,
-                    fromWatchdog = true
-                )
+                activeQueuedAttempt?.let { attempt ->
+                    onQueuedEffectCompleted(request, deliveryToken, delivery, completionLease, attempt, fromWatchdog = true)
+                }
             }
 
         queuedCompletionWatchdog =
