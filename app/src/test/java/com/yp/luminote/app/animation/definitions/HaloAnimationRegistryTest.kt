@@ -9,12 +9,22 @@ class HaloAnimationRegistryTest {
 
     @Test
     fun `a test local Meteor definition is usable without an engine or renderer change`() {
-        val meteor = fixture(id = HaloAnimationId("METEOR"))
+        val trailLength = FloatAnimationProperty(
+            key = "trail_length",
+            defaultValue = 0.25f,
+            min = 0.10f,
+            max = 0.60f
+        )
+        val meteor = fixture(
+            id = HaloAnimationId("METEOR"),
+            properties = listOf(trailLength)
+        )
 
         val registry = HaloAnimationRegistry(listOf(meteor))
 
         assertSame(meteor, registry.definition(HaloAnimationId("METEOR")))
         assertEquals(listOf(meteor), registry.definitions)
+        assertEquals(listOf(trailLength), registry.definition(HaloAnimationId("METEOR")).properties)
     }
 
     @Test(expected = IllegalArgumentException::class)
@@ -34,7 +44,8 @@ class HaloAnimationRegistryTest {
 
     private fun fixture(
         id: HaloAnimationId = HaloAnimationId("FIXTURE"),
-        ambientEligible: Boolean = false
+        ambientEligible: Boolean = false,
+        properties: List<AnimationPropertySpec<*>> = emptyList()
     ): HaloAnimationDefinition = object : HaloAnimationDefinition {
         override val id = id
         override val titleRes = 0
@@ -42,5 +53,6 @@ class HaloAnimationRegistryTest {
         override val ambientEligible = ambientEligible
         override val runtimePolicy = HaloRuntimePolicy(0L, 0L)
         override val effectSpec = HaloEffectSpec.FullContour
+        override val properties = properties
     }
 }

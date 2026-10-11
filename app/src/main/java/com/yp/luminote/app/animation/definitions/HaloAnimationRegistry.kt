@@ -15,6 +15,11 @@ class HaloAnimationRegistry(definitions: List<HaloAnimationDefinition>) {
 
     init {
         require(this.definitions.size == byId.size) { "Animation definition IDs must be unique." }
+        this.definitions.forEach { definition ->
+            require(definition.properties.map { it.key }.distinct().size == definition.properties.size) {
+                "Animation property keys must be unique for ${definition.id}."
+            }
+        }
     }
 
     val ambientDefinitions: List<HaloAnimationDefinition> =

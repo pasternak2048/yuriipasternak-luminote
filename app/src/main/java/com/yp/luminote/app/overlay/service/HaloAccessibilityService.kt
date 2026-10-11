@@ -1,5 +1,6 @@
 package com.yp.luminote.app.overlay.service
 import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.overlay.coordination.AnimationPropertyIntentCodec
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.overlay.host.HaloView
 import com.yp.luminote.app.overlay.host.OverlayDisplayMetrics
@@ -804,6 +805,13 @@ class HaloAccessibilityService : AccessibilityService() {
             if (config.renderMode == HaloRenderMode.AMBIENT) {
                 config.copy(motion = HaloAnimationStorage.resolveAmbient(intent?.getStringExtra(HaloOverlayService.EXTRA_MOTION)))
             } else config
+        }.let { config ->
+            config.copy(
+                effectPlan = HaloConfig.resolveEffectPlan(
+                    config.motion,
+                    AnimationPropertyIntentCodec.read(intent?.getBundleExtra(HaloOverlayService.EXTRA_ANIMATION_PROPERTIES))
+                )
+            )
         }
     }
 

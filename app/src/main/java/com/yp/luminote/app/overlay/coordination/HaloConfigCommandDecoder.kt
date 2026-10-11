@@ -4,6 +4,7 @@ import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.HaloFrame
+import com.yp.luminote.app.animation.definitions.AnimationPropertyOverrides
 
 /**
  * Decodes the configuration payload of a Halo command without owning its
@@ -46,7 +47,9 @@ internal object HaloConfigCommandDecoder {
             edgeCalibrationDp = command.edgeCalibrationDp ?: defaults.edgeCalibrationDp,
             cornerCalibrationDp = command.cornerCalibrationDp ?: defaults.cornerCalibrationDp,
             cornerShape = command.cornerShape ?: defaults.cornerShape
-        ).sanitized()
+        ).sanitized().let { config ->
+            config.copy(effectPlan = HaloConfig.resolveEffectPlan(config.motion, command.animationPropertyOverrides))
+        }
 }
 
 internal data class RawHaloConfigCommand(
@@ -64,4 +67,5 @@ internal data class RawHaloConfigCommand(
     val edgeCalibrationDp: Float? = null,
     val cornerCalibrationDp: Float? = null,
     val cornerShape: Float? = null
+    ,val animationPropertyOverrides: AnimationPropertyOverrides = AnimationPropertyOverrides()
 )

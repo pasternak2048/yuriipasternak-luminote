@@ -14,6 +14,7 @@ import com.yp.luminote.app.overlay.coordination.HaloEffectCoordinator
 import com.yp.luminote.app.overlay.coordination.HaloEffectDelivery
 import com.yp.luminote.app.overlay.coordination.HaloEffectRequest
 import com.yp.luminote.app.overlay.coordination.RawHaloConfigCommand
+import com.yp.luminote.app.overlay.coordination.AnimationPropertyIntentCodec
 import com.yp.luminote.app.overlay.coordination.QueuedCompletionLease
 
 import android.app.Notification
@@ -480,7 +481,8 @@ class HaloOverlayService : Service() {
                         ),
                     edgeCalibrationDp = intent?.getFloatExtra(EXTRA_EDGE_CALIBRATION_DP, defaults.edgeCalibrationDp),
                     cornerCalibrationDp = intent?.getFloatExtra(EXTRA_CORNER_CALIBRATION_DP, defaults.cornerCalibrationDp),
-                    cornerShape = intent?.getFloatExtra(EXTRA_CORNER_SHAPE, defaults.cornerShape)
+                    cornerShape = intent?.getFloatExtra(EXTRA_CORNER_SHAPE, defaults.cornerShape),
+                    animationPropertyOverrides = AnimationPropertyIntentCodec.read(intent?.getBundleExtra(EXTRA_ANIMATION_PROPERTIES))
                 ),
             defaults = defaults
         ).copy(
@@ -491,7 +493,8 @@ class HaloOverlayService : Service() {
             }
         ).let { config ->
             if (config.renderMode == HaloRenderMode.AMBIENT) {
-                config.copy(motion = HaloAnimationStorage.resolveAmbient(intent?.getStringExtra(EXTRA_MOTION)))
+                val motion = HaloAnimationStorage.resolveAmbient(intent?.getStringExtra(EXTRA_MOTION))
+                config.copy(motion = motion, effectPlan = HaloConfig.resolveEffectPlan(motion, AnimationPropertyIntentCodec.read(intent?.getBundleExtra(EXTRA_ANIMATION_PROPERTIES))))
             } else config
         }
     }
@@ -1467,6 +1470,8 @@ class HaloOverlayService : Service() {
         const val EXTRA_MOTION =
             "extra_halo_motion"
 
+        const val EXTRA_ANIMATION_PROPERTIES = "extra_halo_animation_properties"
+
         const val EXTRA_EFFECT_SPEED =
             "extra_halo_effect_speed"
 
@@ -1585,6 +1590,7 @@ class HaloOverlayService : Service() {
                     EXTRA_MOTION,
                     settings.haloMotion.value
                 )
+                putExtra(EXTRA_ANIMATION_PROPERTIES, AnimationPropertyIntentCodec.write(settings.animationPropertyOverrides))
 
                 putExtra(
                     EXTRA_EFFECT_SPEED,

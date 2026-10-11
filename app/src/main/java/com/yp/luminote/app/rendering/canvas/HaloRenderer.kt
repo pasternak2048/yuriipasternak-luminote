@@ -7,7 +7,6 @@ import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.animation.LightImpulseEndpoints
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
-import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -30,7 +29,7 @@ internal fun usesLightImpulseRenderer(config: HaloConfig): Boolean =
 /** Normal-app Impulse retains the conventional color preparation; dedicated impulse keeps its source color. */
 internal fun impulseUsesNormalColorTreatment(config: HaloConfig): Boolean =
     config.renderMode != HaloRenderMode.LIGHT_IMPULSE &&
-        LuminoteHaloAnimations.registry.definition(config.motion).effectSpec is HaloEffectSpec.SpecializedField
+        config.effectPlan is HaloEffectSpec.SpecializedField
 
 
 
@@ -249,15 +248,19 @@ internal class EdgeRenderPipeline(
 
     /** Resolved once per config/session; a VSYNC delegates to this cached target. */
     private var canvasEffectTarget = canvasEffectDispatcher.resolve(
-        LuminoteHaloAnimations.registry.definition(this.config.motion).effectSpec
+        this.config.effectPlan
     )
     private val renderFrame = CanvasEffectFrame()
+
+    /** Test seam for verifying config-bound cache replacement, never used by rendering. */
+    internal fun cachedEffectTargetForTest(): CanvasEffectTarget = canvasEffectTarget
 
     fun update(
         config: HaloConfig
     ) {
         val next =
             config.sanitized()
+        val effectPlanChanged = this.config.effectPlan != next.effectPlan
 
         val geometryChanged =
             this.config.thickness !=
@@ -271,9 +274,9 @@ internal class EdgeRenderPipeline(
             next
         lightImpulseUsesConventionalColorTreatment =
             impulseUsesNormalColorTreatment(next)
-        canvasEffectTarget = canvasEffectDispatcher.resolve(
-            LuminoteHaloAnimations.registry.definition(next.motion).effectSpec
-        )
+        if (effectPlanChanged) {
+            canvasEffectTarget = canvasEffectDispatcher.resolve(next.effectPlan)
+        }
 
         colorRgb =
             next.color and RGB_MASK
