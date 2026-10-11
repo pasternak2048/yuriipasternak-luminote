@@ -1,424 +1,138 @@
 package com.yp.luminote.app.overlay.coordination
-import com.yp.luminote.app.effects.model.HaloRenderMode
 
+import com.yp.luminote.app.effects.model.HaloRenderMode
 import java.util.ArrayDeque
 import java.util.Collections
 import java.util.IdentityHashMap
 
-/** A renderer attempt. Identity, not request equality, owns completion. */
-internal data class HaloEffectDelivery(
-    val request: HaloEffectRequest,
-    val lease: Long
-)
+/** Stable FIFO lease; retries never allocate another delivery. */
+internal data class HaloEffectDelivery(val request: HaloEffectRequest, val lease: Long)
+internal enum class HaloEffectRoute { ACCESSIBILITY, OVERLAY }
+internal class HaloEffectAttempt(
+    val delivery: HaloEffectDelivery,
+    val lease: Long,
+    val segment: Int,
+    val route: HaloEffectRoute
+) { internal var started = false }
+internal enum class HaloEffectAttemptOutcome { Started, Completed, RetryableBeforeStart, TerminalBeforeStart, AbandonedAfterStart, Cancelled }
 
-/**
- * Serializes transient notification Halo effects.
- *
- * Exactly one request can be active at a time. Additional requests wait in
- * FIFO order until the active animation reports natural completion.
- *
- * While an effect from an application is active or waiting, further events
- * from that application are coalesced. This prevents group chats from
- * replaying a long burst of already-seen effects.
- *
- * The coordinator itself does not own a renderer. The latest available
- * renderer is supplied by a HaloOverlayService instance.
- *
- * Renderer ownership is tracked explicitly so a destroyed service cannot
- * accidentally detach a newer renderer.
- *
- * State invariants: a delivery is completed at most once; stale completion and
- * detach events cannot mutate a replacement delivery; reattachment allocates a
- * new lease; and [clear] is idempotent. All methods are expected on the main thread.
- */
-internal class HaloEffectCoordinator(
-    private val nowMillis: () -> Long = ::monotonicMillis
-) {
+/** Main-thread FIFO owner. An attempt callback may mutate state only while it owns [activeAttempt]. */
+internal class HaloEffectCoordinator(private val nowMillis: () -> Long = ::monotonicMillis) {
+    private val pendingRequests = ArrayDeque<HaloEffectRequest>()
+    private val expirySuspendedRequests = Collections.newSetFromMap(IdentityHashMap<HaloEffectRequest, Boolean>())
+    private var activeDelivery: HaloEffectDelivery? = null
+    private var activeAttempt: HaloEffectAttempt? = null
+    private var nextDeliveryLease = 0L
+    private var nextAttemptLease = 0L
+    private var rendererOwner: Any? = null
+    private var onAttemptStarted: ((HaloEffectAttempt) -> Unit)? = null
+    private var legacyRenderer = false
 
-    private val pendingRequests =
-        ArrayDeque<HaloEffectRequest>()
-
-    /** Normal requests held by the active multi-colour reminder do not age out mid-cycle. */
-    private val expirySuspendedRequests =
-        Collections.newSetFromMap(IdentityHashMap<HaloEffectRequest, Boolean>())
-
-    private var activeDelivery:
-            HaloEffectDelivery? = null
-
-    private var nextDeliveryLease =
-        0L
-
-    private var rendererOwner:
-            Any? = null
-
-    private var onRequestStarted:
-            ((HaloEffectDelivery) -> Unit)? = null
-
-    fun enqueue(
-        request: HaloEffectRequest
-    ) {
+    fun enqueue(request: HaloEffectRequest) {
         discardExpiredRequests()
-
-        Log.d(
-            TAG,
-            "enqueue " +
-                    "package=${request.packageName}, " +
-                    "key=${request.notificationKey}, " +
-                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
-                    "pending=${pendingRequests.size}"
-        )
-
-        val active =
-            activeDelivery?.request
-
-        if (
-            active?.packageName ==
-            request.packageName
-        ) {
-            Log.d(
-                TAG,
-                "coalesced active application " +
-                        "package=${request.packageName}, " +
-                        "key=${request.notificationKey}"
-            )
-
-            return
-        }
-
-        if (
-            pendingRequests.any {
-                it.packageName ==
-                        request.packageName
-            }
-        ) {
-            Log.d(
-                TAG,
-                "coalesced pending application " +
-                        "package=${request.packageName}, " +
-                        "key=${request.notificationKey}"
-            )
-
-            return
-        }
-
-        if (active == null) {
-            start(
-                request
-            )
-
-            return
-        }
-
-        if (
-            pendingRequests.size >=
-            MAX_PENDING_REQUESTS
-        ) {
-            Log.w(
-                TAG,
-                "Dropped effect because the queue is full: " +
-                        "package=${request.packageName}, " +
-                        "key=${request.notificationKey}"
-            )
-
-            return
-        }
-
-        pendingRequests.addLast(
-            request
-        )
-
-        if (active?.isReminder() == true && !request.isReminder()) {
-            expirySuspendedRequests += request
-        }
-
-        Log.d(
-            TAG,
-            "queued " +
-                    "package=${request.packageName}, " +
-                    "key=${request.notificationKey}, " +
-                    "pending=${pendingRequests.size}"
-        )
+        val active = activeDelivery?.request
+        if (active?.packageName == request.packageName || pendingRequests.any { it.packageName == request.packageName }) return
+        if (active == null) { start(request); return }
+        if (pendingRequests.size >= MAX_PENDING_REQUESTS) return
+        pendingRequests.addLast(request)
+        if (active.isReminder() && !request.isReminder()) expirySuspendedRequests += request
     }
 
-    fun onRequestCompleted(
-        delivery: HaloEffectDelivery
-    ) {
-        if (
-            activeDelivery !== delivery
-        ) {
-            Log.d(
-                TAG,
-                "Ignoring stale completion: " +
-                        "package=${delivery.request.packageName}, " +
-                        "key=${delivery.request.notificationKey}, " +
-                        "activePackage=${activeDelivery?.request?.packageName}, " +
-                        "activeKey=${activeDelivery?.request?.notificationKey}"
-            )
-
-            return
-        }
-
-        Log.d(
-            TAG,
-            "completed " +
-                    "package=${delivery.request.packageName}, " +
-                    "key=${delivery.request.notificationKey}, " +
-                    "pending=${pendingRequests.size}"
-        )
-
-        val completedReminder = activeDelivery?.request?.isReminder() == true
-        activeDelivery = null
-
-        if (completedReminder) {
-            rebaseNormalRequestsHeldByReminder()
-        }
-
-        startNext()
-    }
-
-    fun clear() {
-        pendingRequests.clear()
-        expirySuspendedRequests.clear()
-
-        activeDelivery =
-            null
-
-        rendererOwner =
-            null
-
-        onRequestStarted =
-            null
-    }
-
-    /** Main-thread ownership query used to defer calibration without disturbing FIFO playback. */
-    fun isBusy(): Boolean = activeDelivery != null || pendingRequests.isNotEmpty()
-
-    fun attachRenderer(
-        owner: Any,
-        onRequestStarted: (HaloEffectDelivery) -> Unit
-    ) {
-        rendererOwner =
-            owner
-
-        this.onRequestStarted =
-            onRequestStarted
-
-        Log.d(
-            TAG,
-            "renderer attached: " +
-                    "owner=${System.identityHashCode(owner)}, " +
-                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
-                    "pending=${pendingRequests.size}"
-        )
-
+    /** Registers a lease before synchronously invoking the host. */
+    fun attachAttemptRenderer(owner: Any, onAttemptStarted: (HaloEffectAttempt) -> Unit) {
+        rendererOwner = owner
+        legacyRenderer = false
+        this.onAttemptStarted = onAttemptStarted
         startPendingIfIdle()
     }
 
-    fun detachRenderer(
-        owner: Any
-    ) {
-        if (
-            rendererOwner !==
-            owner
-        ) {
-            Log.d(
-                TAG,
-                "Ignoring renderer detach from stale owner=" +
-                        System.identityHashCode(owner)
-            )
+    /** Compatibility surface for existing pure FIFO callers. */
+    fun attachRenderer(owner: Any, onRequestStarted: (HaloEffectDelivery) -> Unit) {
+        attachAttemptRenderer(owner) { onRequestStarted(it.delivery) }
+        legacyRenderer = true
+    }
 
-            return
-        }
-
-        Log.d(
-            TAG,
-            "renderer detached: " +
-                    "owner=${System.identityHashCode(owner)}, " +
-                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
-                    "pending=${pendingRequests.size}"
-        )
-
-        rendererOwner =
-            null
-
-        onRequestStarted =
-            null
-
-        activeDelivery?.let { delivery ->
-            activeDelivery =
-                null
-
-            val request = delivery.request
-
-            if (isExpired(request)) {
-                Log.d(
-                    TAG,
-                    "Dropped expired active effect after renderer detach: " +
-                            "package=${request.packageName}, " +
-                            "key=${request.notificationKey}"
-                )
-            } else {
-                pendingRequests.addFirst(
-                    request
-                )
-
-                Log.d(
-                    TAG,
-                    "Requeued active effect after renderer detach: " +
-                            "package=${request.packageName}, " +
-                            "key=${request.notificationKey}"
-                )
-            }
+    fun detachRenderer(owner: Any, terminalActiveAttempt: Boolean = false) {
+        if (rendererOwner !== owner) return
+        rendererOwner = null
+        onAttemptStarted = null
+        activeAttempt?.let { attempt ->
+            activeAttempt = null
+            if (terminalActiveAttempt) {
+                // Terminal host loss ends this delivery, including the normal
+                // reminder-held FIFO rebase performed by finishActive.
+                finishActive()
+            } else if (!attempt.started) {
+                activeDelivery?.let { pendingRequests.addFirst(it.request) }
+                activeDelivery = null
+            } else finishActive()
         }
     }
 
-    private fun startNext() {
-        discardExpiredRequests()
-
-        if (
-            activeDelivery != null
-        ) {
-            return
+    /** The start/failure race linearizes here: first accepted event wins. */
+    fun onAttemptOutcome(attempt: HaloEffectAttempt, outcome: HaloEffectAttemptOutcome) {
+        if (activeAttempt !== attempt || activeDelivery !== attempt.delivery) return
+        when (outcome) {
+            HaloEffectAttemptOutcome.Started -> attempt.started = true
+            HaloEffectAttemptOutcome.Completed -> if (attempt.started) finishSegmentOrDelivery(attempt)
+            HaloEffectAttemptOutcome.RetryableBeforeStart -> if (!attempt.started && attempt.route == HaloEffectRoute.ACCESSIBILITY) fallback(attempt)
+            HaloEffectAttemptOutcome.TerminalBeforeStart -> if (!attempt.started) finishActive()
+            HaloEffectAttemptOutcome.AbandonedAfterStart -> if (attempt.started) finishActive()
+            HaloEffectAttemptOutcome.Cancelled -> { activeAttempt = null; activeDelivery = null }
         }
-
-        val next =
-            pendingRequests.pollFirst()
-                ?: return
-
-        start(
-            next
-        )
     }
 
-    private fun start(
-        request: HaloEffectRequest
-    ) {
-        if (
-            activeDelivery != null
-        ) {
-            pendingRequests.addLast(
-                request
-            )
-
-            Log.d(
-                TAG,
-                "deferred start because another request is active: " +
-                        "package=${request.packageName}, " +
-                        "key=${request.notificationKey}, " +
-                    "activeKey=${activeDelivery?.request?.notificationKey}, " +
-                        "pending=${pendingRequests.size}"
-            )
-
-            return
-        }
-
-        val renderer =
-            onRequestStarted
-
-        if (renderer == null) {
-            pendingRequests.addFirst(
-                request
-            )
-
-            Log.w(
-                TAG,
-                "No renderer available; waiting: " +
-                        "package=${request.packageName}, " +
-                        "key=${request.notificationKey}, " +
-                        "pending=${pendingRequests.size}"
-            )
-
-            return
-        }
-
-        val delivery =
-            HaloEffectDelivery(
-                request = request,
-                lease = ++nextDeliveryLease
-            )
-
-        activeDelivery =
-            delivery
-
-        Log.d(
-            TAG,
-            "start " +
-                    "package=${request.packageName}, " +
-                    "key=${request.notificationKey}, " +
-                    "pending=${pendingRequests.size}"
-        )
-
-        renderer(delivery)
+    /** Existing callers represent a renderer that did start and then completed. */
+    fun onRequestCompleted(delivery: HaloEffectDelivery) {
+        val attempt = activeAttempt ?: return
+        if (attempt.delivery !== delivery) return
+        if (legacyRenderer) { finishActive(); return }
+        onAttemptOutcome(attempt, HaloEffectAttemptOutcome.Started)
+        onAttemptOutcome(attempt, HaloEffectAttemptOutcome.Completed)
     }
 
-    private fun startPendingIfIdle() {
-        if (
-            activeDelivery != null ||
-            pendingRequests.isEmpty()
-        ) {
-            return
+    /** Must run before host cancellation so teardown callbacks are stale. */
+    fun clear() { pendingRequests.clear(); expirySuspendedRequests.clear(); activeAttempt = null; activeDelivery = null; rendererOwner = null; onAttemptStarted = null; legacyRenderer = false }
+    fun isBusy(): Boolean = activeDelivery != null || pendingRequests.isNotEmpty()
+
+    private fun start(request: HaloEffectRequest) {
+        if (activeDelivery != null) { pendingRequests.addLast(request); return }
+        if (onAttemptStarted == null) { pendingRequests.addFirst(request); return }
+        activeDelivery = HaloEffectDelivery(request, ++nextDeliveryLease)
+        dispatchAttempt(0, HaloEffectRoute.ACCESSIBILITY)
+    }
+    private fun dispatchAttempt(segment: Int, route: HaloEffectRoute) {
+        val delivery = activeDelivery ?: return
+        if (onAttemptStarted == null) return
+        if (isExpired(delivery.request)) { finishActive(); return }
+        HaloEffectAttempt(delivery, ++nextAttemptLease, segment, route).also { attempt ->
+            activeAttempt = attempt
+            onAttemptStarted?.invoke(attempt)
         }
-
-        Log.d(
-            TAG,
-            "renderer available; resuming queued playback " +
-                    "pending=${pendingRequests.size}"
-        )
-
+    }
+    private fun fallback(attempt: HaloEffectAttempt) {
+        if (isExpired(attempt.delivery.request)) { finishActive(); return }
+        activeAttempt = null // old host's synchronous teardown callbacks are stale
+        dispatchAttempt(attempt.segment, HaloEffectRoute.OVERLAY)
+    }
+    private fun finishSegmentOrDelivery(attempt: HaloEffectAttempt) {
+        val colors = attempt.delivery.request.reminderColors
+        if (colors.isNotEmpty() && attempt.segment < colors.lastIndex) {
+            activeAttempt = null
+            dispatchAttempt(attempt.segment + 1, HaloEffectRoute.ACCESSIBILITY)
+        } else finishActive()
+    }
+    private fun finishActive() {
+        val reminder = activeDelivery?.request?.isReminder() == true
+        activeAttempt = null; activeDelivery = null
+        if (reminder) rebaseNormalRequestsHeldByReminder()
         startNext()
     }
-
-    private fun discardExpiredRequests() {
-        while (
-            pendingRequests.firstOrNull()?.let(::isExpired) ==
-            true
-        ) {
-            val expired =
-                pendingRequests.removeFirst()
-
-            Log.d(
-                TAG,
-                "Dropped expired queued effect: " +
-                        "package=${expired.packageName}, " +
-                        "key=${expired.notificationKey}"
-            )
-        }
-    }
-
-    private fun isExpired(
-        request: HaloEffectRequest
-    ): Boolean =
-        request !in expirySuspendedRequests &&
-        nowMillis() -
-                request.enqueuedAt >=
-                MAX_REQUEST_AGE_MS
-
-    private fun rebaseNormalRequestsHeldByReminder() {
-        val now = nowMillis()
-        expirySuspendedRequests.forEach { request ->
-            request.enqueuedAt = now
-        }
-        expirySuspendedRequests.clear()
-    }
-
-    private fun HaloEffectRequest.isReminder(): Boolean =
-        config.renderMode == HaloRenderMode.LIGHT_IMPULSE &&
-                reminderColors.isNotEmpty()
-
-    private companion object {
-        const val TAG =
-            "HaloCoordinator"
-
-        const val MAX_PENDING_REQUESTS =
-            8
-
-        const val MAX_REQUEST_AGE_MS =
-            15_000L
-    }
-}
-
-/** Coordination is Android-free; hosts may surface diagnostics at their boundary. */
-private object Log {
-    fun d(tag: String, message: String) = Unit
-    fun w(tag: String, message: String) = Unit
+    private fun startNext() { discardExpiredRequests(); if (activeDelivery == null) pendingRequests.pollFirst()?.let(::start) }
+    private fun startPendingIfIdle() { if (activeDelivery == null && pendingRequests.isNotEmpty()) startNext() }
+    private fun discardExpiredRequests() { while (pendingRequests.firstOrNull()?.let(::isExpired) == true) pendingRequests.removeFirst() }
+    private fun isExpired(request: HaloEffectRequest) = request !in expirySuspendedRequests && nowMillis() - request.enqueuedAt >= MAX_REQUEST_AGE_MS
+    private fun rebaseNormalRequestsHeldByReminder() { val now = nowMillis(); expirySuspendedRequests.forEach { it.enqueuedAt = now }; expirySuspendedRequests.clear() }
+    private fun HaloEffectRequest.isReminder() = config.renderMode == HaloRenderMode.LIGHT_IMPULSE && reminderColors.isNotEmpty()
+    private companion object { const val MAX_PENDING_REQUESTS = 8; const val MAX_REQUEST_AGE_MS = 15_000L }
 }
