@@ -8,8 +8,19 @@ import android.view.WindowInsets
 import kotlin.math.abs
 
 /**
- * Owns the validated display outline and derived paths in overlay coordinates.
- * Paths are read-only to callers. All updates happen on the UI thread.
+ * Owns display-derived geometry and all calibration resolution for one overlay instance.
+ *
+ * Every path is expressed in the overlay view's pixel coordinate space: `(0, 0)` is the
+ * top-left of the overlay and the contour proceeds clockwise from its top edge. Display-shape
+ * and rounded-corner data are accepted only after they have been validated in that same space.
+ * The physical display contour, automatic [opticalInsetPx], and caller supplied edge/corner
+ * calibration are resolved here; renderer families must pass their already-resolved calibration
+ * inputs and must not reinterpret them.
+ *
+ * This is UI-thread-confined state. Returned Android [Path] instances are mutable and are owned
+ * by this outline: consumers must treat them as read-only and must neither retain them across an
+ * outline update nor mutate them. [version] changes whenever a rebuild occurs, and the derived
+ * stroke-path cache is cleared at that point.
  */
 internal class DisplayOutline(private val density: Float) {
     private val displayPath = Path()

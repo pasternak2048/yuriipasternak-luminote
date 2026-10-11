@@ -13,6 +13,14 @@ class EdgeSegmentRendererTest {
         assertEquals(2f, range.length)
     }
 
+    @Test fun `wrapped ranges preserve their length while crossing the top-left seam`() {
+        val range = EdgeSegmentRenderer.range(9f, 10f, 2f, allowFullContour = true)
+
+        assertEquals(9f, range!!.start)
+        assertEquals(2f, range.length)
+        assertEquals(true, range.start + range.length > 10f)
+    }
+
     @Test fun `conventional policy rejects invalid subpixel and near full segments`() {
         assertNull(EdgeSegmentRenderer.range(0f, 10f, 0.49f, allowFullContour = false))
         assertNull(EdgeSegmentRenderer.range(0f, 10f, 9.5f, allowFullContour = false))
