@@ -532,6 +532,7 @@ class HaloOverlayService : Service() {
                     edgeCalibrationDp = intent?.getFloatExtra(EXTRA_EDGE_CALIBRATION_DP, defaults.edgeCalibrationDp),
                     cornerCalibrationDp = intent?.getFloatExtra(EXTRA_CORNER_CALIBRATION_DP, defaults.cornerCalibrationDp),
                     cornerShape = intent?.getFloatExtra(EXTRA_CORNER_SHAPE, defaults.cornerShape),
+                    renderingEngineName = intent?.getStringExtra(EXTRA_RENDERING_ENGINE),
                     animationPropertyOverrides = AnimationPropertyIntentCodec.read(intent?.getBundleExtra(EXTRA_ANIMATION_PROPERTIES))
                 ),
             defaults = defaults
@@ -1606,6 +1607,7 @@ class HaloOverlayService : Service() {
 
         const val EXTRA_EDGE_CALIBRATION_DP = "extra_display_edge_calibration_dp"
         const val EXTRA_CORNER_CALIBRATION_DP = "extra_display_corner_calibration_dp"
+        const val EXTRA_RENDERING_ENGINE = "extra_rendering_engine"
         const val EXTRA_CORNER_SHAPE = "extra_display_corner_shape"
         const val EXTRA_CALIBRATION_TOKEN = "extra_calibration_token"
         const val EXTRA_CALIBRATION_GENERATION = "extra_calibration_generation"
@@ -1700,6 +1702,7 @@ class HaloOverlayService : Service() {
                 putExtra(EXTRA_EDGE_CALIBRATION_DP, settings.displayEdgeCalibrationDp)
                 putExtra(EXTRA_CORNER_CALIBRATION_DP, settings.displayCornerCalibrationDp)
                 putExtra(EXTRA_CORNER_SHAPE, settings.displayCornerShape)
+                putExtra(EXTRA_RENDERING_ENGINE, settings.renderingEngine.name)
 
                 putExtra(
                     EXTRA_FRAME,

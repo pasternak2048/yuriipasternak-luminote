@@ -47,6 +47,19 @@ enum class ThemeMode {
     }
 }
 
+/** Selects the rendering implementation for the next effect session. */
+enum class RenderingEngine {
+    CANVAS,
+    GPU_ACCELERATED;
+
+    companion object {
+        fun fromStorage(value: String?): RenderingEngine =
+            value
+                ?.let { stored -> entries.firstOrNull { it.name == stored } }
+                ?: CANVAS
+    }
+}
+
 /** Only one screen-edge experience can own the overlay at a time. */
 enum class HaloMode {
     NOTIFICATIONS,
@@ -56,6 +69,8 @@ enum class HaloMode {
 
 data class LuminoteSettings(
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
+
+    val renderingEngine: RenderingEngine = RenderingEngine.CANVAS,
 
     val haloMode: HaloMode = HaloMode.NOTIFICATIONS,
 

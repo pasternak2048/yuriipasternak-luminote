@@ -42,5 +42,7 @@ internal class RenderFrame {
 internal sealed interface RenderOutcome {
     object Rendered : RenderOutcome
     data class Unsupported(val reason: String) : RenderOutcome
+    /** A GPU backend requests the pipeline's session-local Canvas failover. */
+    data class FallbackToCanvas(val cause: Throwable) : RenderOutcome
     data class Error(val cause: Throwable) : RenderOutcome
 }

@@ -2,6 +2,7 @@ package com.yp.luminote.app.effects.model
 
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
+import com.yp.luminote.app.data.settings.RenderingEngine
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.data.settings.durationFor
@@ -33,7 +34,9 @@ data class HaloConfig(
     val effectPlan: HaloEffectSpec = defaultEffectPlan(motion),
     /** Colors used by a gradient treatment. */
     val palette: IntArray = intArrayOf(),
-    val renderMode: HaloRenderMode = HaloRenderMode.NORMAL
+    val renderMode: HaloRenderMode = HaloRenderMode.NORMAL,
+    /** Captured at overlay creation; changing it never swaps a live backend. */
+    val renderingEngine: RenderingEngine = RenderingEngine.CANVAS
 ) {
     fun sanitized(): HaloConfig {
         val sanitizedEffectSpeed =

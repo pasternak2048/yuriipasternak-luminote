@@ -29,6 +29,7 @@ import android.view.Gravity
 import android.view.WindowManager
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
+import com.yp.luminote.app.data.settings.RenderingEngine
 import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.notification.HaloReminderRuntime
 import kotlin.math.max
@@ -761,6 +762,7 @@ class HaloAccessibilityService : AccessibilityService() {
             edgeCalibrationDp = intent?.getFloatExtra(HaloOverlayService.EXTRA_EDGE_CALIBRATION_DP, defaults.edgeCalibrationDp) ?: defaults.edgeCalibrationDp,
             cornerCalibrationDp = intent?.getFloatExtra(HaloOverlayService.EXTRA_CORNER_CALIBRATION_DP, defaults.cornerCalibrationDp) ?: defaults.cornerCalibrationDp,
             cornerShape = intent?.getFloatExtra(HaloOverlayService.EXTRA_CORNER_SHAPE, defaults.cornerShape) ?: defaults.cornerShape,
+            renderingEngine = RenderingEngine.fromStorage(intent?.getStringExtra(HaloOverlayService.EXTRA_RENDERING_ENGINE)),
 
             frame =
                 intent?.getStringExtra(

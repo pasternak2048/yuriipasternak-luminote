@@ -33,6 +33,40 @@ class HaloRenderingPipelineTest {
         assertEquals(RenderOutcome.Unsupported("Rendering pipeline is disposed"), pipeline.render(target, frame))
     }
 
+    @Test
+    fun `GPU backend failure falls back to Canvas once and redraws the current frame`() {
+        val gpu = FailingGpuBackend()
+        val canvas = RecordingBackend()
+        val pipeline = HaloRenderingPipeline(gpu) { canvas }
+        val target = FakeTarget()
+        val frame = RenderFrame()
+        val config = HaloConfig(intensity = .4f)
+
+        pipeline.updateConfig(config)
+
+        assertSame(RenderOutcome.Rendered, pipeline.render(target, frame))
+        assertEquals(1, gpu.renderCalls)
+        assertEquals(1, gpu.disposeCalls)
+        assertSame(target, canvas.target)
+        assertSame(frame, canvas.frame)
+        assertSame(config, canvas.config)
+
+        assertSame(RenderOutcome.Rendered, pipeline.render(target, frame))
+        assertEquals(1, gpu.renderCalls)
+        assertEquals(2, canvas.events.count { it == "render" })
+    }
+
+    @Test
+    fun `first GPU fallback keeps the construction session config`() {
+        val gpu = FailingGpuBackend()
+        val canvas = RecordingBackend()
+        val sessionConfig = HaloConfig(intensity = .23f)
+        val pipeline = HaloRenderingPipeline(gpu, sessionConfig) { canvas }
+
+        assertSame(RenderOutcome.Rendered, pipeline.render(FakeTarget(), RenderFrame()))
+        assertSame(sessionConfig, canvas.config)
+    }
+
     private class FakeTarget : HaloRenderTarget
 
     private class RecordingBackend : HaloRenderBackend {
@@ -60,5 +94,17 @@ class HaloRenderingPipelineTest {
         override fun dispose() {
             events += "dispose"
         }
+    }
+
+    private class FailingGpuBackend : HaloRenderBackend {
+        var renderCalls = 0
+        var disposeCalls = 0
+        override fun updateConfig(config: HaloConfig) = Unit
+        override fun invalidateSurface() = Unit
+        override fun render(target: HaloRenderTarget, frame: RenderFrame): RenderOutcome {
+            renderCalls++
+            return RenderOutcome.FallbackToCanvas(IllegalStateException("forced GPU failure"))
+        }
+        override fun dispose() { disposeCalls++ }
     }
 }

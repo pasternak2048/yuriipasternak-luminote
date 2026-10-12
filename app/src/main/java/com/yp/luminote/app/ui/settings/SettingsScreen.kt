@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.R
+import com.yp.luminote.app.data.settings.RenderingEngine
 import com.yp.luminote.app.data.settings.ThemeMode
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.LuminoteNavigationRow
@@ -55,6 +56,26 @@ fun AppearanceScreen(onBackClick: () -> Unit, viewModel: LuminoteSettingsViewMod
                             title = label,
                             selected = settings.themeMode == option,
                             onClick = { viewModel.setThemeMode(option) },
+                            control = LuminoteSelectionControl.Radio
+                        )
+                    }
+                }
+            }
+        }
+        LuminoteSettingsCard {
+            Column(Modifier.padding(20.dp)) {
+                Text(stringResource(R.string.rendering_engine), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(12.dp))
+                Column(Modifier.selectableGroup()) {
+                    RenderingEngine.entries.forEach { option ->
+                        val label = when (option) {
+                            RenderingEngine.CANVAS -> stringResource(R.string.rendering_engine_canvas)
+                            RenderingEngine.GPU_ACCELERATED -> stringResource(R.string.rendering_engine_gpu_accelerated)
+                        }
+                        LuminoteSelectionRow(
+                            title = label,
+                            selected = settings.renderingEngine == option,
+                            onClick = { viewModel.setRenderingEngine(option) },
                             control = LuminoteSelectionControl.Radio
                         )
                     }

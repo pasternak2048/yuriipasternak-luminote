@@ -70,6 +70,9 @@
     <string name="theme_system_default">Systemowy</string>
     <string name="theme_light">Jasny</string>
     <string name="theme_dark">Ciemny</string>
+    <string name="rendering_engine">Silnik renderowania</string>
+    <string name="rendering_engine_canvas">Standardowy (Canvas)</string>
+    <string name="rendering_engine_gpu_accelerated">Akcelerowany przez GPU</string>
     <string name="frame">Ramka</string>
     <string name="match_app_color">Dopasuj kolor aplikacji</string>
     <string name="match_app_color_description">Użyj koloru ikony aplikacji, która wysłała powiadomienie.</string>

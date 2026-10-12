@@ -31,6 +31,11 @@ class LuminoteSettingsRepository(
                 "theme_mode"
             )
 
+        val renderingEngine =
+            stringPreferencesKey(
+                "rendering_engine"
+            )
+
         val haloMode =
             stringPreferencesKey(
                 "halo_mode"
@@ -163,6 +168,10 @@ class LuminoteSettingsRepository(
 
                     themeMode = ThemeMode.fromStorage(
                         preferences[Keys.themeMode]
+                    ),
+
+                    renderingEngine = RenderingEngine.fromStorage(
+                        preferences[Keys.renderingEngine]
                     ),
 
                     haloMode =
@@ -426,6 +435,9 @@ class LuminoteSettingsRepository(
         context.luminoteDataStore.edit { preferences ->
             preferences[Keys.themeMode] =
                 settings.themeMode.name
+
+            preferences[Keys.renderingEngine] =
+                settings.renderingEngine.name
 
             preferences[Keys.haloMode] =
                 settings.haloMode.name

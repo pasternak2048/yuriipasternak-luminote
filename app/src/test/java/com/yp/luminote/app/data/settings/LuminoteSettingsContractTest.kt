@@ -23,6 +23,7 @@ class LuminoteSettingsContractTest {
         assertFalse(settings.ambientEnabled)
         assertEquals(NotificationSource.ALL_APPS, settings.notificationSource)
         assertEquals(ThemeMode.SYSTEM, settings.themeMode)
+        assertEquals(RenderingEngine.CANVAS, settings.renderingEngine)
         assertTrue(settings.selectedApps.isEmpty())
     }
 
@@ -42,5 +43,12 @@ class LuminoteSettingsContractTest {
         assertEquals(ThemeMode.SYSTEM, ThemeMode.fromStorage(null))
         assertEquals(ThemeMode.SYSTEM, ThemeMode.fromStorage("night"))
         assertEquals(ThemeMode.LIGHT, ThemeMode.fromStorage("LIGHT"))
+    }
+
+    @Test
+    fun `rendering engine parser falls back to canvas for missing or malformed data`() {
+        assertEquals(RenderingEngine.CANVAS, RenderingEngine.fromStorage(null))
+        assertEquals(RenderingEngine.CANVAS, RenderingEngine.fromStorage("vulkan"))
+        assertEquals(RenderingEngine.GPU_ACCELERATED, RenderingEngine.fromStorage("GPU_ACCELERATED"))
     }
 }

@@ -21,6 +21,7 @@ import com.yp.luminote.app.data.settings.MIN_REMINDER_INTERVAL_SECONDS
 import com.yp.luminote.app.data.settings.MAX_REMINDER_INTERVAL_SECONDS
 import com.yp.luminote.app.data.settings.sanitizeReminderIntervalSeconds
 import com.yp.luminote.app.data.settings.NotificationSource
+import com.yp.luminote.app.data.settings.RenderingEngine
 import com.yp.luminote.app.data.settings.ThemeMode
 import com.yp.luminote.app.data.settings.sanitizeDisplayCalibration
 import com.yp.luminote.app.data.settings.sanitizeDisplayCornerShape
@@ -88,6 +89,14 @@ class LuminoteSettingsViewModel(
     ) {
         updateSettings {
             copy(themeMode = mode)
+        }
+    }
+
+    fun setRenderingEngine(
+        engine: RenderingEngine
+    ) {
+        updateSettings {
+            copy(renderingEngine = engine)
         }
     }
 

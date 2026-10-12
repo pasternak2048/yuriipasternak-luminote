@@ -13,6 +13,8 @@ import com.yp.luminote.app.rendering.api.RenderMode
 import com.yp.luminote.app.rendering.api.RenderOutcome
 import com.yp.luminote.app.rendering.canvas.CanvasRenderBackend
 import com.yp.luminote.app.rendering.canvas.CanvasRenderTarget
+import com.yp.luminote.app.rendering.gpu.GpuRenderBackend
+import com.yp.luminote.app.data.settings.RenderingEngine
 import com.yp.luminote.app.rendering.canvas.CalibrationDiagnostics
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
@@ -68,7 +70,15 @@ internal class HaloView(
         )
 
     /** Composition remains at the Android host; animation remains backend-neutral. */
-    private val renderingPipeline = HaloRenderingPipeline(CanvasRenderBackend(config, outline))
+    /** Backend is selected once per View/session. update() deliberately never hot-swaps it. */
+    private val renderingPipeline = HaloRenderingPipeline(
+        initialBackend = when (config.renderingEngine) {
+            RenderingEngine.CANVAS -> CanvasRenderBackend(config, outline)
+            RenderingEngine.GPU_ACCELERATED -> GpuRenderBackend(config, outline)
+        },
+        canvasFallback = { fallbackConfig -> CanvasRenderBackend(fallbackConfig, outline) },
+        initialConfig = config
+    )
 
     private val renderFrame = RenderFrame()
 
@@ -398,6 +408,7 @@ internal class HaloView(
         }
         when (outcome) {
             is RenderOutcome.Error -> Log.e(TAG, "Render backend failed", outcome.cause)
+            is RenderOutcome.FallbackToCanvas -> Log.e(TAG, "GPU fallback could not be completed", outcome.cause)
             is RenderOutcome.Unsupported -> Log.w(TAG, "Render backend unsupported: ${outcome.reason}")
             RenderOutcome.Rendered -> Unit
         }

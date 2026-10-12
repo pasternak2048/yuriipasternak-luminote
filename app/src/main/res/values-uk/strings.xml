@@ -70,6 +70,9 @@
     <string name="theme_system_default">Системна</string>
     <string name="theme_light">Світла</string>
     <string name="theme_dark">Темна</string>
+    <string name="rendering_engine">Рушій рендерингу</string>
+    <string name="rendering_engine_canvas">Стандартний (Canvas)</string>
+    <string name="rendering_engine_gpu_accelerated">З прискоренням GPU</string>
     <string name="frame">Контур</string>
     <string name="match_app_color">Колір застосунку</string>
     <string name="match_app_color_description">Використовувати колір значка застосунку, який надіслав сповіщення.</string>
