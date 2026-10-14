@@ -5,6 +5,7 @@ import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
+import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
@@ -40,6 +41,45 @@ class CanvasEffectDispatcherTest {
         )
         assertEquals(0.18f, surface.calls.single { it.primitive == Primitive.LUMINOUS_SEGMENT }.lengthFraction)
         surface.calls.forEach { call -> assertSame(frame, call.frame) }
+    }
+
+    @Test
+    fun `typed plan operations retain Canvas routing phase alpha gradient and blade variants`() {
+        val surface = RecordingSurface()
+        val dispatcher = CanvasEffectDispatcher(surface)
+        val frame = CanvasEffectFrame().apply {
+            phase = 0.4f
+            alpha = 153
+            gradientPhase = 0.7f
+            frameTimeNanos = 42L
+        }
+        val operations = listOf(
+            PrimaryVisualOperation.FullContourPulse,
+            PrimaryVisualOperation.TravelingLuminousSegment(0.18f),
+            PrimaryVisualOperation.LightImpulse,
+            PrimaryVisualOperation.Supernova,
+            PrimaryVisualOperation.ForceBlade(BladeVariant.AZURE),
+            PrimaryVisualOperation.ForceBlade(BladeVariant.CRIMSON),
+            PrimaryVisualOperation.ForceBlade(BladeVariant.CLASH)
+        )
+
+        operations.forEach { dispatcher.resolve(it).draw(Canvas(), frame) }
+
+        assertEquals(
+            listOf(
+                Primitive.FULL_CONTOUR, Primitive.LUMINOUS_SEGMENT, Primitive.SPECIALIZED_FIELD,
+                Primitive.SUPERNOVA, Primitive.AZURE_BLADE, Primitive.CRIMSON_BLADE, Primitive.CLASH_BLADE
+            ),
+            surface.calls.map(Call::primitive)
+        )
+        surface.calls.forEach { call ->
+            assertSame(frame, call.frame)
+            assertEquals(0.4f, call.frame.phase)
+            assertEquals(153, call.frame.alpha)
+            assertEquals(0.7f, call.frame.gradientPhase)
+            assertEquals(42L, call.frame.frameTimeNanos)
+        }
+        assertEquals(0.18f, surface.calls[1].lengthFraction)
     }
 
     @Test

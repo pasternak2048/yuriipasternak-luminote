@@ -7,6 +7,14 @@ import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.animation.LightImpulseEndpoints
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
+import com.yp.luminote.app.animation.plan.GeometryRequest
+import com.yp.luminote.app.animation.plan.HaloEffectVisualPlanMapper
+import com.yp.luminote.app.animation.plan.AppearancePayload
+import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
+import com.yp.luminote.app.animation.plan.VisualPlanSpec
+import com.yp.luminote.app.rendering.api.FrameCommandBuffer
+import com.yp.luminote.app.rendering.api.FrameCommandCompiler
+import com.yp.luminote.app.rendering.api.RenderFrame
 
 import android.graphics.Canvas
 import android.graphics.Matrix
@@ -99,6 +107,18 @@ internal class EdgeRenderPipeline(
     config: HaloConfig,
     private val outline: DisplayOutline
 ) {
+    /** Test-only witness emitted at the point an established Canvas family is invoked. */
+    internal data class RenderTrace(
+        val operation: PrimaryVisualOperation,
+        val phase: Float,
+        val gradientPhase: Float,
+        val alpha: Int,
+        val frameTimeNanos: Long,
+        val geometry: GeometryRequest.DisplayOutlineContour,
+        val appearance: AppearancePayload
+    )
+
+    internal var renderTraceForTest: MutableList<RenderTrace>? = null
     internal val outlinePath: Path
         get() = outline.path
 
@@ -110,7 +130,7 @@ internal class EdgeRenderPipeline(
         return styleGeometryFor(stylePathForCurrentConfig()).takeIf { it.length > 0f }
     }
 
-    internal fun lightImpulseAlpha(): Int = (255f * config.intensity).roundToInt().coerceIn(0, 255)
+    internal fun lightImpulseAlpha(): Int = (255f * appearance().intensity).roundToInt().coerceIn(0, 255)
     private var config =
         config.sanitized()
 
@@ -147,8 +167,7 @@ internal class EdgeRenderPipeline(
     private var gradientOutlineVersion =
         -1
 
-    private var gradientPalette =
-        intArrayOf()
+    private var gradientPalette: List<Int> = emptyList()
 
     private val gradientMatrix =
         Matrix()
@@ -248,21 +267,24 @@ internal class EdgeRenderPipeline(
         }
 
         override fun drawAzureBlade(canvas: Canvas, frame: CanvasEffectFrame) {
-            val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
-            val cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
-            forceBlades.drawAzure(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, config.cornerShape, frame.frameTimeNanos)
+            val geometry = geometry()
+            val edgeCalibrationPx = outline.dpToPx(geometry.edgeCalibrationDp)
+            val cornerCalibrationPx = outline.dpToPx(geometry.cornerCalibrationDp)
+            forceBlades.drawAzure(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, geometry.cornerShape, frame.frameTimeNanos)
         }
 
         override fun drawCrimsonBlade(canvas: Canvas, frame: CanvasEffectFrame) {
-            val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
-            val cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
-            forceBlades.drawCrimson(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, config.cornerShape, frame.frameTimeNanos)
+            val geometry = geometry()
+            val edgeCalibrationPx = outline.dpToPx(geometry.edgeCalibrationDp)
+            val cornerCalibrationPx = outline.dpToPx(geometry.cornerCalibrationDp)
+            forceBlades.drawCrimson(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, geometry.cornerShape, frame.frameTimeNanos)
         }
 
         override fun drawClashBlade(canvas: Canvas, frame: CanvasEffectFrame) {
-            val edgeCalibrationPx = outline.dpToPx(config.edgeCalibrationDp)
-            val cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp)
-            forceBlades.drawClash(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, config.cornerShape, frame.frameTimeNanos)
+            val geometry = geometry()
+            val edgeCalibrationPx = outline.dpToPx(geometry.edgeCalibrationDp)
+            val cornerCalibrationPx = outline.dpToPx(geometry.cornerCalibrationDp)
+            forceBlades.drawClash(canvas, frame.phase, frame.alpha, renderStrokeWidth, edgeCalibrationPx, cornerCalibrationPx, geometry.cornerShape, frame.frameTimeNanos)
         }
     })
 
@@ -271,6 +293,15 @@ internal class EdgeRenderPipeline(
         this.config.effectPlan
     )
     private val renderFrame = CanvasEffectFrame()
+    private var visualPlan: VisualPlanSpec = HaloEffectVisualPlanMapper.map(this.config)
+    /** Targets are bound when the immutable session plan changes, never selected at VSYNC. */
+    private var planTargets: List<CanvasEffectTarget> = visualPlan.emitters.map {
+        canvasEffectDispatcher.resolve(it.operation)
+    }
+    private val commandBuffer = FrameCommandBuffer()
+    /** Bound only while a plan command is executing; static calibration uses config unchanged. */
+    private var activeAppearance: AppearancePayload? = null
+    private var activeGeometry: GeometryRequest.DisplayOutlineContour? = null
 
     /** Test seam for verifying config-bound cache replacement, never used by rendering. */
     internal fun cachedEffectTargetForTest(): CanvasEffectTarget = canvasEffectTarget
@@ -297,6 +328,8 @@ internal class EdgeRenderPipeline(
         if (effectPlanChanged) {
             canvasEffectTarget = canvasEffectDispatcher.resolve(next.effectPlan)
         }
+        visualPlan = HaloEffectVisualPlanMapper.map(next)
+        planTargets = visualPlan.emitters.map { canvasEffectDispatcher.resolve(it.operation) }
 
         colorRgb =
             next.color and RGB_MASK
@@ -324,7 +357,94 @@ internal class EdgeRenderPipeline(
         gradientPhase: Float,
         frameTimeNanos: Long = 0L
     ) {
+        drawLegacy(canvas, animationProgress, effectPhase, gradientPhase, frameTimeNanos)
+    }
+
+    /** Compiles host-owned frame data into reusable commands and draws in emitter order. */
+    fun drawPlan(canvas: Canvas, frame: RenderFrame) {
+        FrameCommandCompiler.compile(visualPlan, frame, commandBuffer)
+        try {
+            for (index in 0 until commandBuffer.size) {
+                val command = commandBuffer[index]
+                bind(command.geometry, command.appearance)
+                trace(
+                    command.operation,
+                    command.phase,
+                    command.gradientPhase,
+                    if (command.operation is PrimaryVisualOperation.LightImpulse) lightImpulseAlpha() else command.alpha,
+                    command.frameTimeNanos
+                )
+                drawCommand(canvas, planTargets[index], command.operation, command.animationProgress, command.phase,
+                    command.gradientPhase, command.alpha, command.frameTimeNanos)
+            }
+        } finally {
+            activeAppearance = null
+            activeGeometry = null
+            updateStrokeParameters()
+        }
+    }
+
+    internal fun replaceVisualPlanForTest(plan: VisualPlanSpec) {
+        visualPlan = plan
+        planTargets = visualPlan.emitters.map { canvasEffectDispatcher.resolve(it.operation) }
+    }
+
+    private fun trace(operation: PrimaryVisualOperation, phase: Float, gradientPhase: Float, alpha: Int, frameTimeNanos: Long) {
+        val sink = renderTraceForTest ?: return
+        sink += RenderTrace(operation, phase, gradientPhase, alpha, frameTimeNanos, geometry(), appearance())
+    }
+
+    private fun bind(geometry: GeometryRequest, appearance: AppearancePayload) {
+        val contour = geometry as? GeometryRequest.DisplayOutlineContour
+            ?: error("Canvas only supports DisplayOutlineContour geometry.")
+        if (activeGeometry != contour) {
+            activeGeometry = contour
+            coreStrokeWidth = calculateCoreStrokeWidth(contour.thickness)
+            renderStrokeWidth = calculateRenderStrokeWidth(coreStrokeWidth)
+            corePaint.strokeWidth = renderStrokeWidth
+            clearStylePathCache()
+        }
+        activeAppearance = appearance
+        colorRgb = appearance.color and RGB_MASK
+    }
+
+    private fun drawCommand(
+        canvas: Canvas,
+        target: CanvasEffectTarget,
+        operation: PrimaryVisualOperation,
+        animationProgress: Float,
+        effectPhase: Float,
+        gradientPhase: Float,
+        baseAlpha: Int,
+        frameTimeNanos: Long
+    ) {
+        if (operation is PrimaryVisualOperation.LightImpulse && usesLightImpulseRenderer(config)) {
+            lightImpulseRenderer.draw(canvas, animationProgress, effectPhase, gradientPhase)
+            return
+        }
+        if (baseAlpha == 0) return
+        if (cachedOutlineVersion != outline.version) {
+            clearStylePathCache()
+            cachedOutlineVersion = outline.version
+        }
+        renderFrame.phase = effectPhase
+        renderFrame.alpha = baseAlpha
+        renderFrame.gradientPhase = gradientPhase
+        renderFrame.frameTimeNanos = frameTimeNanos
+        target.draw(canvas, renderFrame)
+    }
+
+    /** Legacy direct entry point retained for renderer-level callers and tests. */
+    fun drawLegacy(
+        canvas: Canvas,
+        animationProgress: Float,
+        effectPhase: Float,
+        gradientPhase: Float,
+        frameTimeNanos: Long = 0L
+    ) {
+        bind(visualPlan.emitters.single().geometry, visualPlan.emitters.single().appearance)
         if (usesLightImpulseRenderer(config)) {
+            trace(PrimaryVisualOperation.LightImpulse, effectPhase, gradientPhase, lightImpulseAlpha(), frameTimeNanos)
             lightImpulseRenderer.draw(canvas, animationProgress, effectPhase, gradientPhase)
             return
         }
@@ -361,6 +481,14 @@ internal class EdgeRenderPipeline(
         renderFrame.alpha = baseAlpha
         renderFrame.gradientPhase = gradientPhase
         renderFrame.frameTimeNanos = frameTimeNanos
+        val operation = visualPlan.emitters.single().operation
+        trace(
+            operation,
+            effectPhase,
+            gradientPhase,
+            if (operation is PrimaryVisualOperation.LightImpulse) lightImpulseAlpha() else baseAlpha,
+            frameTimeNanos
+        )
         canvasEffectTarget.draw(canvas, renderFrame)
     }
 
@@ -374,8 +502,26 @@ internal class EdgeRenderPipeline(
         }
     }
 
+    private fun appearance(): AppearancePayload = activeAppearance ?: AppearancePayload(
+        color = config.color,
+        intensity = config.intensity,
+        thickness = config.thickness,
+        colorMode = config.colorMode,
+        palette = config.palette.toList()
+    )
+
+    private fun geometry(): GeometryRequest.DisplayOutlineContour = activeGeometry
+        ?: GeometryRequest.DisplayOutlineContour(
+            thickness = config.thickness,
+            frame = config.frame,
+            edgeCalibrationDp = config.edgeCalibrationDp,
+            cornerCalibrationDp = config.cornerCalibrationDp,
+            cornerShape = config.cornerShape
+        )
+
     /** Complete calibrated frame used by the static calibration preview. */
     fun drawStaticFrame(canvas: Canvas) {
+        colorRgb = config.color and RGB_MASK
         if (config.intensity <= 0f) return
         if (cachedOutlineVersion != outline.version) {
             clearStylePathCache()
@@ -400,9 +546,9 @@ internal class EdgeRenderPipeline(
         gradientPhase: Float
     ) {
         if (
-            config.colorMode ==
+            appearance().colorMode ==
             HaloColorMode.GRADIENT &&
-            config.palette.size > 1
+            appearance().palette.size > 1
         ) {
             val shader =
                 gradientShader()
@@ -447,12 +593,13 @@ internal class EdgeRenderPipeline(
     }
 
     internal fun stylePathForCurrentConfig(): Path {
-        val edgeCalibrationPx = outline.opticalInsetPx + outline.dpToPx(config.edgeCalibrationDp)
+        val geometry = geometry()
+        val edgeCalibrationPx = outline.opticalInsetPx + outline.dpToPx(geometry.edgeCalibrationDp)
         return conventionalPathCache.pathFor(
             strokeWidth = renderStrokeWidth,
             edgeCalibrationPx = edgeCalibrationPx,
-            cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp),
-            cornerShape = config.cornerShape,
+            cornerCalibrationPx = outline.dpToPx(geometry.cornerCalibrationDp),
+            cornerShape = geometry.cornerShape,
             extraEnvelopePx = 0f
         )
     }
@@ -464,7 +611,7 @@ internal class EdgeRenderPipeline(
     private fun updateStrokeParameters() {
         coreStrokeWidth =
             calculateCoreStrokeWidth(
-                config.thickness
+                geometry().thickness
             )
 
         renderStrokeWidth =
@@ -513,9 +660,9 @@ internal class EdgeRenderPipeline(
         return StyleGeometry(
             conventionalPathCache.geometrySnapshotFor(
                 strokeWidth = renderStrokeWidth,
-                edgeCalibrationPx = outline.opticalInsetPx + outline.dpToPx(config.edgeCalibrationDp),
-                cornerCalibrationPx = outline.dpToPx(config.cornerCalibrationDp),
-                cornerShape = config.cornerShape,
+                edgeCalibrationPx = outline.opticalInsetPx + outline.dpToPx(geometry().edgeCalibrationDp),
+                cornerCalibrationPx = outline.dpToPx(geometry().cornerCalibrationDp),
+                cornerShape = geometry().cornerShape,
                 extraEnvelopePx = 0f
             )
         ).also { cachedStyleGeometry = it }
@@ -528,9 +675,7 @@ internal class EdgeRenderPipeline(
             gradientShader != null &&
             gradientOutlineVersion ==
             outline.version &&
-            gradientPalette.contentEquals(
-                config.palette
-            )
+            gradientPalette == appearance().palette
         ) {
             return gradientShader!!
         }
@@ -548,12 +693,12 @@ internal class EdgeRenderPipeline(
 
         val colors =
             IntArray(
-                config.palette.size +
+                appearance().palette.size +
                         1
             ) { index ->
-                config.palette[
+                appearance().palette[
                     index %
-                            config.palette.size
+                            appearance().palette.size
                 ] or
                         OPAQUE_ALPHA
             }
@@ -586,7 +731,7 @@ internal class EdgeRenderPipeline(
                 outline.version
 
             gradientPalette =
-                config.palette.copyOf()
+                appearance().palette
         }
     }
 
@@ -604,9 +749,9 @@ internal class EdgeRenderPipeline(
         phase: Float
     ): Int {
         if (
-            config.colorMode ==
+            appearance().colorMode ==
             HaloColorMode.GRADIENT ||
-            config.palette.size <
+            appearance().palette.size <
             2
         ) {
             return colorRgb
@@ -619,26 +764,26 @@ internal class EdgeRenderPipeline(
 
         val scaled =
             normalizedPhase *
-                    config.palette.size
+                    appearance().palette.size
 
         val startIndex =
             scaled.toInt() %
-                    config.palette.size
+                    appearance().palette.size
 
         val endIndex =
             (
                     startIndex +
                             1
                     ) %
-                    config.palette.size
+                    appearance().palette.size
 
         val fraction =
             scaled -
                     scaled.toInt()
 
         return blend(
-            config.palette[startIndex],
-            config.palette[endIndex],
+            appearance().palette[startIndex],
+            appearance().palette[endIndex],
             fraction
         ) and
                 RGB_MASK
@@ -850,6 +995,14 @@ internal class HaloRenderer(config: HaloConfig, outline: DisplayOutline) {
 
     fun draw(canvas: Canvas, animationProgress: Float, effectPhase: Float, gradientPhase: Float, frameTimeNanos: Long = 0L) =
         pipeline.draw(canvas, animationProgress, effectPhase, gradientPhase, frameTimeNanos)
+
+    fun drawPlan(canvas: Canvas, frame: RenderFrame) = pipeline.drawPlan(canvas, frame)
+
+    internal fun setRenderTraceForTest(sink: MutableList<EdgeRenderPipeline.RenderTrace>?) {
+        pipeline.renderTraceForTest = sink
+    }
+
+    internal fun replaceVisualPlanForTest(plan: VisualPlanSpec) = pipeline.replaceVisualPlanForTest(plan)
 
     fun drawStaticFrame(canvas: Canvas) = pipeline.drawStaticFrame(canvas)
 
