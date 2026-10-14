@@ -3,33 +3,50 @@ package com.yp.luminote.app.animation.plan
 import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
+import java.util.Collections
 
 /**
  * Immutable, backend-neutral visual description resolved once for an animation
  * session. It contains no Canvas/GPU objects, clocks, callbacks, or geometry.
  */
-internal data class VisualPlanSpec(
-    val emitters: List<VisualEmitterSpec>
+internal class VisualPlanSpec(
+    emitters: List<VisualEmitterSpec>
 ) {
+    /** An admitted plan never retains a caller-owned mutable collection. */
+    val emitters: List<VisualEmitterSpec> = immutableList(emitters)
     init {
         require(emitters.isNotEmpty()) { "A visual plan needs at least one emitter." }
     }
 }
 
-internal data class VisualEmitterSpec(
+internal class VisualEmitterSpec(
     val geometry: GeometryRequest,
     val transform: EmitterTransform = EmitterTransform(),
     val appearance: AppearancePayload,
     val operation: PrimaryVisualOperation,
-    val modifiers: List<VisualModifier> = emptyList()
+    modifiers: List<VisualModifier> = emptyList()
 ) {
+    /** Closed, ordered effect stack captured at the plan admission boundary. */
+    val modifiers: List<VisualModifier> = immutableList(modifiers)
+
     init {
-        modifiers.forEach { modifier ->
+        this.modifiers.forEach { modifier ->
             require(modifier.isCompatibleWith(operation)) {
                 "${modifier::class.simpleName} is not compatible with ${operation::class.simpleName}."
             }
         }
+        require(this.modifiers.zipWithNext().all { (first, second) ->
+            first.canonicalOrder < second.canonicalOrder
+        }) { "Modifiers must be unique and declared in canonical compositor order." }
     }
+
+    fun copy(
+        geometry: GeometryRequest = this.geometry,
+        transform: EmitterTransform = this.transform,
+        appearance: AppearancePayload = this.appearance,
+        operation: PrimaryVisualOperation = this.operation,
+        modifiers: List<VisualModifier> = this.modifiers
+    ) = VisualEmitterSpec(geometry, transform, appearance, operation, modifiers)
 }
 
 /** Geometry is resolved only by DisplayOutline and EdgePathGeometryProvider at draw time. */
@@ -64,13 +81,21 @@ internal data class EmitterTransform(
 }
 
 /** Session-resolved appearance; Canvas remains authoritative for its rendering treatment. */
-internal data class AppearancePayload(
+internal class AppearancePayload(
     val color: Int,
     val intensity: Float,
     val thickness: Float,
     val colorMode: HaloColorMode,
-    val palette: List<Int>
-)
+    palette: List<Int>
+) {
+    val palette: List<Int> = immutableList(palette)
+
+    override fun equals(other: Any?): Boolean = other is AppearancePayload &&
+        color == other.color && intensity == other.intensity && thickness == other.thickness &&
+        colorMode == other.colorMode && palette == other.palette
+
+    override fun hashCode(): Int = arrayOf(color, intensity, thickness, colorMode, palette).contentHashCode()
+}
 
 /** One family-specific operation per emitter keeps existing specialized renderers intact. */
 internal sealed interface PrimaryVisualOperation {
@@ -92,10 +117,53 @@ internal sealed interface PrimaryVisualOperation {
  * semantics: it multiplies the emitter alpha before the established renderer runs.
  */
 internal sealed interface VisualModifier {
+    /** Canonical declaration and evaluation order; never infer it from caller order. */
+    val canonicalOrder: Int
+
     data class Opacity(val multiplier: Float) : VisualModifier {
+        override val canonicalOrder: Int = 0
         init {
             require(multiplier.isFinite() && multiplier >= 0f) {
                 "Opacity multiplier must be finite and non-negative."
+            }
+        }
+    }
+
+    /** A frame-time-driven multiplier in [1 - amplitude, 1], with no new clock. */
+    data class IntensityPulse(
+        val amplitude: Float,
+        val frequencyHz: Float = 1f
+    ) : VisualModifier {
+        override val canonicalOrder: Int = 1
+        init {
+            require(amplitude.isFinite() && amplitude in 0f..1f) {
+                "Pulse amplitude must be finite and within 0..1."
+            }
+            require(frequencyHz.isFinite() && frequencyHz in 0f..120f && frequencyHz > 0f) {
+                "Pulse frequency must be finite and within 0..120 Hz."
+            }
+        }
+    }
+
+    /** Softens the source stroke itself; it is intentionally distinct from [Glow]. */
+    data class Blur(val radiusPx: Float) : VisualModifier {
+        override val canonicalOrder: Int = 2
+        init {
+            require(radiusPx.isFinite() && radiusPx in 0f..64f) {
+                "Blur radius must be finite and within 0..64 px."
+            }
+        }
+    }
+
+    /** Adds a separately rendered, expanded envelope behind the source. */
+    data class Glow(val radiusPx: Float, val alphaMultiplier: Float = 1f) : VisualModifier {
+        override val canonicalOrder: Int = 3
+        init {
+            require(radiusPx.isFinite() && radiusPx in 0f..64f) {
+                "Glow radius must be finite and within 0..64 px."
+            }
+            require(alphaMultiplier.isFinite() && alphaMultiplier in 0f..1f) {
+                "Glow alpha multiplier must be finite and within 0..1."
             }
         }
     }
@@ -104,7 +172,12 @@ internal sealed interface VisualModifier {
         // Light Impulse owns its dedicated alpha envelope; changing it would be
         // an approximation until it receives an explicit compatible modifier.
         is Opacity -> operation !is PrimaryVisualOperation.LightImpulse
+        is IntensityPulse, is Blur, is Glow -> operation is PrimaryVisualOperation.FullContourPulse
     }
 }
 
 internal fun normalizedFraction(value: Float): Float = (value % 1f + 1f) % 1f
+
+/** Kotlin's [List] is read-only only at the type level. */
+private fun <T> immutableList(values: List<T>): List<T> =
+    Collections.unmodifiableList(ArrayList(values))

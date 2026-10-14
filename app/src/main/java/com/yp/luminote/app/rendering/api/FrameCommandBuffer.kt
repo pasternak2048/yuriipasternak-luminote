@@ -7,6 +7,9 @@ import com.yp.luminote.app.animation.plan.VisualEmitterSpec
 import com.yp.luminote.app.animation.plan.VisualModifier
 import com.yp.luminote.app.animation.plan.VisualPlanSpec
 import kotlin.math.roundToInt
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlin.math.roundToLong
 
 /**
  * UI-thread-confined reusable command storage. Its entries borrow immutable plan
@@ -65,20 +68,34 @@ internal object FrameCommandCompiler {
         out.phase = emitter.transform.phaseFor(frame.effectPhase)
         out.gradientPhase = emitter.transform.phaseFor(frame.gradientPhase)
         out.animationProgress = frame.animationProgress
-        out.alpha = resolvedAlpha(emitter, frame.animationProgress)
+        out.alpha = resolvedAlpha(emitter, frame.animationProgress, frame.frameTimeNanos)
         out.frameTimeNanos = frame.frameTimeNanos
     }
 
-    private fun resolvedAlpha(emitter: VisualEmitterSpec, progress: Float): Int {
+    private fun resolvedAlpha(emitter: VisualEmitterSpec, progress: Float, frameTimeNanos: Long): Int {
         var modifierAlpha = 1f
         // Avoid a filtered list/fold allocation on every host frame.
         var index = 0
         while (index < emitter.modifiers.size) {
             val modifier = emitter.modifiers[index]
-            if (modifier is VisualModifier.Opacity) modifierAlpha *= modifier.multiplier
+            when (modifier) {
+                is VisualModifier.Opacity -> modifierAlpha *= modifier.multiplier
+                is VisualModifier.IntensityPulse -> {
+                    // Reduce a host timestamp to one period before trig. This
+                    // preserves deterministic sub-frame phase at long uptimes.
+                    val periodNanos = (NANOS_PER_SECOND / modifier.frequencyHz).roundToLong()
+                    val nanosIntoPeriod = Math.floorMod(frameTimeNanos, periodNanos)
+                    val wave = (0.5 + 0.5 * sin(TWO_PI * nanosIntoPeriod.toDouble() / periodNanos)).toFloat()
+                    modifierAlpha *= 1f - modifier.amplitude + modifier.amplitude * wave
+                }
+                is VisualModifier.Blur, is VisualModifier.Glow -> Unit
+            }
             index++
         }
         return (255f * emitter.appearance.intensity * progress.coerceIn(0f, 1f) * modifierAlpha)
             .roundToInt().coerceIn(0, 255)
     }
+
+    private const val NANOS_PER_SECOND = 1_000_000_000.0
+    private const val TWO_PI = 2.0 * PI
 }

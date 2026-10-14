@@ -77,6 +77,77 @@ class VisualPlanSpecTest {
         }
     }
 
+    @Test
+    fun `new optical modifiers admit only full contour in canonical unique order`() {
+        val all = listOf(
+            VisualModifier.Opacity(0.8f),
+            VisualModifier.IntensityPulse(0.4f, 2f),
+            VisualModifier.Blur(3f),
+            VisualModifier.Glow(6f, 0.5f)
+        )
+        VisualEmitterSpec(geometry(), appearance = appearance(), operation = PrimaryVisualOperation.FullContourPulse, modifiers = all)
+
+        listOf<PrimaryVisualOperation>(
+            PrimaryVisualOperation.TravelingLuminousSegment(0.2f),
+            PrimaryVisualOperation.LightImpulse,
+            PrimaryVisualOperation.Supernova,
+            PrimaryVisualOperation.ForceBlade(BladeVariant.AZURE)
+        ).forEach { operation ->
+            listOf(VisualModifier.IntensityPulse(0.2f), VisualModifier.Blur(2f), VisualModifier.Glow(2f)).forEach { modifier ->
+                expectRejected { VisualEmitterSpec(geometry(), appearance = appearance(), operation = operation, modifiers = listOf(modifier)) }
+            }
+        }
+        expectRejected { VisualEmitterSpec(geometry(), appearance = appearance(), operation = PrimaryVisualOperation.FullContourPulse, modifiers = all.reversed()) }
+        expectRejected { VisualEmitterSpec(geometry(), appearance = appearance(), operation = PrimaryVisualOperation.FullContourPulse, modifiers = listOf(VisualModifier.Blur(1f), VisualModifier.Blur(2f))) }
+    }
+
+    @Test
+    fun `admission is JVM immutable and pulse is deterministic at large timestamps`() {
+        val mutableModifiers = mutableListOf<VisualModifier>(VisualModifier.IntensityPulse(1f, 1f))
+        val emitter = VisualEmitterSpec(geometry(), appearance = appearance(), operation = PrimaryVisualOperation.FullContourPulse, modifiers = mutableModifiers)
+        val plan = VisualPlanSpec(mutableListOf(emitter))
+        mutableModifiers.clear()
+        assertEquals(1, plan.emitters.single().modifiers.size)
+        expectImmutable { (plan.emitters as MutableList<VisualEmitterSpec>).clear() }
+        expectImmutable { (emitter.modifiers as MutableList<VisualModifier>).clear() }
+        assertEquals(1, plan.emitters.size)
+        assertEquals(1, plan.emitters.single().modifiers.size)
+
+        val frame = RenderFrame().apply {
+            animationProgress = 1f
+            frameTimeNanos = 9_000_000_000_250_000_000L
+        }
+        val first = FrameCommandCompiler.compile(plan, frame, FrameCommandBuffer())[0].alpha
+        val second = FrameCommandCompiler.compile(plan, frame, FrameCommandBuffer())[0].alpha
+        assertEquals(first, second)
+        // 0.25 seconds at 1 Hz is peak, proving precision was not lost before division.
+        assertEquals(255, first)
+    }
+
+    @Test
+    fun `pulse frequency has a bounded frame-resolvable range`() {
+        expectRejected { VisualModifier.IntensityPulse(0.5f, 120.1f) }
+        VisualModifier.IntensityPulse(0.5f, 120f)
+    }
+
+    private fun expectRejected(block: () -> Unit) {
+        try {
+            block()
+            fail("Expected modifier admission to reject the combination")
+        } catch (_: IllegalArgumentException) {
+            // Expected.
+        }
+    }
+
+    private fun expectImmutable(block: () -> Unit) {
+        try {
+            block()
+            fail("Expected admitted collection to reject mutation")
+        } catch (_: UnsupportedOperationException) {
+            // Expected: JVM-facing collection is unmodifiable.
+        }
+    }
+
     private fun emitter(
         operation: PrimaryVisualOperation,
         transform: EmitterTransform = EmitterTransform(),

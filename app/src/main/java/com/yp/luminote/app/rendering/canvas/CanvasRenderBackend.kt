@@ -42,6 +42,17 @@ internal class CanvasRenderBackend(
         val canvas = (target as? CanvasRenderTarget)?.canvas
             ?: return RenderOutcome.Unsupported("Canvas backend requires a CanvasRenderTarget")
 
+        // RenderEffect is a hardware-only primitive. Reject before compiling or drawing so an
+        // effect-bearing plan can never silently fall back to the legacy Canvas path.
+        if (frame.mode == RenderMode.ANIMATION && renderer.requiresHardwareEffects()) {
+            if (frame.viewportWidth <= 0 || frame.viewportHeight <= 0) {
+                return RenderOutcome.Unsupported("Positive viewport dimensions are required for visual effects")
+            }
+            if (!canvas.isHardwareAccelerated) {
+                return RenderOutcome.Unsupported("Canvas hardware acceleration is required for visual effects")
+            }
+        }
+
         return try {
             when (frame.mode) {
                 RenderMode.ANIMATION -> renderer.drawPlan(
@@ -69,5 +80,10 @@ internal class CanvasRenderBackend(
     override fun dispose() {
         if (disposed) return
         disposed = true
+        renderer.dispose()
+    }
+
+    internal fun replaceVisualPlanForTest(plan: com.yp.luminote.app.animation.plan.VisualPlanSpec) {
+        renderer.replaceVisualPlanForTest(plan)
     }
 }

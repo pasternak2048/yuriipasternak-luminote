@@ -6,6 +6,7 @@ import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
+import com.yp.luminote.app.animation.plan.VisualModifier
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
@@ -161,7 +162,7 @@ class CanvasEffectDispatcherTest {
             calls += Call(Primitive.SUPERNOVA, frame)
         }
 
-        override fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame) {
+        override fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) {
             calls += Call(Primitive.FULL_CONTOUR, frame)
         }
 

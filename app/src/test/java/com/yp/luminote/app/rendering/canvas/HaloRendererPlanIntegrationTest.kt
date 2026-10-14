@@ -13,6 +13,7 @@ import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.rendering.api.RenderFrame
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import kotlin.math.roundToInt
 
 /** Exercises the production FrameCommandCompiler -> HaloRenderer.drawPlan route for every family. */
 class HaloRendererPlanIntegrationTest {
@@ -98,5 +99,33 @@ class HaloRendererPlanIntegrationTest {
             traces.map { it.operation }
         )
         assertEquals(listOf(107, 107, 107), traces.map { it.alpha })
+    }
+
+    /** Modifier-free plans retain the exact direct Canvas route. */
+    @Test
+    fun `empty modifier stack remains an exact direct Canvas route`() {
+        val config = HaloConfig(effectPlan = HaloEffectSpec.FullContour)
+        val renderer = HaloRenderer(config, DisplayOutline(density = 1f).also { it.resize(320, 640) })
+        val base = HaloEffectVisualPlanMapper.map(config).emitters.single()
+        renderer.replaceVisualPlanForTest(
+            VisualPlanSpec(
+                listOf(
+                    base
+                )
+            )
+        )
+        val traces = mutableListOf<EdgeRenderPipeline.RenderTrace>()
+        renderer.setRenderTraceForTest(traces)
+        renderer.drawPlan(Canvas(), RenderFrame().apply {
+            animationProgress = 1f
+            effectPhase = 0.4f
+            gradientPhase = 0.7f
+            frameTimeNanos = 250_000_000L
+        })
+
+        renderer.draw(Canvas(), 1f, 0.4f, 0.7f, 250_000_000L)
+        assertEquals(listOf(PrimaryVisualOperation.FullContourPulse, PrimaryVisualOperation.FullContourPulse), traces.map { it.operation })
+        assertEquals((255f * config.intensity).roundToInt(), traces.first().alpha)
+        assertEquals(traces[0], traces[1])
     }
 }
