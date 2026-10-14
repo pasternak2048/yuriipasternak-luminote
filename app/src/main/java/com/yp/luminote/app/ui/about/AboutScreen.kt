@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
@@ -64,6 +65,7 @@ import com.yp.luminote.app.update.UpdateViewModel
 fun AboutScreen(
     onBackClick: () -> Unit,
     onEasterEggClick: () -> Unit,
+    onDebugVisualEffectsDemoClick: () -> Unit = {},
     showUpdatesOnly: Boolean = false
 ) {
     if (showUpdatesOnly) {
@@ -71,7 +73,8 @@ fun AboutScreen(
     } else {
         AboutContent(
             onBackClick = onBackClick,
-            onEasterEggClick = onEasterEggClick
+            onEasterEggClick = onEasterEggClick,
+            onDebugVisualEffectsDemoClick = onDebugVisualEffectsDemoClick
         )
     }
 }
@@ -156,7 +159,8 @@ private fun UpdatesScreen(
 @Composable
 private fun AboutContent(
     onBackClick: () -> Unit,
-    onEasterEggClick: () -> Unit
+    onEasterEggClick: () -> Unit,
+    onDebugVisualEffectsDemoClick: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
@@ -236,13 +240,16 @@ private fun AboutContent(
 
             AboutBlock(
                 title = stringResource(R.string.app_version),
-                modifier = Modifier.clickable {
-                    versionTapCount += 1
-                    if (versionTapCount >= EASTER_EGG_TAP_COUNT) {
-                        versionTapCount = 0
-                        onEasterEggClick()
-                    }
-                }
+                modifier = Modifier.combinedClickable(
+                    onClick = {
+                        versionTapCount += 1
+                        if (versionTapCount >= EASTER_EGG_TAP_COUNT) {
+                            versionTapCount = 0
+                            onEasterEggClick()
+                        }
+                    },
+                    onLongClick = onDebugVisualEffectsDemoClick
+                )
             ) {
                 Text(
                     text = versionInfo,

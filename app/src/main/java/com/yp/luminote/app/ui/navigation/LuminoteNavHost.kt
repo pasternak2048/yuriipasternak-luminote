@@ -41,7 +41,8 @@ object LuminoteRoutes {
 
 @Composable
 fun LuminoteNavHost(
-    settingsViewModel: LuminoteSettingsViewModel
+    settingsViewModel: LuminoteSettingsViewModel,
+    onDebugVisualEffectsDemoClick: () -> Unit = {}
 ) {
     val navController =
         rememberNavController()
@@ -216,7 +217,8 @@ fun LuminoteNavHost(
                     navController.navigate(
                         LuminoteRoutes.EASTER_EGG
                     )
-                }
+                },
+                onDebugVisualEffectsDemoClick = onDebugVisualEffectsDemoClick
             )
         }
 

@@ -1,5 +1,7 @@
 package com.yp.luminote.app
 
+import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,7 +37,10 @@ class MainActivity : ComponentActivity() {
 
             if (settingsLoaded) {
                 LuminoteTheme(themeMode = settings.themeMode) {
-                    LuminoteNavHost(settingsViewModel)
+                    LuminoteNavHost(
+                        settingsViewModel = settingsViewModel,
+                        onDebugVisualEffectsDemoClick = ::launchVisualEffectsDemoIfDebug
+                    )
                 }
             } else {
                 // Do not render normal UI with the temporary default before DataStore loads.
@@ -45,5 +50,22 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /**
+     * Debug-only bridge for the in-app demo affordance.
+     *
+     * The target activity exists exclusively in the debug source set; keeping its name as a
+     * string prevents the release variant from resolving or linking against a debug class.
+     */
+    private fun launchVisualEffectsDemoIfDebug() {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return
+
+        startActivity(
+            Intent().setClassName(
+                packageName,
+                "com.yp.luminote.app.debug.VisualEffectsDemoActivity"
+            )
+        )
     }
 }

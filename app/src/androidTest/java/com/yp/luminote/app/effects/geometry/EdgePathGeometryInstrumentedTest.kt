@@ -2,9 +2,13 @@ package com.yp.luminote.app.effects.geometry
 
 import android.graphics.Path
 import android.graphics.PathMeasure
+import android.content.Intent
 import android.view.WindowInsets
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.yp.luminote.app.MainActivity
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -69,12 +73,29 @@ class EdgePathGeometryInstrumentedTest {
 
     @Test
     fun `updateInsets invalidates the provider cache through an outline rebuild`() {
-        val outline = DisplayOutline(density = 1f).apply { resize(100, 200) }
-        val provider = EdgePathGeometryProvider(outline)
-        val beforeInsets = provider.pathFor(8f, outline.opticalInsetPx, 0f, 0.5f, 0f)
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val activity = instrumentation.startActivitySync(
+            Intent(instrumentation.targetContext, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        try {
+            instrumentation.waitForIdleSync()
+            val rootView = activity.window.decorView
+            val insets = requireNotNull(rootView.rootWindowInsets)
+            val displayShapePath = requireNotNull(insets.displayShape).path
+            assertFalse("real root WindowInsets must provide a display-shape path", displayShapePath.isEmpty)
 
-        outline.updateInsets(WindowInsets.Builder().build())
+            val outline = DisplayOutline(density = rootView.resources.displayMetrics.density).apply {
+                resize(rootView.width, rootView.height)
+            }
+            val provider = EdgePathGeometryProvider(outline)
+            val beforeInsets = provider.pathFor(8f, outline.opticalInsetPx, 0f, 0.5f, 0f)
 
-        assertNotSame(beforeInsets, provider.pathFor(8f, outline.opticalInsetPx, 0f, 0.5f, 0f))
+            outline.updateInsets(insets)
+
+            assertNotSame(beforeInsets, provider.pathFor(8f, outline.opticalInsetPx, 0f, 0.5f, 0f))
+        } finally {
+            instrumentation.runOnMainSync { activity.finish() }
+        }
     }
 }

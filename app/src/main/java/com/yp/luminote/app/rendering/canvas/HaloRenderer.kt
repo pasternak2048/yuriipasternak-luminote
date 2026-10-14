@@ -12,6 +12,7 @@ import com.yp.luminote.app.animation.plan.HaloEffectVisualPlanMapper
 import com.yp.luminote.app.animation.plan.AppearancePayload
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualPlanSpec
+import com.yp.luminote.app.animation.plan.VisualModifier
 import com.yp.luminote.app.rendering.api.FrameCommandBuffer
 import com.yp.luminote.app.rendering.api.FrameCommandCompiler
 import com.yp.luminote.app.rendering.api.RenderFrame
@@ -22,7 +23,10 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
 import android.graphics.SweepGradient
+import android.graphics.Shader.TileMode
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import kotlin.math.PI
@@ -118,7 +122,19 @@ internal class EdgeRenderPipeline(
         val appearance: AppearancePayload
     )
 
+    /** Test-only witness captured at each hardware optical pass and command boundary. */
+    internal data class PaintPassTrace(
+        val stage: PaintPassStage,
+        val strokeWidth: Float,
+        val alpha: Int,
+        val effectRadiusPx: Float?,
+        val renderNodeIdentity: Int?
+    )
+
+    internal enum class PaintPassStage { GLOW_ENVELOPE, SOURCE, OPTICAL_RESTORED, COMMAND_COMPLETE }
+
     internal var renderTraceForTest: MutableList<RenderTrace>? = null
+    internal var paintPassTraceForTest: MutableList<PaintPassTrace>? = null
     internal val outlinePath: Path
         get() = outline.path
 
@@ -184,6 +200,9 @@ internal class EdgeRenderPipeline(
                 renderStrokeWidth
         }
 
+    /** Hardware-only optical resources; never leaked into plan or frame contracts. */
+    private val hardwareContourExecutor = HardwareContourExecutor()
+
     private val conventionalRenderer = ConventionalEdgeRenderer(object : ConventionalRenderSurface {
         override val outlinePath: Path
             get() = this@EdgeRenderPipeline.outlinePath
@@ -246,8 +265,8 @@ internal class EdgeRenderPipeline(
             supernovaRenderer.draw(canvas, frame.phase, frame.alpha, frame.gradientPhase)
         }
 
-        override fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame) {
-            conventionalRenderer.drawPulse(canvas, frame.alpha, frame.phase, frame.gradientPhase)
+        override fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) {
+            drawFullContourWithModifiers(canvas, frame, modifiers)
         }
 
         override fun drawLuminousSegment(
@@ -303,6 +322,10 @@ internal class EdgeRenderPipeline(
     private var activeAppearance: AppearancePayload? = null
     private var activeGeometry: GeometryRequest.DisplayOutlineContour? = null
 
+    init {
+        warmVisualResources(visualPlan)
+    }
+
     /** Test seam for verifying config-bound cache replacement, never used by rendering. */
     internal fun cachedEffectTargetForTest(): CanvasEffectTarget = canvasEffectTarget
 
@@ -329,6 +352,8 @@ internal class EdgeRenderPipeline(
             canvasEffectTarget = canvasEffectDispatcher.resolve(next.effectPlan)
         }
         visualPlan = HaloEffectVisualPlanMapper.map(next)
+        hardwareContourExecutor.invalidateConfiguration()
+        warmVisualResources(visualPlan)
         planTargets = visualPlan.emitters.map { canvasEffectDispatcher.resolve(it.operation) }
 
         colorRgb =
@@ -348,6 +373,7 @@ internal class EdgeRenderPipeline(
         cachedOutlineVersion = -1
         gradientOutlineVersion = -1
         outline.clearRenderCaches()
+        hardwareContourExecutor.invalidateSurface()
     }
 
     fun draw(
@@ -374,7 +400,7 @@ internal class EdgeRenderPipeline(
                     if (command.operation is PrimaryVisualOperation.LightImpulse) lightImpulseAlpha() else command.alpha,
                     command.frameTimeNanos
                 )
-                drawCommand(canvas, planTargets[index], command.operation, command.animationProgress, command.phase,
+                drawCommand(canvas, planTargets[index], command.operation, command.modifiers, command.animationProgress, command.phase,
                     command.gradientPhase, command.alpha, command.frameTimeNanos)
             }
         } finally {
@@ -386,6 +412,8 @@ internal class EdgeRenderPipeline(
 
     internal fun replaceVisualPlanForTest(plan: VisualPlanSpec) {
         visualPlan = plan
+        hardwareContourExecutor.invalidateConfiguration()
+        warmVisualResources(plan)
         planTargets = visualPlan.emitters.map { canvasEffectDispatcher.resolve(it.operation) }
     }
 
@@ -412,6 +440,7 @@ internal class EdgeRenderPipeline(
         canvas: Canvas,
         target: CanvasEffectTarget,
         operation: PrimaryVisualOperation,
+        modifiers: List<VisualModifier>,
         animationProgress: Float,
         effectPhase: Float,
         gradientPhase: Float,
@@ -431,7 +460,170 @@ internal class EdgeRenderPipeline(
         renderFrame.alpha = baseAlpha
         renderFrame.gradientPhase = gradientPhase
         renderFrame.frameTimeNanos = frameTimeNanos
-        target.draw(canvas, renderFrame)
+        target.draw(canvas, renderFrame, modifiers)
+        tracePaintPass(PaintPassStage.COMMAND_COMPLETE)
+    }
+
+    /**
+     * Full-contour is the only operation admitted to the new optical stack.
+     * Blur is applied to the source pass; Glow is an independently drawn, wider
+     * blurred envelope behind it. Both passes retain the established contour clip.
+     */
+    private fun drawFullContourWithModifiers(
+        canvas: Canvas,
+        frame: CanvasEffectFrame,
+        modifiers: List<VisualModifier>
+    ) {
+        val blur = modifiers.firstOrNull { it is VisualModifier.Blur } as? VisualModifier.Blur
+        val glow = modifiers.firstOrNull { it is VisualModifier.Glow } as? VisualModifier.Glow
+        if (blur == null && glow == null) {
+            conventionalRenderer.drawPulse(canvas, frame.alpha, frame.phase, frame.gradientPhase)
+            return
+        }
+
+        val savedWidth = corePaint.strokeWidth
+        val savedAlpha = corePaint.alpha
+        val saveCount = canvas.save()
+        try {
+            canvas.clipPath(outlinePath)
+            val path = stylePathForCurrentConfig()
+            hardwareContourExecutor.draw(
+                parent = canvas,
+                path = path,
+                sourceAlpha = frame.alpha,
+                phase = frame.phase,
+                gradientPhase = frame.gradientPhase,
+                sourceStrokeWidth = savedWidth,
+                blur = blur,
+                glow = glow
+            )
+        } finally {
+            corePaint.strokeWidth = savedWidth
+            corePaint.alpha = savedAlpha
+            tracePaintPass(PaintPassStage.OPTICAL_RESTORED, assignedStrokeWidth = savedWidth)
+            canvas.restoreToCount(saveCount)
+        }
+    }
+
+    private fun tracePaintPass(
+        stage: PaintPassStage,
+        assignedRadiusPx: Float? = null,
+        renderNodeIdentity: Int? = null,
+        assignedStrokeWidth: Float = corePaint.strokeWidth
+    ) {
+        val sink = paintPassTraceForTest ?: return
+        sink += PaintPassTrace(stage, assignedStrokeWidth, corePaint.alpha, assignedRadiusPx, renderNodeIdentity)
+    }
+
+    private fun warmVisualResources(plan: VisualPlanSpec) {
+        plan.emitters.forEach { emitter ->
+            emitter.modifiers.forEach { modifier ->
+                val radius = when (modifier) {
+                    is VisualModifier.Blur -> modifier.radiusPx
+                    is VisualModifier.Glow -> modifier.radiusPx
+                    else -> null
+                }
+                if (radius != null && radius > 0f) hardwareContourExecutor.warm(radius)
+            }
+        }
+    }
+
+    internal fun requiresHardwareEffects(): Boolean = visualPlan.emitters.any { emitter ->
+        emitter.operation is PrimaryVisualOperation.FullContourPulse &&
+            emitter.modifiers.any { it is VisualModifier.Blur || it is VisualModifier.Glow }
+    }
+
+    fun dispose() = hardwareContourExecutor.dispose()
+
+    /**
+     * Canvas-private hardware executor for the admitted FullContour optical stack. The display
+     * lists deliberately re-record every draw: all source paint inputs and contour geometry may
+     * change with a host frame. Only platform resources are cached here.
+     */
+    private inner class HardwareContourExecutor {
+        private val sourceNode = RenderNode("LuminoteContourSource")
+        private val glowNode = RenderNode("LuminoteContourGlow")
+        private val blurEffects = mutableMapOf<Float, RenderEffect>()
+
+        fun warm(radiusPx: Float) {
+            if (radiusPx <= 0f || radiusPx in blurEffects) return
+            blurEffects[radiusPx] = RenderEffect.createBlurEffect(radiusPx, radiusPx, TileMode.CLAMP)
+        }
+
+        fun draw(
+            parent: Canvas,
+            path: Path,
+            sourceAlpha: Int,
+            phase: Float,
+            gradientPhase: Float,
+            sourceStrokeWidth: Float,
+            blur: VisualModifier.Blur?,
+            glow: VisualModifier.Glow?
+        ) {
+            val width = parent.width
+            val height = parent.height
+            check(parent.isHardwareAccelerated && width > 0 && height > 0) {
+                "Hardware contour execution requires a hardware Canvas with positive dimensions"
+            }
+
+            if (glow != null && glow.radiusPx > 0f && glow.alphaMultiplier > 0f) {
+                val glowEffect = blurEffects.getValue(glow.radiusPx)
+                glowNode.setRenderEffect(glowEffect)
+                prepareConventionalPaint(
+                    (sourceAlpha * glow.alphaMultiplier).roundToInt().coerceIn(0, 255),
+                    phase,
+                    gradientPhase
+                )
+                corePaint.strokeWidth = sourceStrokeWidth + glow.radiusPx * 2f
+                record(glowNode, width, height, path)
+                tracePaintPass(
+                    PaintPassStage.GLOW_ENVELOPE,
+                    glow.radiusPx,
+                    System.identityHashCode(glowNode),
+                    sourceStrokeWidth + glow.radiusPx * 2f
+                )
+                parent.drawRenderNode(glowNode)
+            }
+
+            val sourceRadius = blur?.radiusPx?.takeIf { it > 0f }
+            if (sourceRadius == null) {
+                sourceNode.setRenderEffect(null)
+            } else {
+                sourceNode.setRenderEffect(blurEffects.getValue(sourceRadius))
+            }
+            prepareConventionalPaint(sourceAlpha, phase, gradientPhase)
+            corePaint.strokeWidth = sourceStrokeWidth
+            record(sourceNode, width, height, path)
+            tracePaintPass(
+                PaintPassStage.SOURCE,
+                sourceRadius,
+                System.identityHashCode(sourceNode),
+                sourceStrokeWidth
+            )
+            parent.drawRenderNode(sourceNode)
+        }
+
+        private fun record(node: RenderNode, width: Int, height: Int, path: Path) {
+            node.setPosition(0, 0, width, height)
+            val recordingCanvas = node.beginRecording(width, height)
+            recordingCanvas.drawPath(path, corePaint)
+            node.endRecording()
+        }
+
+        fun invalidateConfiguration() {
+            sourceNode.setRenderEffect(null)
+            glowNode.setRenderEffect(null)
+            sourceNode.discardDisplayList()
+            glowNode.discardDisplayList()
+            blurEffects.clear()
+        }
+
+        fun invalidateSurface() {
+            sourceNode.discardDisplayList()
+            glowNode.discardDisplayList()
+        }
+
+        fun dispose() = invalidateConfiguration()
     }
 
     /** Legacy direct entry point retained for renderer-level callers and tests. */
@@ -998,8 +1190,16 @@ internal class HaloRenderer(config: HaloConfig, outline: DisplayOutline) {
 
     fun drawPlan(canvas: Canvas, frame: RenderFrame) = pipeline.drawPlan(canvas, frame)
 
+    internal fun requiresHardwareEffects(): Boolean = pipeline.requiresHardwareEffects()
+
+    fun dispose() = pipeline.dispose()
+
     internal fun setRenderTraceForTest(sink: MutableList<EdgeRenderPipeline.RenderTrace>?) {
         pipeline.renderTraceForTest = sink
+    }
+
+    internal fun setPaintPassTraceForTest(sink: MutableList<EdgeRenderPipeline.PaintPassTrace>?) {
+        pipeline.paintPassTraceForTest = sink
     }
 
     internal fun replaceVisualPlanForTest(plan: VisualPlanSpec) = pipeline.replaceVisualPlanForTest(plan)

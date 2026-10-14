@@ -14,6 +14,7 @@ import com.yp.luminote.app.rendering.api.RenderOutcome
 import com.yp.luminote.app.rendering.canvas.CanvasRenderBackend
 import com.yp.luminote.app.rendering.canvas.CanvasRenderTarget
 import com.yp.luminote.app.rendering.canvas.CalibrationDiagnostics
+import com.yp.luminote.app.animation.plan.VisualPlanSpec
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 
@@ -68,7 +69,9 @@ internal class HaloView(
         )
 
     /** Composition remains at the Android host; animation remains backend-neutral. */
-    private val renderingPipeline = HaloRenderingPipeline(CanvasRenderBackend(config, outline))
+    private val canvasRenderBackend = CanvasRenderBackend(config, outline)
+
+    private val renderingPipeline = HaloRenderingPipeline(canvasRenderBackend)
 
     private val renderFrame = RenderFrame()
 
@@ -164,6 +167,16 @@ internal class HaloView(
                 )
         }
 
+        invalidate()
+    }
+
+    /**
+     * Host-only visual-plan substitution used by the debug visual-effects demo.
+     * It retains this view's production Canvas backend, geometry, and animation
+     * lifecycle; callers supply only an already-admitted visual plan.
+     */
+    internal fun replaceVisualPlanForDebug(plan: VisualPlanSpec) {
+        canvasRenderBackend.replaceVisualPlanForTest(plan)
         invalidate()
     }
 

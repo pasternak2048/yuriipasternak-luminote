@@ -4,6 +4,7 @@ import android.graphics.Canvas
 import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
+import com.yp.luminote.app.animation.plan.VisualModifier
 
 /**
  * Canvas translation of the backend-neutral effect contract.
@@ -57,7 +58,7 @@ internal class CanvasEffectDispatcher(
 internal interface CanvasEffectRenderSurface {
     fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame)
     fun drawSupernova(canvas: Canvas, frame: CanvasEffectFrame)
-    fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame)
+    fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>)
     fun drawLuminousSegment(
         canvas: Canvas,
         frame: CanvasEffectFrame,
@@ -78,34 +79,36 @@ internal class CanvasEffectFrame {
 }
 
 internal fun interface CanvasEffectTarget {
-    fun draw(canvas: Canvas, frame: CanvasEffectFrame)
+    fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>)
 }
+
+internal fun CanvasEffectTarget.draw(canvas: Canvas, frame: CanvasEffectFrame) = draw(canvas, frame, emptyList())
 
 private class CanvasSpecializedFieldRenderer(
     private val surface: CanvasEffectRenderSurface
 ) : CanvasEffectTarget {
-    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) =
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) =
         surface.drawSpecializedField(canvas, frame)
 }
 
 private class CanvasSupernovaRenderer(
     private val surface: CanvasEffectRenderSurface
 ) : CanvasEffectTarget {
-    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) = surface.drawSupernova(canvas, frame)
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) = surface.drawSupernova(canvas, frame)
 }
 
 private class CanvasFullContourRenderer(
     private val surface: CanvasEffectRenderSurface
 ) : CanvasEffectTarget {
-    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) =
-        surface.drawFullContour(canvas, frame)
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) =
+        surface.drawFullContour(canvas, frame, modifiers)
 }
 
 private class CanvasLuminousSegmentRenderer(
     private val surface: CanvasEffectRenderSurface,
     private val lengthFraction: Float
 ) : CanvasEffectTarget {
-    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) =
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) =
         surface.drawLuminousSegment(
             canvas,
             frame,
@@ -121,17 +124,17 @@ private fun normalizedFraction(value: Float): Float = (value % 1f + 1f) % 1f
 private class CanvasAzureBladeRenderer(
     private val surface: CanvasEffectRenderSurface
 ) : CanvasEffectTarget {
-    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) = surface.drawAzureBlade(canvas, frame)
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) = surface.drawAzureBlade(canvas, frame)
 }
 
 private class CanvasCrimsonBladeRenderer(
     private val surface: CanvasEffectRenderSurface
 ) : CanvasEffectTarget {
-    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) = surface.drawCrimsonBlade(canvas, frame)
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) = surface.drawCrimsonBlade(canvas, frame)
 }
 
 private class CanvasClashBladeRenderer(
     private val surface: CanvasEffectRenderSurface
 ) : CanvasEffectTarget {
-    override fun draw(canvas: Canvas, frame: CanvasEffectFrame) = surface.drawClashBlade(canvas, frame)
+    override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) = surface.drawClashBlade(canvas, frame)
 }
