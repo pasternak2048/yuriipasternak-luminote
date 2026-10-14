@@ -44,12 +44,9 @@ internal class CanvasRenderBackend(
 
         return try {
             when (frame.mode) {
-                RenderMode.ANIMATION -> renderer.draw(
+                RenderMode.ANIMATION -> renderer.drawPlan(
                     canvas = canvas,
-                    animationProgress = frame.animationProgress,
-                    effectPhase = frame.effectPhase,
-                    gradientPhase = frame.gradientPhase,
-                    frameTimeNanos = frame.frameTimeNanos
+                    frame = frame
                 )
 
                 RenderMode.STATIC_CALIBRATION -> {

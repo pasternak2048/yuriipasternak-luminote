@@ -3,6 +3,7 @@ package com.yp.luminote.app.rendering.canvas
 import android.graphics.Canvas
 import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
+import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 
 /**
  * Canvas translation of the backend-neutral effect contract.
@@ -30,6 +31,21 @@ internal class CanvasEffectDispatcher(
             CanvasLuminousSegmentRenderer(surface, effectSpec.lengthFraction)
         }
         is HaloEffectSpec.Blade -> when (effectSpec.variant) {
+            BladeVariant.AZURE -> azureBlade
+            BladeVariant.CRIMSON -> crimsonBlade
+            BladeVariant.CLASH -> clashBlade
+        }
+    }
+
+    /** Plan operation adapter; it deliberately binds to the established render targets. */
+    fun resolve(operation: PrimaryVisualOperation): CanvasEffectTarget = when (operation) {
+        PrimaryVisualOperation.LightImpulse -> specializedField
+        PrimaryVisualOperation.Supernova -> supernova
+        PrimaryVisualOperation.FullContourPulse -> fullContour
+        is PrimaryVisualOperation.TravelingLuminousSegment -> luminousSegments.getOrPut(operation.lengthFraction) {
+            CanvasLuminousSegmentRenderer(surface, operation.lengthFraction)
+        }
+        is PrimaryVisualOperation.ForceBlade -> when (operation.variant) {
             BladeVariant.AZURE -> azureBlade
             BladeVariant.CRIMSON -> crimsonBlade
             BladeVariant.CLASH -> clashBlade
