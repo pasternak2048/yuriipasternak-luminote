@@ -40,6 +40,7 @@ internal interface LightImpulseRenderSurface {
     val corePaint: Paint
     val renderStrokeWidth: Float
     val colorRgb: Int
+    val travelCoreSamples: Int
     fun geometry(): StyleGeometry?
     fun alpha(): Int
     fun preparePaint(alpha: Int, effectPhase: Float, gradientPhase: Float)
@@ -486,10 +487,11 @@ private fun drawContinuousImpulseCore(
     minSourceDistance: Float
 ) {
     val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-    val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
+    val coreSamples = surface.travelCoreSamples
+    val sampleLength = coreSpan / coreSamples
     var sample = 0
-    while (sample < LIGHT_CORE_SAMPLES) {
-        val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
+    while (sample < coreSamples) {
+        val position = (sample + 0.5f) / coreSamples
         // Start at zero at the physical leading edge, then bloom into a compact peak. This
         // keeps the front tapered from the first frame rather than only at convergence.
         val softenedEnergy = lightImpulseTaperedFrontStrength(position)
@@ -535,11 +537,12 @@ private fun drawSourceAnchoredImpulseCore(
     surface.corePaint.strokeCap = lightImpulseOwnedBeamCap()
     val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, availableOwnedLength * 0.60f)
     val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-    val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
+    val coreSamples = surface.travelCoreSamples
+    val sampleLength = coreSpan / coreSamples
     val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + pulseDirection * 0.7f)
     var sample = 0
-    while (sample < LIGHT_CORE_SAMPLES) {
-        val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
+    while (sample < coreSamples) {
+        val position = (sample + 0.5f) / coreSamples
         // The same pointed profile is measured outward from the bottom source. The two
         // low-energy tips meet the reserved bloom, which turns their reunion into one local
         // glint instead of two blunt caps stacking at the endpoint.

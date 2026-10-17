@@ -12,12 +12,12 @@ class HaloAnimationDefinitionsTest {
         assertEquals(
             listOf(
                 "IMPULSE",
+                "SUPERNOVA",
                 "PULSE",
                 "SNAKE",
                 "AZURE_BLADE",
                 "CRIMSON_BLADE",
-                "FORCE_CLASH",
-                "SUPERNOVA"
+                "FORCE_CLASH"
             ),
             LuminoteHaloAnimations.all.map { it.id.value }
         )

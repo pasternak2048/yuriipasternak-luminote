@@ -6,6 +6,9 @@ import com.yp.luminote.app.effects.geometry.EdgeSegmentRenderer
 import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.animation.LightImpulseEndpoints
+import com.yp.luminote.app.animation.LIGHT_CORE_SAMPLES
+import com.yp.luminote.app.animation.NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES
+import com.yp.luminote.app.animation.definitions.ImpulseAnimation
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.plan.GeometryRequest
 import com.yp.luminote.app.animation.plan.HaloEffectVisualPlanMapper
@@ -43,6 +46,70 @@ internal fun usesLightImpulseRenderer(config: HaloConfig): Boolean =
 internal fun impulseUsesNormalColorTreatment(config: HaloConfig): Boolean =
     config.renderMode != HaloRenderMode.LIGHT_IMPULSE &&
         config.effectPlan is HaloEffectSpec.SpecializedField
+
+/**
+ * Refines only the first normal catalog Impulse while its source is recorded into the approved
+ * Blur/Glow operation scope. The dedicated reminder route and modifier-free/direct paths keep
+ * their existing 28-sample source exactly.
+ */
+internal fun lightImpulseCoreSamplesFor(
+    config: HaloConfig,
+    operation: PrimaryVisualOperation,
+    modifiers: List<VisualModifier>
+): Int = if (
+    operation is PrimaryVisualOperation.LightImpulse &&
+    config.motion == ImpulseAnimation.id &&
+    config.renderMode == HaloRenderMode.NORMAL &&
+    config.effectPlan is HaloEffectSpec.SpecializedField &&
+    containsOpticalModifier(modifiers)
+) {
+    NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES
+} else {
+    LIGHT_CORE_SAMPLES
+}
+
+/** Frame-path modifier lookup: indexed access avoids iterator and predicate allocation. */
+private fun containsOpticalModifier(modifiers: List<VisualModifier>): Boolean {
+    var index = 0
+    while (index < modifiers.size) {
+        when (modifiers[index]) {
+            is VisualModifier.Blur,
+            is VisualModifier.Glow -> return true
+            else -> Unit
+        }
+        index++
+    }
+    return false
+}
+
+private fun firstBlurModifier(modifiers: List<VisualModifier>): VisualModifier.Blur? {
+    var index = 0
+    while (index < modifiers.size) {
+        val modifier = modifiers[index]
+        if (modifier is VisualModifier.Blur) return modifier
+        index++
+    }
+    return null
+}
+
+private fun firstGlowModifier(modifiers: List<VisualModifier>): VisualModifier.Glow? {
+    var index = 0
+    while (index < modifiers.size) {
+        val modifier = modifiers[index]
+        if (modifier is VisualModifier.Glow) return modifier
+        index++
+    }
+    return null
+}
+
+private fun computePlanRequiresHardwareEffects(plan: VisualPlanSpec): Boolean {
+    var emitterIndex = 0
+    while (emitterIndex < plan.emitters.size) {
+        if (containsOpticalModifier(plan.emitters[emitterIndex].modifiers)) return true
+        emitterIndex++
+    }
+    return false
+}
 
 
 
@@ -147,6 +214,7 @@ internal class EdgeRenderPipeline(
     }
 
     internal fun lightImpulseAlpha(): Int = (255f * appearance().intensity).roundToInt().coerceIn(0, 255)
+    private var lightImpulsePulseMultiplier = 1f
     private var config =
         config.sanitized()
 
@@ -202,6 +270,7 @@ internal class EdgeRenderPipeline(
 
     /** Hardware-only optical resources; never leaked into plan or frame contracts. */
     private val hardwareContourExecutor = HardwareContourExecutor()
+    private val hardwareCompositedOperationExecutor = HardwareCompositedOperationExecutor()
 
     private val conventionalRenderer = ConventionalEdgeRenderer(object : ConventionalRenderSurface {
         override val outlinePath: Path
@@ -226,10 +295,14 @@ internal class EdgeRenderPipeline(
             get() = this@EdgeRenderPipeline.renderStrokeWidth
         override val colorRgb: Int
             get() = this@EdgeRenderPipeline.colorRgb
+        override val travelCoreSamples: Int
+            get() = lightImpulseCoreSamples
 
         override fun geometry(): StyleGeometry? = lightImpulseGeometry()
 
-        override fun alpha(): Int = lightImpulseAlpha()
+        override fun alpha(): Int = (
+            lightImpulseAlpha() * lightImpulsePulseMultiplier * compositedSourceAlphaScale
+        ).roundToInt().coerceIn(0, 255)
 
         override fun preparePaint(alpha: Int, effectPhase: Float, gradientPhase: Float) {
             prepareLightImpulsePaint(alpha, effectPhase, gradientPhase)
@@ -256,9 +329,18 @@ internal class EdgeRenderPipeline(
         ForceBladesRenderer(outline)
 
     private val canvasEffectDispatcher = CanvasEffectDispatcher(object : CanvasEffectRenderSurface {
-        override fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame) {
+        override fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) {
             // Ordinary Impulse retains its historical full-intensity primitive path.
-            lightImpulseRenderer.draw(canvas, 1f, frame.phase, frame.gradientPhase)
+            lightImpulsePulseMultiplier = frame.intensityPulseMultiplier
+            compositedSourceAlphaScale = frame.compositedSourceAlphaScale
+            lightImpulseCoreSamples = frame.lightImpulseCoreSamples
+            try {
+                lightImpulseRenderer.draw(canvas, 1f, frame.phase, frame.gradientPhase)
+            } finally {
+                lightImpulsePulseMultiplier = 1f
+                compositedSourceAlphaScale = 1f
+                lightImpulseCoreSamples = LIGHT_CORE_SAMPLES
+            }
         }
 
         override fun drawSupernova(canvas: Canvas, frame: CanvasEffectFrame) {
@@ -307,12 +389,23 @@ internal class EdgeRenderPipeline(
         }
     })
 
+    /**
+     * Transient scale used only while a normal specialized-field operation is
+     * recorded into a hardware compositing node. The direct and dedicated
+     * Light Impulse routes always use the identity value.
+     */
+    private var compositedSourceAlphaScale = 1f
+
+    /** Reset after every source recording; the dedicated renderer retains its established core. */
+    private var lightImpulseCoreSamples = LIGHT_CORE_SAMPLES
+
     /** Resolved once per config/session; a VSYNC delegates to this cached target. */
     private var canvasEffectTarget = canvasEffectDispatcher.resolve(
         this.config.effectPlan
     )
     private val renderFrame = CanvasEffectFrame()
     private var visualPlan: VisualPlanSpec = HaloEffectVisualPlanMapper.map(this.config)
+    private var planRequiresHardwareEffects = computePlanRequiresHardwareEffects(visualPlan)
     /** Targets are bound when the immutable session plan changes, never selected at VSYNC. */
     private var planTargets: List<CanvasEffectTarget> = visualPlan.emitters.map {
         canvasEffectDispatcher.resolve(it.operation)
@@ -352,7 +445,9 @@ internal class EdgeRenderPipeline(
             canvasEffectTarget = canvasEffectDispatcher.resolve(next.effectPlan)
         }
         visualPlan = HaloEffectVisualPlanMapper.map(next)
+        planRequiresHardwareEffects = computePlanRequiresHardwareEffects(visualPlan)
         hardwareContourExecutor.invalidateConfiguration()
+        hardwareCompositedOperationExecutor.invalidateConfiguration()
         warmVisualResources(visualPlan)
         planTargets = visualPlan.emitters.map { canvasEffectDispatcher.resolve(it.operation) }
 
@@ -374,6 +469,7 @@ internal class EdgeRenderPipeline(
         gradientOutlineVersion = -1
         outline.clearRenderCaches()
         hardwareContourExecutor.invalidateSurface()
+        hardwareCompositedOperationExecutor.invalidateSurface()
     }
 
     fun draw(
@@ -397,11 +493,14 @@ internal class EdgeRenderPipeline(
                     command.operation,
                     command.phase,
                     command.gradientPhase,
-                    if (command.operation is PrimaryVisualOperation.LightImpulse) lightImpulseAlpha() else command.alpha,
+                    if (command.operation is PrimaryVisualOperation.LightImpulse) {
+                        (lightImpulseAlpha() * command.intensityPulseMultiplier)
+                            .roundToInt().coerceIn(0, 255)
+                    } else command.alpha,
                     command.frameTimeNanos
                 )
                 drawCommand(canvas, planTargets[index], command.operation, command.modifiers, command.animationProgress, command.phase,
-                    command.gradientPhase, command.alpha, command.frameTimeNanos)
+                    command.gradientPhase, command.alpha, command.intensityPulseMultiplier, command.frameTimeNanos)
             }
         } finally {
             activeAppearance = null
@@ -412,7 +511,9 @@ internal class EdgeRenderPipeline(
 
     internal fun replaceVisualPlanForTest(plan: VisualPlanSpec) {
         visualPlan = plan
+        planRequiresHardwareEffects = computePlanRequiresHardwareEffects(plan)
         hardwareContourExecutor.invalidateConfiguration()
+        hardwareCompositedOperationExecutor.invalidateConfiguration()
         warmVisualResources(plan)
         planTargets = visualPlan.emitters.map { canvasEffectDispatcher.resolve(it.operation) }
     }
@@ -445,10 +546,16 @@ internal class EdgeRenderPipeline(
         effectPhase: Float,
         gradientPhase: Float,
         baseAlpha: Int,
+        pulseMultiplier: Float,
         frameTimeNanos: Long
     ) {
         if (operation is PrimaryVisualOperation.LightImpulse && usesLightImpulseRenderer(config)) {
-            lightImpulseRenderer.draw(canvas, animationProgress, effectPhase, gradientPhase)
+            lightImpulsePulseMultiplier = pulseMultiplier
+            try {
+                lightImpulseRenderer.draw(canvas, animationProgress, effectPhase, gradientPhase)
+            } finally {
+                lightImpulsePulseMultiplier = 1f
+            }
             return
         }
         if (baseAlpha == 0) return
@@ -460,22 +567,35 @@ internal class EdgeRenderPipeline(
         renderFrame.alpha = baseAlpha
         renderFrame.gradientPhase = gradientPhase
         renderFrame.frameTimeNanos = frameTimeNanos
-        target.draw(canvas, renderFrame, modifiers)
+        renderFrame.intensityPulseMultiplier = pulseMultiplier
+        renderFrame.lightImpulseCoreSamples = lightImpulseCoreSamplesFor(config, operation, modifiers)
+        if (hasOpticalModifier(modifiers) && operation !is PrimaryVisualOperation.FullContourPulse) {
+            try {
+                hardwareCompositedOperationExecutor.draw(canvas, target, renderFrame, modifiers)
+            } finally {
+                renderFrame.lightImpulseCoreSamples = LIGHT_CORE_SAMPLES
+            }
+        } else {
+            try {
+                target.draw(canvas, renderFrame, modifiers)
+            } finally {
+                renderFrame.lightImpulseCoreSamples = LIGHT_CORE_SAMPLES
+            }
+        }
         tracePaintPass(PaintPassStage.COMMAND_COMPLETE)
     }
 
     /**
-     * Full-contour is the only operation admitted to the new optical stack.
-     * Blur is applied to the source pass; Glow is an independently drawn, wider
-     * blurred envelope behind it. Both passes retain the established contour clip.
+     * Full-contour owns its native optical implementation. Other admitted
+     * families use the reusable composited-operation executor below.
      */
     private fun drawFullContourWithModifiers(
         canvas: Canvas,
         frame: CanvasEffectFrame,
         modifiers: List<VisualModifier>
     ) {
-        val blur = modifiers.firstOrNull { it is VisualModifier.Blur } as? VisualModifier.Blur
-        val glow = modifiers.firstOrNull { it is VisualModifier.Glow } as? VisualModifier.Glow
+        val blur = firstBlurModifier(modifiers)
+        val glow = firstGlowModifier(modifiers)
         if (blur == null && glow == null) {
             conventionalRenderer.drawPulse(canvas, frame.alpha, frame.phase, frame.gradientPhase)
             return
@@ -523,17 +643,23 @@ internal class EdgeRenderPipeline(
                     is VisualModifier.Glow -> modifier.radiusPx
                     else -> null
                 }
-                if (radius != null && radius > 0f) hardwareContourExecutor.warm(radius)
+                if (radius != null && radius > 0f) {
+                    hardwareContourExecutor.warm(radius)
+                    hardwareCompositedOperationExecutor.warm(radius)
+                }
             }
         }
     }
 
-    internal fun requiresHardwareEffects(): Boolean = visualPlan.emitters.any { emitter ->
-        emitter.operation is PrimaryVisualOperation.FullContourPulse &&
-            emitter.modifiers.any { it is VisualModifier.Blur || it is VisualModifier.Glow }
+    internal fun requiresHardwareEffects(): Boolean = planRequiresHardwareEffects
+
+    fun dispose() {
+        hardwareContourExecutor.dispose()
+        hardwareCompositedOperationExecutor.dispose()
     }
 
-    fun dispose() = hardwareContourExecutor.dispose()
+    private fun hasOpticalModifier(modifiers: List<VisualModifier>): Boolean =
+        containsOpticalModifier(modifiers)
 
     /**
      * Canvas-private hardware executor for the admitted FullContour optical stack. The display
@@ -608,6 +734,113 @@ internal class EdgeRenderPipeline(
             val recordingCanvas = node.beginRecording(width, height)
             recordingCanvas.drawPath(path, corePaint)
             node.endRecording()
+        }
+
+        fun invalidateConfiguration() {
+            sourceNode.setRenderEffect(null)
+            glowNode.setRenderEffect(null)
+            sourceNode.discardDisplayList()
+            glowNode.discardDisplayList()
+            blurEffects.clear()
+        }
+
+        fun invalidateSurface() {
+            sourceNode.discardDisplayList()
+            glowNode.discardDisplayList()
+        }
+
+        fun dispose() = invalidateConfiguration()
+    }
+
+    /**
+     * Reusable full-operation source for families whose compatible effect scope is their
+     * already-composited Canvas result. The target retains ownership of motion, geometry and
+     * internal layers; this executor only applies the admitted optical stack around it.
+     */
+    private inner class HardwareCompositedOperationExecutor {
+        private val sourceNode = RenderNode("COMPOSITED_OPERATION_SOURCE")
+        private val glowNode = RenderNode("COMPOSITED_OPERATION_GLOW")
+        private val blurEffects = mutableMapOf<Float, RenderEffect>()
+
+        fun warm(radiusPx: Float) {
+            if (radiusPx > 0f && radiusPx !in blurEffects) {
+                blurEffects[radiusPx] = RenderEffect.createBlurEffect(radiusPx, radiusPx, TileMode.CLAMP)
+            }
+        }
+
+        fun draw(
+            parent: Canvas,
+            target: CanvasEffectTarget,
+            frame: CanvasEffectFrame,
+            modifiers: List<VisualModifier>
+        ) {
+            val width = parent.width
+            val height = parent.height
+            check(parent.isHardwareAccelerated && width > 0 && height > 0) {
+                "Hardware composited operation execution requires a hardware Canvas with positive dimensions"
+            }
+            val blur = firstBlurModifier(modifiers)
+            val glow = firstGlowModifier(modifiers)
+            val saveCount = parent.save()
+            try {
+                // A RenderEffect is evaluated after display-list recording, so retain the
+                // physical contour clip on the parent to prevent blurred rectangular artifacts.
+                parent.clipPath(outlinePath)
+                if (glow != null && glow.radiusPx > 0f && glow.alphaMultiplier > 0f) {
+                    glowNode.setRenderEffect(blurEffects.getValue(glow.radiusPx))
+                    record(
+                        glowNode,
+                        width,
+                        height,
+                        target,
+                        frame,
+                        (frame.alpha * glow.alphaMultiplier).roundToInt().coerceIn(0, 255),
+                        glow.alphaMultiplier
+                    )
+                    tracePaintPass(
+                        PaintPassStage.GLOW_ENVELOPE,
+                        glow.radiusPx,
+                        System.identityHashCode(glowNode)
+                    )
+                    parent.drawRenderNode(glowNode)
+                }
+                val sourceRadius = if (blur != null && blur.radiusPx > 0f) blur.radiusPx else null
+                sourceNode.setRenderEffect(
+                    if (sourceRadius == null) null else blurEffects.getValue(sourceRadius)
+                )
+                record(sourceNode, width, height, target, frame, frame.alpha, 1f)
+                tracePaintPass(
+                    PaintPassStage.SOURCE,
+                    sourceRadius,
+                    System.identityHashCode(sourceNode)
+                )
+                parent.drawRenderNode(sourceNode)
+            } finally {
+                parent.restoreToCount(saveCount)
+            }
+        }
+
+        private fun record(
+            node: RenderNode,
+            width: Int,
+            height: Int,
+            target: CanvasEffectTarget,
+            frame: CanvasEffectFrame,
+            alpha: Int,
+            sourceAlphaScale: Float
+        ) {
+            node.setPosition(0, 0, width, height)
+            val previousAlpha = frame.alpha
+            val previousSourceAlphaScale = frame.compositedSourceAlphaScale
+            frame.alpha = alpha
+            frame.compositedSourceAlphaScale = sourceAlphaScale
+            try {
+                target.draw(node.beginRecording(width, height), frame, emptyList())
+            } finally {
+                node.endRecording()
+                frame.alpha = previousAlpha
+                frame.compositedSourceAlphaScale = previousSourceAlphaScale
+            }
         }
 
         fun invalidateConfiguration() {

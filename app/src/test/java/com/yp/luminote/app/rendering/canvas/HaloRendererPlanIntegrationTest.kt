@@ -2,10 +2,14 @@ package com.yp.luminote.app.rendering.canvas
 
 import android.graphics.Canvas
 import com.yp.luminote.app.animation.definitions.BladeVariant
+import com.yp.luminote.app.animation.definitions.ImpulseAnimation
+import com.yp.luminote.app.animation.LIGHT_CORE_SAMPLES
+import com.yp.luminote.app.animation.NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.plan.HaloEffectVisualPlanMapper
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualPlanSpec
+import com.yp.luminote.app.animation.plan.VisualModifier
 import com.yp.luminote.app.effects.geometry.DisplayOutline
 import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.effects.model.HaloRenderMode
@@ -127,5 +131,52 @@ class HaloRendererPlanIntegrationTest {
         assertEquals(listOf(PrimaryVisualOperation.FullContourPulse, PrimaryVisualOperation.FullContourPulse), traces.map { it.operation })
         assertEquals((255f * config.intensity).roundToInt(), traces.first().alpha)
         assertEquals(traces[0], traces[1])
+    }
+
+    @Test
+    fun `dedicated light impulse retains its modifier-free renderer route`() {
+        val config = HaloConfig(renderMode = HaloRenderMode.LIGHT_IMPULSE, effectPlan = HaloEffectSpec.SpecializedField)
+        val renderer = HaloRenderer(config, DisplayOutline(density = 1f).also { it.resize(320, 640) })
+        val base = HaloEffectVisualPlanMapper.map(config).emitters.single()
+        assertEquals(emptyList<VisualModifier>(), base.modifiers)
+        val traces = mutableListOf<EdgeRenderPipeline.RenderTrace>()
+        renderer.setRenderTraceForTest(traces)
+        renderer.drawPlan(Canvas(), RenderFrame().apply {
+            animationProgress = 0.6f
+            effectPhase = 0.4f
+            gradientPhase = 0.7f
+            frameTimeNanos = 0L
+        })
+
+        assertEquals(PrimaryVisualOperation.LightImpulse, traces.single().operation)
+        assertEquals(0.4f, traces.single().phase)
+        assertEquals(0.7f, traces.single().gradientPhase)
+        assertEquals((255f * traces.single().appearance.intensity).roundToInt(), traces.single().alpha)
+        assertEquals(base.geometry, traces.single().geometry)
+    }
+
+    @Test
+    fun `wavefront refinement is scoped to the normal composited impulse source`() {
+        val normal = HaloConfig(
+            motion = ImpulseAnimation.id,
+            renderMode = HaloRenderMode.NORMAL,
+            effectPlan = HaloEffectSpec.SpecializedField
+        )
+        val normalEmitter = HaloEffectVisualPlanMapper.map(normal).emitters.single()
+        val reminder = normal.copy(renderMode = HaloRenderMode.LIGHT_IMPULSE)
+        val reminderEmitter = HaloEffectVisualPlanMapper.map(reminder).emitters.single()
+
+        assertEquals(
+            NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES,
+            lightImpulseCoreSamplesFor(normal, normalEmitter.operation, normalEmitter.modifiers)
+        )
+        assertEquals(
+            LIGHT_CORE_SAMPLES,
+            lightImpulseCoreSamplesFor(normal, normalEmitter.operation, emptyList())
+        )
+        assertEquals(
+            LIGHT_CORE_SAMPLES,
+            lightImpulseCoreSamplesFor(reminder, reminderEmitter.operation, reminderEmitter.modifiers)
+        )
     }
 }

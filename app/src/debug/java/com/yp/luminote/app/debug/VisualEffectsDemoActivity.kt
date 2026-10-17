@@ -52,6 +52,7 @@ internal class VisualEffectsDemoActivity : ComponentActivity() {
                 setContent {
                     LuminoteTheme {
                         VisualEffectsDemoControls(
+                            onFamilySelected = controller::selectFamily,
                             onModeSelected = controller::select,
                             onRestart = controller::restart
                         )
@@ -70,14 +71,16 @@ internal class VisualEffectsDemoActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
-
 @Composable
 private fun VisualEffectsDemoControls(
-    onModeSelected: (VisualEffectsDemoMode) -> Unit,
+    onFamilySelected: (VisualEffectsDemoFamily) -> Unit,
+    onModeSelected: (VisualEffectsDemoMode) -> VisualEffectsDemoSelection,
     onRestart: () -> Unit
 ) {
+    var selectedFamily by remember { mutableStateOf(VisualEffectsDemoFamily.FULL_CONTOUR) }
     var selectedMode by remember { mutableStateOf(VisualEffectsDemoMode.BASELINE) }
     var controlsVisible by remember { mutableStateOf(true) }
+    var selectionStatus by remember { mutableStateOf<String?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (controlsVisible) {
@@ -99,6 +102,31 @@ private fun VisualEffectsDemoControls(
                     text = "Visual effects demo",
                     style = MaterialTheme.typography.titleMedium
                 )
+                Text(
+                    text = "Animation family",
+                    style = MaterialTheme.typography.labelLarge
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    VisualEffectsDemoFamily.entries.forEach { family ->
+                        FilterChip(
+                            selected = selectedFamily == family,
+                            onClick = {
+                                selectedFamily = family
+                                selectedMode = VisualEffectsDemoMode.BASELINE
+                                selectionStatus = null
+                                onFamilySelected(family)
+                            },
+                            label = { Text(family.label) }
+                        )
+                    }
+                }
+                Text(
+                    text = "Modifier stack",
+                    style = MaterialTheme.typography.labelLarge
+                )
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -107,12 +135,22 @@ private fun VisualEffectsDemoControls(
                         FilterChip(
                             selected = selectedMode == mode,
                             onClick = {
-                                selectedMode = mode
-                                onModeSelected(mode)
+                                when (val selection = onModeSelected(mode)) {
+                                    VisualEffectsDemoSelection.Applied -> {
+                                        selectedMode = mode
+                                        selectionStatus = null
+                                    }
+                                    is VisualEffectsDemoSelection.Unsupported -> {
+                                        selectionStatus = selection.reason
+                                    }
+                                }
                             },
                             label = { Text(mode.label) }
                         )
                     }
+                }
+                selectionStatus?.let { status ->
+                    Text(text = status, color = MaterialTheme.colorScheme.error)
                 }
                 Button(
                     onClick = onRestart,
@@ -143,12 +181,3 @@ private fun VisualEffectsDemoControls(
         }
     }
 }
-
-private val VisualEffectsDemoMode.label: String
-    get() = when (this) {
-        VisualEffectsDemoMode.BASELINE -> "Baseline"
-        VisualEffectsDemoMode.GLOW -> "Glow"
-        VisualEffectsDemoMode.BLUR -> "Blur"
-        VisualEffectsDemoMode.INTENSITY_PULSE -> "Intensity Pulse"
-        VisualEffectsDemoMode.COMBINED -> "Combined"
-    }
