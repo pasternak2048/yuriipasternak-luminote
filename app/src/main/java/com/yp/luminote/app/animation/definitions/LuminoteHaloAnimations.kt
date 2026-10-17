@@ -5,12 +5,12 @@ object LuminoteHaloAnimations {
     val registry = HaloAnimationRegistry(
         listOf(
             ImpulseAnimation,
+            SupernovaAnimation,
             PulseAnimation,
             SnakeAnimation,
             AzureBladeAnimation,
             CrimsonBladeAnimation,
-            ForceClashAnimation,
-            SupernovaAnimation
+            ForceClashAnimation
         )
     )
 

@@ -14,6 +14,8 @@ internal const val LIGHT_ATTACHED_TAIL_BODY_SHARE = 0.55f
 internal const val LIGHT_TERMINAL_SOURCE_RADIUS_FRACTION = 0.040f
 internal const val LIGHT_TAIL_SAMPLES = 40
 internal const val LIGHT_CORE_SAMPLES = 28
+/** Extra longitudinal resolution only for normal Impulse recorded into its optical stack. */
+internal const val NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES = 48
 internal const val LIGHT_BLOOM_SAMPLES = 40
 internal const val LIGHT_BRANCH_EMERGENCE_TRAVEL = 0.08f
 internal const val LIGHT_TAIL_PASS_SHARE = 0.46f

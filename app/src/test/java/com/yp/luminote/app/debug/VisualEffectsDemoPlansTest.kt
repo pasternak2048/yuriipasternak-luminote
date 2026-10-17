@@ -1,42 +1,55 @@
 package com.yp.luminote.app.debug
 
-import com.yp.luminote.app.animation.definitions.HaloEffectSpec
-import com.yp.luminote.app.animation.definitions.PulseAnimation
+import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
-import com.yp.luminote.app.animation.plan.VisualModifier
-import com.yp.luminote.app.effects.model.HaloConfig
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertSame
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VisualEffectsDemoPlansTest {
     @Test
-    fun `all modes keep one FullContourPulse base and change only modifiers`() {
-        val plans = visualEffectsDemoPlans(
-            HaloConfig(motion = PulseAnimation.id, effectPlan = HaloEffectSpec.FullContour).sanitized()
-        )
-
-        assertEquals(VisualEffectsDemoMode.entries.toSet(), plans.keys)
-        val baseline = plans.getValue(VisualEffectsDemoMode.BASELINE).emitters.single()
-        assertSame(PrimaryVisualOperation.FullContourPulse, baseline.operation)
-        assertEquals(emptyList<VisualModifier>(), baseline.modifiers)
-
-        plans.values.forEach { plan ->
-            val emitter = plan.emitters.single()
-            assertSame(PrimaryVisualOperation.FullContourPulse, emitter.operation)
-            assertEquals(baseline.geometry, emitter.geometry)
-            assertEquals(baseline.transform, emitter.transform)
-            assertEquals(baseline.appearance, emitter.appearance)
+    fun `every family maps its baseline to its real production operation`() {
+        val operations = VisualEffectsDemoFamily.entries.associateWith { family ->
+            visualEffectsDemoPlan(family, VisualEffectsDemoMode.BASELINE)!!.emitters.single().operation
         }
-        assertEquals(listOf(VisualModifier.Glow(18f, 0.75f)), plans.getValue(VisualEffectsDemoMode.GLOW).emitters.single().modifiers)
-        assertEquals(listOf(VisualModifier.Blur(10f)), plans.getValue(VisualEffectsDemoMode.BLUR).emitters.single().modifiers)
-        assertEquals(
-            listOf(VisualModifier.IntensityPulse(0.55f, 1.2f)),
-            plans.getValue(VisualEffectsDemoMode.INTENSITY_PULSE).emitters.single().modifiers
-        )
-        assertEquals(
-            listOf(VisualModifier.IntensityPulse(0.55f, 1.2f), VisualModifier.Blur(10f), VisualModifier.Glow(18f, 0.75f)),
-            plans.getValue(VisualEffectsDemoMode.COMBINED).emitters.single().modifiers
-        )
+
+        assertEquals(PrimaryVisualOperation.FullContourPulse, operations.getValue(VisualEffectsDemoFamily.FULL_CONTOUR))
+        assertEquals(PrimaryVisualOperation.TravelingLuminousSegment(0.18f), operations.getValue(VisualEffectsDemoFamily.LUMINOUS_SEGMENT))
+        assertEquals(PrimaryVisualOperation.LightImpulse, operations.getValue(VisualEffectsDemoFamily.LIGHT_IMPULSE))
+        assertEquals(PrimaryVisualOperation.Supernova, operations.getValue(VisualEffectsDemoFamily.SUPERNOVA))
+        assertEquals(PrimaryVisualOperation.ForceBlade(BladeVariant.AZURE), operations.getValue(VisualEffectsDemoFamily.FORCE_BLADE_AZURE))
+        assertEquals(PrimaryVisualOperation.ForceBlade(BladeVariant.CRIMSON), operations.getValue(VisualEffectsDemoFamily.FORCE_BLADE_CRIMSON))
+        assertEquals(PrimaryVisualOperation.ForceBlade(BladeVariant.CLASH), operations.getValue(VisualEffectsDemoFamily.FORCE_BLADE_CLASH))
+    }
+
+    @Test
+    fun `D1 exposes full stacks only for families with admitted semantics`() {
+        listOf(
+            VisualEffectsDemoFamily.FULL_CONTOUR,
+            VisualEffectsDemoFamily.LUMINOUS_SEGMENT,
+            VisualEffectsDemoFamily.SUPERNOVA
+        ).forEach { family ->
+            VisualEffectsDemoMode.entries.forEach { mode ->
+                assertTrue(supportsDemoMode(family, mode))
+                assertTrue(visualEffectsDemoPlan(family, mode) != null)
+            }
+        }
+
+        listOf(
+            VisualEffectsDemoFamily.LIGHT_IMPULSE,
+            VisualEffectsDemoFamily.FORCE_BLADE_AZURE,
+            VisualEffectsDemoFamily.FORCE_BLADE_CRIMSON,
+            VisualEffectsDemoFamily.FORCE_BLADE_CLASH
+        ).forEach { family ->
+            assertTrue(supportsDemoMode(family, VisualEffectsDemoMode.BASELINE))
+            assertTrue(supportsDemoMode(family, VisualEffectsDemoMode.INTENSITY_PULSE))
+            assertTrue(visualEffectsDemoPlan(family, VisualEffectsDemoMode.INTENSITY_PULSE) != null)
+            assertFalse(supportsDemoMode(family, VisualEffectsDemoMode.BLUR))
+            assertFalse(supportsDemoMode(family, VisualEffectsDemoMode.GLOW))
+            assertFalse(supportsDemoMode(family, VisualEffectsDemoMode.COMBINED))
+            assertNull(visualEffectsDemoPlan(family, VisualEffectsDemoMode.GLOW))
+        }
     }
 }

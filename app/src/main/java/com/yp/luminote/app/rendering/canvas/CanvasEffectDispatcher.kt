@@ -1,10 +1,12 @@
 package com.yp.luminote.app.rendering.canvas
 
 import android.graphics.Canvas
+import com.yp.luminote.app.animation.LIGHT_CORE_SAMPLES
 import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualModifier
+import com.yp.luminote.app.animation.plan.LuminousSegmentAppearance
 
 /**
  * Canvas translation of the backend-neutral effect contract.
@@ -56,7 +58,7 @@ internal class CanvasEffectDispatcher(
 
 /** Existing Canvas primitives are exposed without leaking them into definitions. */
 internal interface CanvasEffectRenderSurface {
-    fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame)
+    fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>)
     fun drawSupernova(canvas: Canvas, frame: CanvasEffectFrame)
     fun drawFullContour(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>)
     fun drawLuminousSegment(
@@ -76,6 +78,21 @@ internal class CanvasEffectFrame {
     var alpha: Int = 0
     var gradientPhase: Float = 0f
     var frameTimeNanos: Long = 0L
+    var intensityPulseMultiplier: Float = 1f
+    /**
+     * Canvas-private scale for a composited operation pass. It is intentionally
+     * separate from [alpha]: normal Impulse owns its historical source envelope
+     * and must not inherit the generic animation-progress alpha.
+     */
+    var compositedSourceAlphaScale: Float = 1f
+    /**
+     * Longitudinal core resolution selected by the config-bound renderer route. This is mutable
+     * frame state so a normal Impulse's RenderNode recording can retain its source-only polish
+     * without changing the dedicated reminder renderer or shared geometry constants.
+     */
+    var lightImpulseCoreSamples: Int = LIGHT_CORE_SAMPLES
+    /** Plan-admitted source treatment for a traveling luminous segment. */
+    var luminousSegmentAppearance: LuminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
 }
 
 internal fun interface CanvasEffectTarget {
@@ -88,7 +105,7 @@ private class CanvasSpecializedFieldRenderer(
     private val surface: CanvasEffectRenderSurface
 ) : CanvasEffectTarget {
     override fun draw(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) =
-        surface.drawSpecializedField(canvas, frame)
+        surface.drawSpecializedField(canvas, frame, modifiers)
 }
 
 private class CanvasSupernovaRenderer(

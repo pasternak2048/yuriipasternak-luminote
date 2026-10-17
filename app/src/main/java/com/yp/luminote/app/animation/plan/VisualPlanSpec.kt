@@ -4,6 +4,9 @@ import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import java.util.Collections
+import kotlin.math.PI
+import kotlin.math.roundToLong
+import kotlin.math.sin
 
 /**
  * Immutable, backend-neutral visual description resolved once for an animation
@@ -24,14 +27,17 @@ internal class VisualEmitterSpec(
     val transform: EmitterTransform = EmitterTransform(),
     val appearance: AppearancePayload,
     val operation: PrimaryVisualOperation,
-    modifiers: List<VisualModifier> = emptyList()
+    val modifierProfile: VisualModifierProfile = VisualModifierProfile.DEFAULT,
+    modifiers: List<VisualModifier> = emptyList(),
+    /** Backend-neutral longitudinal treatment for a luminous segment source. */
+    val luminousSegmentAppearance: LuminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
 ) {
     /** Closed, ordered effect stack captured at the plan admission boundary. */
     val modifiers: List<VisualModifier> = immutableList(modifiers)
 
     init {
         this.modifiers.forEach { modifier ->
-            require(modifier.isCompatibleWith(operation)) {
+            require(modifier.isCompatibleWith(operation, modifierProfile)) {
                 "${modifier::class.simpleName} is not compatible with ${operation::class.simpleName}."
             }
         }
@@ -45,9 +51,21 @@ internal class VisualEmitterSpec(
         transform: EmitterTransform = this.transform,
         appearance: AppearancePayload = this.appearance,
         operation: PrimaryVisualOperation = this.operation,
-        modifiers: List<VisualModifier> = this.modifiers
-    ) = VisualEmitterSpec(geometry, transform, appearance, operation, modifiers)
+        modifierProfile: VisualModifierProfile = this.modifierProfile,
+        modifiers: List<VisualModifier> = this.modifiers,
+        luminousSegmentAppearance: LuminousSegmentAppearance = this.luminousSegmentAppearance
+    ) = VisualEmitterSpec(geometry, transform, appearance, operation, modifierProfile, modifiers, luminousSegmentAppearance)
 }
+
+/** A source-shape decision, selected at plan admission rather than inferred by Canvas. */
+internal enum class LuminousSegmentAppearance { DEFAULT, FLOWING_SNAKE }
+
+/**
+ * A profile is selected once at plan admission, never inferred by the Canvas
+ * executor. It keeps the reminder's shared LightImpulse operation optically
+ * closed while allowing the one normal registry entry to opt in explicitly.
+ */
+internal enum class VisualModifierProfile { DEFAULT, NORMAL_IMPULSE }
 
 /** Geometry is resolved only by DisplayOutline and EdgePathGeometryProvider at draw time. */
 internal sealed interface GeometryRequest {
@@ -168,13 +186,56 @@ internal sealed interface VisualModifier {
         }
     }
 
-    fun isCompatibleWith(operation: PrimaryVisualOperation): Boolean = when (this) {
-        // Light Impulse owns its dedicated alpha envelope; changing it would be
-        // an approximation until it receives an explicit compatible modifier.
-        is Opacity -> operation !is PrimaryVisualOperation.LightImpulse
-        is IntensityPulse, is Blur, is Glow -> operation is PrimaryVisualOperation.FullContourPulse
+    fun isCompatibleWith(
+        operation: PrimaryVisualOperation,
+        profile: VisualModifierProfile = VisualModifierProfile.DEFAULT
+    ): Boolean = VisualOperationModifierPolicy.allows(operation, this, profile)
+}
+
+/**
+ * The single admission policy for typed visual operations. Keeping it beside the
+ * closed operation/modifier contracts prevents a renderer from advertising a
+ * modifier that its actual Canvas source cannot execute.
+ */
+internal object VisualOperationModifierPolicy {
+    fun allows(
+        operation: PrimaryVisualOperation,
+        modifier: VisualModifier,
+        profile: VisualModifierProfile = VisualModifierProfile.DEFAULT
+    ): Boolean = when (modifier) {
+        // LightImpulse owns an alpha envelope. Its only modifier-capable profile
+        // is the exact normal registry Impulse admitted by the mapper.
+        is VisualModifier.Opacity -> operation !is PrimaryVisualOperation.LightImpulse
+        is VisualModifier.IntensityPulse -> operation !is PrimaryVisualOperation.LightImpulse ||
+            profile == VisualModifierProfile.NORMAL_IMPULSE
+        is VisualModifier.Blur, is VisualModifier.Glow -> operation is PrimaryVisualOperation.FullContourPulse ||
+            operation is PrimaryVisualOperation.TravelingLuminousSegment ||
+            operation is PrimaryVisualOperation.Supernova ||
+            (operation is PrimaryVisualOperation.LightImpulse &&
+                profile == VisualModifierProfile.NORMAL_IMPULSE)
     }
 }
+
+/** Shared by command compilation and the dedicated Light Impulse source path. */
+internal fun intensityPulseMultiplier(modifiers: List<VisualModifier>, frameTimeNanos: Long): Float {
+    var multiplier = 1f
+    var index = 0
+    while (index < modifiers.size) {
+        val modifier = modifiers[index]
+        if (modifier is VisualModifier.IntensityPulse) {
+            // Reduce before trig so long-running sessions retain deterministic sub-frame phase.
+            val periodNanos = (NANOS_PER_SECOND / modifier.frequencyHz).roundToLong()
+            val nanosIntoPeriod = Math.floorMod(frameTimeNanos, periodNanos)
+            val wave = (0.5 + 0.5 * sin(TWO_PI * nanosIntoPeriod.toDouble() / periodNanos)).toFloat()
+            multiplier *= 1f - modifier.amplitude + modifier.amplitude * wave
+        }
+        index++
+    }
+    return multiplier
+}
+
+private const val NANOS_PER_SECOND = 1_000_000_000.0
+private const val TWO_PI = 2.0 * PI
 
 internal fun normalizedFraction(value: Float): Float = (value % 1f + 1f) % 1f
 

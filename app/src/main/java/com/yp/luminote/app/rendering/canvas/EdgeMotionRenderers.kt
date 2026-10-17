@@ -2,6 +2,7 @@ package com.yp.luminote.app.rendering.canvas
 import com.yp.luminote.app.effects.geometry.EdgeSegmentRenderer
 import com.yp.luminote.app.effects.geometry.EdgePathGeometry
 import com.yp.luminote.app.animation.*
+import com.yp.luminote.app.animation.plan.LuminousSegmentAppearance
 
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -21,6 +22,7 @@ internal class StyleGeometry(private val geometry: EdgePathGeometry) {
 }
 
 private const val SNAKE_SEGMENT_FRACTION = 0.18f
+internal const val FLOWING_SNAKE_SAMPLES = 32
 
 private fun normalizedPhase(phase: Float): Float = (phase % 1f + 1f) % 1f
 
@@ -40,6 +42,7 @@ internal interface LightImpulseRenderSurface {
     val corePaint: Paint
     val renderStrokeWidth: Float
     val colorRgb: Int
+    val travelCoreSamples: Int
     fun geometry(): StyleGeometry?
     fun alpha(): Int
     fun preparePaint(alpha: Int, effectPhase: Float, gradientPhase: Float)
@@ -60,15 +63,29 @@ internal class ConventionalEdgeRenderer(private val surface: ConventionalRenderS
         }
     }
 
-    fun drawLuminousSegment(canvas: Canvas, baseAlpha: Int, effectPhase: Float, gradientPhase: Float, startFraction: Float, lengthFraction: Float) {
+    fun drawLuminousSegment(
+        canvas: Canvas,
+        baseAlpha: Int,
+        effectPhase: Float,
+        gradientPhase: Float,
+        startFraction: Float,
+        lengthFraction: Float,
+        appearance: LuminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
+    ) {
         val saveCount = canvas.save()
         try {
             canvas.clipPath(surface.outlinePath)
             surface.preparePaint(baseAlpha, effectPhase, gradientPhase)
             val path = surface.stylePath()
             val geometry = surface.styleGeometry(path)
-            luminousSegment.draw(canvas, geometry, startFraction.coerceIn(0f, 1f) * geometry.length,
-                lengthFraction.coerceIn(0f, 1f) * geometry.length, surface.corePaint, surface.corePaint.alpha, 1f)
+            val start = startFraction.coerceIn(0f, 1f) * geometry.length
+            val length = lengthFraction.coerceIn(0f, 1f) * geometry.length
+            if (appearance == LuminousSegmentAppearance.FLOWING_SNAKE) {
+                luminousSegment.drawFlowingSnake(canvas, geometry, start, length, surface.corePaint, surface.corePaint.alpha)
+            } else {
+                // Preserve the established four-pass source exactly for every non-Snake route.
+                luminousSegment.draw(canvas, geometry, start, length, surface.corePaint, surface.corePaint.alpha, 1f)
+            }
         } finally {
             canvas.restoreToCount(saveCount)
         }
@@ -123,6 +140,33 @@ internal class LuminousEdgeSegmentOptics(private val segmentPath: Path) {
         appendAndDraw(canvas, geometry, center - length / 2f, length, paint)
     }
 
+    /**
+     * Snake's source owns exactly 32 contiguous physical intervals. This makes its tail-to-head
+     * luminance continuous through corners and the contour seam without changing travel geometry.
+     */
+    fun drawFlowingSnake(canvas: Canvas, geometry: StyleGeometry, start: Float, length: Float, paint: Paint, alpha: Int) {
+        if (!length.isFinite() || length < EdgeSegmentRenderer.MIN_RENDERABLE_SEGMENT_PX || alpha <= 0) return
+        val sampleLength = length / FLOWING_SNAKE_SAMPLES
+        if (sampleLength <= 0f) return
+        val baseWidth = paint.strokeWidth
+        val baseCap = paint.strokeCap
+        paint.strokeCap = Paint.Cap.BUTT
+        try {
+            var sample = 0
+            while (sample < FLOWING_SNAKE_SAMPLES) {
+                val center = (sample + 0.5f) / FLOWING_SNAKE_SAMPLES
+                val emission = flowingSnakeEmission(center)
+                val width = baseWidth * flowingSnakeWidthMultiplier(center)
+                drawPass(canvas, geometry, start + sample * sampleLength, sampleLength, paint, alpha, width, emission)
+                sample++
+            }
+        } finally {
+            paint.strokeWidth = baseWidth
+            paint.strokeCap = baseCap
+            paint.alpha = alpha
+        }
+    }
+
     private fun drawPass(canvas: Canvas, geometry: StyleGeometry, start: Float, length: Float, paint: Paint, alpha: Int, strokeWidth: Float, emission: Float) {
         if (length < EdgeSegmentRenderer.MIN_RENDERABLE_SEGMENT_PX || emission <= 0f) return
         paint.alpha = (alpha * emission).roundToInt().coerceIn(0, 255)
@@ -142,6 +186,24 @@ internal class LuminousEdgeSegmentOptics(private val segmentPath: Path) {
         private const val CORE_SHARE = 0.23f
         private const val SOFT_HEAD_SHARE = 0.12f
     }
+}
+
+private fun smoothStep(start: Float, end: Float, value: Float): Float {
+    val fraction = ((value - start) / (end - start)).coerceIn(0f, 1f)
+    return fraction * fraction * (3f - 2f * fraction)
+}
+
+/** Pure source profile used by the 32 fixed Snake intervals; no renderer state or allocation. */
+internal fun flowingSnakeEmission(normalizedPosition: Float): Float {
+    val body = smoothStep(0f, 0.74f, normalizedPosition)
+    val head = smoothStep(0.74f, 1f, normalizedPosition)
+    return (0.02f + 0.82f * body + 0.16f * head).coerceIn(0f, 1f)
+}
+
+internal fun flowingSnakeWidthMultiplier(normalizedPosition: Float): Float {
+    val body = smoothStep(0f, 0.74f, normalizedPosition)
+    val head = smoothStep(0.74f, 1f, normalizedPosition)
+    return 0.76f + 0.26f * body + 0.10f * head
 }
 
 internal class LightImpulseRenderer(private val surface: LightImpulseRenderSurface) {
@@ -486,10 +548,11 @@ private fun drawContinuousImpulseCore(
     minSourceDistance: Float
 ) {
     val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-    val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
+    val coreSamples = surface.travelCoreSamples
+    val sampleLength = coreSpan / coreSamples
     var sample = 0
-    while (sample < LIGHT_CORE_SAMPLES) {
-        val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
+    while (sample < coreSamples) {
+        val position = (sample + 0.5f) / coreSamples
         // Start at zero at the physical leading edge, then bloom into a compact peak. This
         // keeps the front tapered from the first frame rather than only at convergence.
         val softenedEnergy = lightImpulseTaperedFrontStrength(position)
@@ -535,11 +598,12 @@ private fun drawSourceAnchoredImpulseCore(
     surface.corePaint.strokeCap = lightImpulseOwnedBeamCap()
     val coreLength = min(geometry.length * LIGHT_CORE_FRACTION, availableOwnedLength * 0.60f)
     val coreSpan = coreLength * LIGHT_CORE_SPAN_MULTIPLIER
-    val sampleLength = coreSpan / LIGHT_CORE_SAMPLES
+    val coreSamples = surface.travelCoreSamples
+    val sampleLength = coreSpan / coreSamples
     val organicPulse = 0.94f + 0.06f * sin(timeline * 19f + pulseDirection * 0.7f)
     var sample = 0
-    while (sample < LIGHT_CORE_SAMPLES) {
-        val position = (sample + 0.5f) / LIGHT_CORE_SAMPLES
+    while (sample < coreSamples) {
+        val position = (sample + 0.5f) / coreSamples
         // The same pointed profile is measured outward from the bottom source. The two
         // low-energy tips meet the reserved bloom, which turns their reunion into one local
         // glint instead of two blunt caps stacking at the endpoint.

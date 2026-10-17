@@ -5,8 +5,10 @@ import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
+import com.yp.luminote.app.animation.NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualModifier
+import com.yp.luminote.app.animation.plan.LuminousSegmentAppearance
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
@@ -31,12 +33,12 @@ class CanvasEffectDispatcherTest {
         assertEquals(
             listOf(
                 Primitive.SPECIALIZED_FIELD,
+                Primitive.SUPERNOVA,
                 Primitive.FULL_CONTOUR,
                 Primitive.LUMINOUS_SEGMENT,
                 Primitive.AZURE_BLADE,
                 Primitive.CRIMSON_BLADE,
-                Primitive.CLASH_BLADE,
-                Primitive.SUPERNOVA
+                Primitive.CLASH_BLADE
             ),
             surface.calls.map(Call::primitive)
         )
@@ -81,6 +83,23 @@ class CanvasEffectDispatcherTest {
             assertEquals(42L, call.frame.frameTimeNanos)
         }
         assertEquals(0.18f, surface.calls[1].lengthFraction)
+    }
+
+    @Test
+    fun `Supernova's production modifier stack retains the dedicated Supernova Canvas target`() {
+        val surface = RecordingSurface()
+        val frame = CanvasEffectFrame()
+        val productionStack = listOf(
+            VisualModifier.IntensityPulse(amplitude = 0.18f, frequencyHz = 1.65f),
+            VisualModifier.Blur(radiusPx = 4.5f),
+            VisualModifier.Glow(radiusPx = 11f, alphaMultiplier = 0.50f)
+        )
+
+        CanvasEffectDispatcher(surface)
+            .resolve(PrimaryVisualOperation.Supernova)
+            .draw(Canvas(), frame, productionStack)
+
+        assertEquals(listOf(Primitive.SUPERNOVA), surface.calls.map(Call::primitive))
     }
 
     @Test
@@ -134,6 +153,50 @@ class CanvasEffectDispatcherTest {
         )
     }
 
+    @Test
+    fun `ordinary light impulse receives the compiled pulse multiplier at its Canvas source`() {
+        val surface = RecordingSurface()
+        val frame = CanvasEffectFrame().apply { intensityPulseMultiplier = 0.5f }
+        CanvasEffectDispatcher(surface)
+            .resolve(PrimaryVisualOperation.LightImpulse)
+            .draw(Canvas(), frame, listOf(VisualModifier.IntensityPulse(1f)))
+
+        assertEquals(Primitive.SPECIALIZED_FIELD, surface.calls.single().primitive)
+        assertEquals(0.5f, surface.calls.single().pulseMultiplier)
+        assertEquals(listOf(VisualModifier.IntensityPulse(1f)), surface.calls.single().modifiers)
+    }
+
+    @Test
+    fun `ordinary light impulse receives the refined core resolution at its Canvas source`() {
+        val surface = RecordingSurface()
+        val frame = CanvasEffectFrame().apply {
+            lightImpulseCoreSamples = NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES
+        }
+
+        CanvasEffectDispatcher(surface)
+            .resolve(PrimaryVisualOperation.LightImpulse)
+            .draw(Canvas(), frame, listOf(VisualModifier.Blur(3.5f)))
+
+        assertEquals(
+            NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES,
+            surface.calls.single().frame.lightImpulseCoreSamples
+        )
+    }
+
+    @Test
+    fun `Snake appearance remains on the reused frame through luminous segment dispatch`() {
+        val surface = RecordingSurface()
+        val frame = CanvasEffectFrame().apply {
+            luminousSegmentAppearance = LuminousSegmentAppearance.FLOWING_SNAKE
+        }
+
+        CanvasEffectDispatcher(surface)
+            .resolve(PrimaryVisualOperation.TravelingLuminousSegment(0.18f))
+            .draw(Canvas(), frame)
+
+        assertEquals(LuminousSegmentAppearance.FLOWING_SNAKE, surface.calls.single().frame.luminousSegmentAppearance)
+    }
+
     private enum class Primitive {
         SPECIALIZED_FIELD,
         FULL_CONTOUR,
@@ -148,14 +211,16 @@ class CanvasEffectDispatcherTest {
         val primitive: Primitive,
         val frame: CanvasEffectFrame,
         val startFraction: Float? = null,
-        val lengthFraction: Float? = null
+        val lengthFraction: Float? = null,
+        val modifiers: List<VisualModifier> = emptyList(),
+        val pulseMultiplier: Float = frame.intensityPulseMultiplier
     )
 
     private class RecordingSurface : CanvasEffectRenderSurface {
         val calls = mutableListOf<Call>()
 
-        override fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame) {
-            calls += Call(Primitive.SPECIALIZED_FIELD, frame)
+        override fun drawSpecializedField(canvas: Canvas, frame: CanvasEffectFrame, modifiers: List<VisualModifier>) {
+            calls += Call(Primitive.SPECIALIZED_FIELD, frame, modifiers = modifiers)
         }
 
         override fun drawSupernova(canvas: Canvas, frame: CanvasEffectFrame) {
