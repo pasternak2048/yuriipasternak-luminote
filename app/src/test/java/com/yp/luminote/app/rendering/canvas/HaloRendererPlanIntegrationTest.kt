@@ -3,6 +3,7 @@ package com.yp.luminote.app.rendering.canvas
 import android.graphics.Canvas
 import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.definitions.ImpulseAnimation
+import com.yp.luminote.app.animation.definitions.AzureBladeAnimation
 import com.yp.luminote.app.animation.LIGHT_CORE_SAMPLES
 import com.yp.luminote.app.animation.NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
@@ -24,6 +25,8 @@ class HaloRendererPlanIntegrationTest {
     @Test
     fun `plan route preserves legacy family execution across Canvas operations`() {
         val customized = HaloConfig(
+            motion = AzureBladeAnimation.id,
+            effectPlan = HaloEffectSpec.FullContour,
             color = 0xFF12ABCD.toInt(),
             intensity = 0.63f,
             thickness = 0.82f,
@@ -73,7 +76,7 @@ class HaloRendererPlanIntegrationTest {
 
     @Test
     fun `plan route executes emitters in declared compositor order`() {
-        val config = HaloConfig(effectPlan = HaloEffectSpec.FullContour)
+        val config = HaloConfig(motion = AzureBladeAnimation.id, effectPlan = HaloEffectSpec.FullContour)
         val renderer = HaloRenderer(config, DisplayOutline(density = 1f).also { it.resize(320, 640) })
         val emitter = HaloEffectVisualPlanMapper.map(config).emitters.single()
         renderer.replaceVisualPlanForTest(
@@ -108,7 +111,7 @@ class HaloRendererPlanIntegrationTest {
     /** Modifier-free plans retain the exact direct Canvas route. */
     @Test
     fun `empty modifier stack remains an exact direct Canvas route`() {
-        val config = HaloConfig(effectPlan = HaloEffectSpec.FullContour)
+        val config = HaloConfig(motion = AzureBladeAnimation.id, effectPlan = HaloEffectSpec.FullContour)
         val renderer = HaloRenderer(config, DisplayOutline(density = 1f).also { it.resize(320, 640) })
         val base = HaloEffectVisualPlanMapper.map(config).emitters.single()
         renderer.replaceVisualPlanForTest(

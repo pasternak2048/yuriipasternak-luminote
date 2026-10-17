@@ -6,6 +6,7 @@ import com.yp.luminote.app.animation.definitions.BladeVariant
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualModifier
+import com.yp.luminote.app.animation.plan.LuminousSegmentAppearance
 
 /**
  * Canvas translation of the backend-neutral effect contract.
@@ -90,6 +91,8 @@ internal class CanvasEffectFrame {
      * without changing the dedicated reminder renderer or shared geometry constants.
      */
     var lightImpulseCoreSamples: Int = LIGHT_CORE_SAMPLES
+    /** Plan-admitted source treatment for a traveling luminous segment. */
+    var luminousSegmentAppearance: LuminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
 }
 
 internal fun interface CanvasEffectTarget {

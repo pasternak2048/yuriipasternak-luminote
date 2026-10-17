@@ -8,6 +8,7 @@ import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import com.yp.luminote.app.animation.NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualModifier
+import com.yp.luminote.app.animation.plan.LuminousSegmentAppearance
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertSame
@@ -180,6 +181,20 @@ class CanvasEffectDispatcherTest {
             NORMAL_COMPOSITED_LIGHT_CORE_SAMPLES,
             surface.calls.single().frame.lightImpulseCoreSamples
         )
+    }
+
+    @Test
+    fun `Snake appearance remains on the reused frame through luminous segment dispatch`() {
+        val surface = RecordingSurface()
+        val frame = CanvasEffectFrame().apply {
+            luminousSegmentAppearance = LuminousSegmentAppearance.FLOWING_SNAKE
+        }
+
+        CanvasEffectDispatcher(surface)
+            .resolve(PrimaryVisualOperation.TravelingLuminousSegment(0.18f))
+            .draw(Canvas(), frame)
+
+        assertEquals(LuminousSegmentAppearance.FLOWING_SNAKE, surface.calls.single().frame.luminousSegmentAppearance)
     }
 
     private enum class Primitive {

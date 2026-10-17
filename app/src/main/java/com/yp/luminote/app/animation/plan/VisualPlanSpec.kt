@@ -28,7 +28,9 @@ internal class VisualEmitterSpec(
     val appearance: AppearancePayload,
     val operation: PrimaryVisualOperation,
     val modifierProfile: VisualModifierProfile = VisualModifierProfile.DEFAULT,
-    modifiers: List<VisualModifier> = emptyList()
+    modifiers: List<VisualModifier> = emptyList(),
+    /** Backend-neutral longitudinal treatment for a luminous segment source. */
+    val luminousSegmentAppearance: LuminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
 ) {
     /** Closed, ordered effect stack captured at the plan admission boundary. */
     val modifiers: List<VisualModifier> = immutableList(modifiers)
@@ -50,9 +52,13 @@ internal class VisualEmitterSpec(
         appearance: AppearancePayload = this.appearance,
         operation: PrimaryVisualOperation = this.operation,
         modifierProfile: VisualModifierProfile = this.modifierProfile,
-        modifiers: List<VisualModifier> = this.modifiers
-    ) = VisualEmitterSpec(geometry, transform, appearance, operation, modifierProfile, modifiers)
+        modifiers: List<VisualModifier> = this.modifiers,
+        luminousSegmentAppearance: LuminousSegmentAppearance = this.luminousSegmentAppearance
+    ) = VisualEmitterSpec(geometry, transform, appearance, operation, modifierProfile, modifiers, luminousSegmentAppearance)
 }
+
+/** A source-shape decision, selected at plan admission rather than inferred by Canvas. */
+internal enum class LuminousSegmentAppearance { DEFAULT, FLOWING_SNAKE }
 
 /**
  * A profile is selected once at plan admission, never inferred by the Canvas

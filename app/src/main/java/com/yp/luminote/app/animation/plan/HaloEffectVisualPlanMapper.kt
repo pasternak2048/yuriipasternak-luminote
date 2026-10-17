@@ -2,6 +2,7 @@ package com.yp.luminote.app.animation.plan
 
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 import com.yp.luminote.app.animation.definitions.ImpulseAnimation
+import com.yp.luminote.app.animation.definitions.SnakeAnimation
 import com.yp.luminote.app.animation.definitions.SupernovaAnimation
 import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.effects.model.HaloRenderMode
@@ -31,6 +32,11 @@ internal object HaloEffectVisualPlanMapper {
                 } else {
                     VisualModifierProfile.DEFAULT
                 },
+                luminousSegmentAppearance = if (isNormalSnake(config)) {
+                    LuminousSegmentAppearance.FLOWING_SNAKE
+                } else {
+                    LuminousSegmentAppearance.DEFAULT
+                },
                 // The registry's first normal Impulse is the sole production
                 // opt-in.  In particular, LIGHT_IMPULSE is the reminder-owned
                 // renderer route and must retain its established profile.
@@ -55,6 +61,11 @@ internal object HaloEffectVisualPlanMapper {
             VisualModifier.Blur(radiusPx = 4.5f),
             VisualModifier.Glow(radiusPx = 11f, alphaMultiplier = 0.50f)
         )
+        isNormalSnake(config) -> listOf(
+            VisualModifier.IntensityPulse(amplitude = 0.12f, frequencyHz = 0.75f),
+            VisualModifier.Blur(radiusPx = 2.75f),
+            VisualModifier.Glow(radiusPx = 7.5f, alphaMultiplier = 0.35f)
+        )
         else -> emptyList()
     }
 
@@ -76,6 +87,11 @@ internal object HaloEffectVisualPlanMapper {
             config.renderMode == HaloRenderMode.NORMAL &&
             config.effectPlan == HaloEffectSpec.Supernova
         )
+
+    private fun isNormalSnake(config: HaloConfig): Boolean =
+        config.motion == SnakeAnimation.id &&
+            config.renderMode == HaloRenderMode.NORMAL &&
+            config.effectPlan is HaloEffectSpec.LuminousSegment
 
     private fun HaloEffectSpec.toPrimaryOperation(): PrimaryVisualOperation = when (this) {
         HaloEffectSpec.SpecializedField -> PrimaryVisualOperation.LightImpulse

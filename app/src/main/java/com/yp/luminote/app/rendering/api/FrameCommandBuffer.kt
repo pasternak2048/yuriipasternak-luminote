@@ -4,6 +4,7 @@ import com.yp.luminote.app.animation.plan.GeometryRequest
 import com.yp.luminote.app.animation.plan.AppearancePayload
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualEmitterSpec
+import com.yp.luminote.app.animation.plan.LuminousSegmentAppearance
 import com.yp.luminote.app.animation.plan.VisualModifier
 import com.yp.luminote.app.animation.plan.VisualPlanSpec
 import com.yp.luminote.app.animation.plan.intensityPulseMultiplier
@@ -39,6 +40,7 @@ internal class FrameVisualCommand {
     lateinit var appearance: AppearancePayload
     lateinit var operation: PrimaryVisualOperation
     lateinit var modifiers: List<VisualModifier>
+    var luminousSegmentAppearance: LuminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
     var phase: Float = 0f
     var gradientPhase: Float = 0f
     var animationProgress: Float = 0f
@@ -65,6 +67,7 @@ internal object FrameCommandCompiler {
         out.appearance = emitter.appearance
         out.operation = emitter.operation
         out.modifiers = emitter.modifiers
+        out.luminousSegmentAppearance = emitter.luminousSegmentAppearance
         out.phase = emitter.transform.phaseFor(frame.effectPhase)
         out.gradientPhase = emitter.transform.phaseFor(frame.gradientPhase)
         out.animationProgress = frame.animationProgress

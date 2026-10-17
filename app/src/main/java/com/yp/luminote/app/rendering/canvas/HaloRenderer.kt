@@ -16,6 +16,7 @@ import com.yp.luminote.app.animation.plan.AppearancePayload
 import com.yp.luminote.app.animation.plan.PrimaryVisualOperation
 import com.yp.luminote.app.animation.plan.VisualPlanSpec
 import com.yp.luminote.app.animation.plan.VisualModifier
+import com.yp.luminote.app.animation.plan.LuminousSegmentAppearance
 import com.yp.luminote.app.rendering.api.FrameCommandBuffer
 import com.yp.luminote.app.rendering.api.FrameCommandCompiler
 import com.yp.luminote.app.rendering.api.RenderFrame
@@ -363,7 +364,8 @@ internal class EdgeRenderPipeline(
                 frame.phase,
                 frame.gradientPhase,
                 startFraction,
-                lengthFraction
+                lengthFraction,
+                frame.luminousSegmentAppearance
             )
         }
 
@@ -500,7 +502,8 @@ internal class EdgeRenderPipeline(
                     command.frameTimeNanos
                 )
                 drawCommand(canvas, planTargets[index], command.operation, command.modifiers, command.animationProgress, command.phase,
-                    command.gradientPhase, command.alpha, command.intensityPulseMultiplier, command.frameTimeNanos)
+                    command.gradientPhase, command.alpha, command.intensityPulseMultiplier, command.frameTimeNanos,
+                    command.luminousSegmentAppearance)
             }
         } finally {
             activeAppearance = null
@@ -547,7 +550,8 @@ internal class EdgeRenderPipeline(
         gradientPhase: Float,
         baseAlpha: Int,
         pulseMultiplier: Float,
-        frameTimeNanos: Long
+        frameTimeNanos: Long,
+        luminousSegmentAppearance: LuminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
     ) {
         if (operation is PrimaryVisualOperation.LightImpulse && usesLightImpulseRenderer(config)) {
             lightImpulsePulseMultiplier = pulseMultiplier
@@ -568,18 +572,21 @@ internal class EdgeRenderPipeline(
         renderFrame.gradientPhase = gradientPhase
         renderFrame.frameTimeNanos = frameTimeNanos
         renderFrame.intensityPulseMultiplier = pulseMultiplier
+        renderFrame.luminousSegmentAppearance = luminousSegmentAppearance
         renderFrame.lightImpulseCoreSamples = lightImpulseCoreSamplesFor(config, operation, modifiers)
         if (hasOpticalModifier(modifiers) && operation !is PrimaryVisualOperation.FullContourPulse) {
             try {
                 hardwareCompositedOperationExecutor.draw(canvas, target, renderFrame, modifiers)
             } finally {
                 renderFrame.lightImpulseCoreSamples = LIGHT_CORE_SAMPLES
+                renderFrame.luminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
             }
         } else {
             try {
                 target.draw(canvas, renderFrame, modifiers)
             } finally {
                 renderFrame.lightImpulseCoreSamples = LIGHT_CORE_SAMPLES
+                renderFrame.luminousSegmentAppearance = LuminousSegmentAppearance.DEFAULT
             }
         }
         tracePaintPass(PaintPassStage.COMMAND_COMPLETE)
