@@ -86,4 +86,8 @@ internal class CanvasRenderBackend(
     internal fun replaceVisualPlanForTest(plan: com.yp.luminote.app.animation.plan.VisualPlanSpec) {
         renderer.replaceVisualPlanForTest(plan)
     }
+
+    override fun updateDebugVisualPlan(plan: com.yp.luminote.app.animation.plan.VisualPlanSpec) {
+        renderer.replaceVisualPlanForTest(plan)
+    }
 }

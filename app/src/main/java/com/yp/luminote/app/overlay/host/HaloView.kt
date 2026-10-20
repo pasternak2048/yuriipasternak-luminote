@@ -14,12 +14,17 @@ import com.yp.luminote.app.rendering.api.RenderOutcome
 import com.yp.luminote.app.rendering.canvas.CanvasRenderBackend
 import com.yp.luminote.app.rendering.canvas.CanvasRenderTarget
 import com.yp.luminote.app.rendering.canvas.CalibrationDiagnostics
+import com.yp.luminote.app.rendering.gpu.DebugGpuFallbackBackend
+import com.yp.luminote.app.rendering.gpu.GpuWitnessDiagnostics
+import com.yp.luminote.app.rendering.gpu.GpuWitnessRenderBackend
+import com.yp.luminote.app.rendering.gpu.GpuPulseRenderBackend
 import com.yp.luminote.app.animation.plan.VisualPlanSpec
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.graphics.Canvas
 import android.util.Log
 import android.view.Choreographer
@@ -69,9 +74,16 @@ internal class HaloView(
         )
 
     /** Composition remains at the Android host; animation remains backend-neutral. */
-    private val canvasRenderBackend = CanvasRenderBackend(config, outline)
+    private var canvasRenderBackend = CanvasRenderBackend(config, outline)
 
-    private val renderingPipeline = HaloRenderingPipeline(canvasRenderBackend)
+    private var renderingPipeline = HaloRenderingPipeline(canvasRenderBackend)
+
+    private var gpuWitnessEnabledForDebug = false
+    private var gpuPulseEnabledForDebug = false
+
+    /** Retained only for the debug demo so a backend recreation cannot discard selected input. */
+    private var debugVisualPlan: VisualPlanSpec? = null
+    private var debugFrozenFrame: DebugFrozenFrame? = null
 
     private val renderFrame = RenderFrame()
 
@@ -176,8 +188,75 @@ internal class HaloView(
      * lifecycle; callers supply only an already-admitted visual plan.
      */
     internal fun replaceVisualPlanForDebug(plan: VisualPlanSpec) {
-        canvasRenderBackend.replaceVisualPlanForTest(plan)
+        debugVisualPlan = plan
+        renderingPipeline.updateDebugVisualPlan(plan)
         invalidate()
+    }
+
+    /** Device-test-only frame override; it borrows the host frame contract and owns no clock. */
+    internal fun setFrozenRenderFrameForDebug(frame: DebugFrozenFrame?) {
+        debugFrozenFrame = frame
+        invalidate()
+    }
+
+    /**
+     * DEBUG-only selector for the Gate A RuntimeShader witness. It replaces neither this host's
+     * VSYNC/animation ownership nor DisplayOutline. Release builds reject the request.
+     */
+    internal fun setGpuWitnessEnabledForDebug(enabled: Boolean): Boolean {
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        if (gpuWitnessEnabledForDebug == enabled) return true
+        renderingPipeline.dispose()
+        canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+        renderingPipeline = if (enabled) {
+            val gpuWitnessBackend = GpuWitnessRenderBackend(outline)
+            HaloRenderingPipeline(
+                DebugGpuFallbackBackend(
+                    gpu = gpuWitnessBackend,
+                    canvas = canvasRenderBackend,
+                    initialConfig = currentConfig,
+                    gpuGeneration = gpuWitnessBackend.generationForDebugEvidence()
+                )
+            )
+        } else {
+            HaloRenderingPipeline(canvasRenderBackend)
+        }
+        gpuWitnessEnabledForDebug = enabled
+        if (enabled) gpuPulseEnabledForDebug = false
+        debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
+        GpuWitnessDiagnostics.record("selection", if (enabled) "requested=GPU actual=pending" else "requested=Canvas actual=Canvas")
+        invalidate()
+        return true
+    }
+
+    /** Gate B's independent DEBUG selector. It admits only the narrow GPU Pulse capability. */
+    internal fun setGpuPulseEnabledForDebug(enabled: Boolean): Boolean {
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        if (gpuPulseEnabledForDebug == enabled) return true
+        renderingPipeline.dispose()
+        canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+        renderingPipeline = if (enabled) {
+            val gpuPulseBackend = GpuPulseRenderBackend(outline)
+            HaloRenderingPipeline(DebugGpuFallbackBackend(
+                gpu = gpuPulseBackend,
+                canvas = canvasRenderBackend,
+                initialConfig = currentConfig,
+                onCanvasFallback = { reason, canvasRendered ->
+                    com.yp.luminote.app.rendering.gpu.GpuPulseEvidence.recordFallback(
+                        gpuPulseBackend.generationForDebugEvidence(),
+                        reason,
+                        canvasRendered
+                    )
+                    com.yp.luminote.app.rendering.gpu.GpuPulseEvidence.recordCanvasPulse(gpuPulseBackend.generationForDebugEvidence())
+                }
+            ))
+        } else HaloRenderingPipeline(canvasRenderBackend)
+        gpuPulseEnabledForDebug = enabled
+        if (enabled) gpuWitnessEnabledForDebug = false
+        debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
+        GpuWitnessDiagnostics.record("pulse-selection", if (enabled) "requested=GPU actual=pending" else "requested=Canvas actual=Canvas")
+        invalidate()
+        return true
     }
 
     fun setOnFiniteAnimationCompletedListener(
@@ -384,6 +463,9 @@ internal class HaloView(
         super.onDetachedFromWindow()
     }
 
+    private var debugCanvasRenderedFrames = 0L
+    internal fun canvasRenderedFramesForDebug(): Long = debugCanvasRenderedFrames
+
     override fun onDraw(
         canvas: Canvas
     ) {
@@ -396,18 +478,30 @@ internal class HaloView(
         )
 
         renderFrame.mode = if (staticFrameMode) RenderMode.STATIC_CALIBRATION else RenderMode.ANIMATION
-        renderFrame.animationProgress = animationState.progress
-        renderFrame.effectPhase = animationState.phase
-        renderFrame.gradientPhase = animationState.gradientPhase
-        renderFrame.frameTimeNanos = lastFrameTimeNanos
+        val frozen = debugFrozenFrame
+        renderFrame.animationProgress = frozen?.progress ?: animationState.progress
+        renderFrame.effectPhase = frozen?.phase ?: animationState.phase
+        renderFrame.gradientPhase = frozen?.gradientPhase ?: animationState.gradientPhase
+        renderFrame.frameTimeNanos = frozen?.frameTimeNanos ?: lastFrameTimeNanos
         renderFrame.viewportWidth = width
         renderFrame.viewportHeight = height
+        renderFrame.intent = if (gpuWitnessEnabledForDebug) {
+            com.yp.luminote.app.rendering.api.RenderIntent.DEBUG_GPU_WITNESS
+        } else if (gpuPulseEnabledForDebug) {
+            com.yp.luminote.app.rendering.api.RenderIntent.DEBUG_GPU_PULSE
+        } else {
+            com.yp.luminote.app.rendering.api.RenderIntent.PRODUCTION
+        }
         if (staticFrameMode) {
             renderFrame.calibrationRulerLegend = resources.getString(R.string.calibration_ruler_legend)
             renderFrame.calibrationRegistrationLabel = localizedCalibrationRegistrationLabel()
         }
         val outcome = canvasTarget.withCanvas(canvas) {
             renderingPipeline.render(canvasTarget, renderFrame)
+        }
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            !gpuWitnessEnabledForDebug && !gpuPulseEnabledForDebug && outcome == RenderOutcome.Rendered) {
+            debugCanvasRenderedFrames++
         }
         when (outcome) {
             is RenderOutcome.Error -> Log.e(TAG, "Render backend failed", outcome.cause)
@@ -562,6 +656,13 @@ internal class HaloView(
         val interval: Float,
         val count: Int,
         val motion: HaloAnimationId
+    )
+
+    internal data class DebugFrozenFrame(
+        val progress: Float,
+        val phase: Float,
+        val gradientPhase: Float,
+        val frameTimeNanos: Long
     )
 
     private companion object {

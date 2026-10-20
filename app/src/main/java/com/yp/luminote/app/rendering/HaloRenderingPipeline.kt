@@ -1,6 +1,7 @@
 package com.yp.luminote.app.rendering
 
 import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.animation.plan.VisualPlanSpec
 import com.yp.luminote.app.rendering.api.HaloRenderBackend
 import com.yp.luminote.app.rendering.api.HaloRenderTarget
 import com.yp.luminote.app.rendering.api.RenderFrame
@@ -17,6 +18,10 @@ internal class HaloRenderingPipeline(
 
     fun updateConfig(config: HaloConfig) {
         if (!disposed) backend.updateConfig(config)
+    }
+
+    fun updateDebugVisualPlan(plan: VisualPlanSpec) {
+        if (!disposed) backend.updateDebugVisualPlan(plan)
     }
 
     fun invalidateSurface() {
