@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.ThemeMode
+import com.yp.luminote.app.data.settings.RenderingEngine
 import com.yp.luminote.app.ui.adaptive.luminoteSafeHorizontalPadding
 import com.yp.luminote.app.ui.components.LuminoteNavigationRow
 import com.yp.luminote.app.ui.components.LuminoteScreenHeader
@@ -31,8 +32,26 @@ import com.yp.luminote.app.ui.components.LuminoteSelectionRow
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 @Composable
-fun SettingsScreen(onBackClick: () -> Unit, onAppearanceClick: () -> Unit, onLanguageClick: () -> Unit, onUpdatesClick: () -> Unit, onAboutClick: () -> Unit) {
+fun SettingsScreen(onBackClick: () -> Unit, onAppearanceClick: () -> Unit, onLanguageClick: () -> Unit, onUpdatesClick: () -> Unit, onAboutClick: () -> Unit, viewModel: LuminoteSettingsViewModel) {
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     SettingsPage(title = stringResource(R.string.settings), onBackClick = onBackClick) {
+        LuminoteSettingsCard {
+            Column(Modifier.padding(20.dp)) {
+                Text(stringResource(R.string.rendering_engine), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(12.dp))
+                Column(Modifier.selectableGroup()) {
+                    RenderingEngine.entries.forEach { engine ->
+                        LuminoteSelectionRow(
+                            title = stringResource(if (engine == RenderingEngine.CANVAS) R.string.rendering_engine_standard else R.string.rendering_engine_gpu),
+                            description = stringResource(if (engine == RenderingEngine.CANVAS) R.string.rendering_engine_standard_description else R.string.rendering_engine_gpu_description),
+                            selected = settings.renderingEngine == engine,
+                            onClick = { viewModel.setRenderingEngine(engine) },
+                            control = LuminoteSelectionControl.Radio
+                        )
+                    }
+                }
+            }
+        }
         SettingsItem(stringResource(R.string.appearance), Icons.Outlined.Palette, onAppearanceClick)
         SettingsItem(stringResource(R.string.language), Icons.Outlined.Language, onLanguageClick)
         SettingsItem(stringResource(R.string.updates), Icons.Outlined.SystemUpdate, onUpdatesClick)

@@ -450,7 +450,8 @@ class HaloAccessibilityService : AccessibilityService() {
                 WindowManager.LayoutParams
                     .TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams
-                    .FLAG_NOT_FOCUSABLE or
+                    .FLAG_HARDWARE_ACCELERATED or
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams
                             .FLAG_NOT_TOUCHABLE or
                         WindowManager.LayoutParams
@@ -1165,7 +1166,8 @@ class HaloAccessibilityService : AccessibilityService() {
                 WindowManager.LayoutParams
                     .TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams
-                    .FLAG_NOT_FOCUSABLE or
+                    .FLAG_HARDWARE_ACCELERATED or
+                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                         WindowManager.LayoutParams
                             .FLAG_NOT_TOUCHABLE or
                         WindowManager.LayoutParams

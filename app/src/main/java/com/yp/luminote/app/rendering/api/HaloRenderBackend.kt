@@ -1,6 +1,7 @@
 package com.yp.luminote.app.rendering.api
 
 import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.animation.plan.VisualPlanSpec
 
 /**
  * Backend-neutral rendering boundary. Targets are host-owned, ephemeral adapters and must never
@@ -8,6 +9,9 @@ import com.yp.luminote.app.effects.model.HaloConfig
  */
 internal interface HaloRenderBackend {
     fun updateConfig(config: HaloConfig)
+
+    /** Debug-only plan injection remains shared so a diagnostic backend cannot observe stale input. */
+    fun updateDebugVisualPlan(plan: VisualPlanSpec) = Unit
 
     /** Called after the host mutates its display geometry or surface. */
     fun invalidateSurface()
@@ -26,6 +30,17 @@ internal enum class RenderMode {
     STATIC_CALIBRATION
 }
 
+/** Rendering intent is host-owned; DEBUG_GPU_WITNESS never describes a production animation. */
+internal enum class RenderIntent {
+    PRODUCTION,
+    DEBUG_GPU_WITNESS,
+    /** Deliberate DEBUG-only Gate B route. Production remains Canvas-selected. */
+    DEBUG_GPU_PULSE,
+    DEBUG_GPU_SNAKE,
+    DEBUG_GPU_IMPULSE,
+    DEBUG_GPU_SUPERNOVA
+}
+
 /** Mutable, host-owned frame values, reused across draws to keep frame work allocation-free. */
 internal class RenderFrame {
     var mode: RenderMode = RenderMode.ANIMATION
@@ -37,10 +52,13 @@ internal class RenderFrame {
     var viewportHeight: Int = 0
     var calibrationRulerLegend: String = ""
     var calibrationRegistrationLabel: String = ""
+    /** Set only by the debug host selector; production plans never opt into the Gate A witness. */
+    var intent: RenderIntent = RenderIntent.PRODUCTION
 }
 
 internal sealed interface RenderOutcome {
     object Rendered : RenderOutcome
     data class Unsupported(val reason: String) : RenderOutcome
-    data class Error(val cause: Throwable) : RenderOutcome
+    /** A post-submission error must not trigger a Canvas draw over partially written GPU pixels. */
+    data class Error(val cause: Throwable, val fallbackEligible: Boolean = true) : RenderOutcome
 }

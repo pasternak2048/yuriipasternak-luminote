@@ -25,6 +25,7 @@ class LuminoteSettingsRepository(
 ) {
 
     private object Keys {
+        val renderingEngine = stringPreferencesKey("rendering_engine")
 
         val themeMode =
             stringPreferencesKey(
@@ -160,6 +161,7 @@ class LuminoteSettingsRepository(
             .map { preferences ->
 
                 LuminoteSettings(
+                    renderingEngine = RenderingEngine.fromStorage(preferences[Keys.renderingEngine]),
 
                     themeMode = ThemeMode.fromStorage(
                         preferences[Keys.themeMode]
@@ -424,6 +426,7 @@ class LuminoteSettingsRepository(
         settings: LuminoteSettings
     ) {
         context.luminoteDataStore.edit { preferences ->
+            preferences[Keys.renderingEngine] = settings.renderingEngine.name
             preferences[Keys.themeMode] =
                 settings.themeMode.name
 
