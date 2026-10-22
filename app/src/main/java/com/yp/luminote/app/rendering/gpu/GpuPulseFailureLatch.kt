@@ -26,20 +26,24 @@ internal class GpuPulsePreSubmitFailure(
     val stage: String,
     val originalType: String,
     val originalMessage: String?,
-    cause: RuntimeException
+    cause: RuntimeException,
+    backendLabel: String = "GPU Pulse",
+    failurePhase: String = "pre-submit"
 ) : IllegalStateException(
-    "GPU Pulse pre-submit failure at $stage: $originalType" +
+    "$backendLabel $failurePhase failure at $stage: $originalType" +
         (originalMessage?.let { ": $it" } ?: ""),
     cause
 ) {
-    val classification: String = "pre-submit-error:$stage:$originalType"
+    val classification: String = "$failurePhase-error:$stage:$originalType"
 
     companion object {
-        fun at(stage: String, cause: RuntimeException) = GpuPulsePreSubmitFailure(
+        fun at(stage: String, cause: RuntimeException, backendLabel: String = "GPU Pulse", failurePhase: String = "pre-submit") = GpuPulsePreSubmitFailure(
             stage = stage,
             originalType = cause.javaClass.simpleName,
             originalMessage = cause.message,
-            cause = cause
+            cause = cause,
+            backendLabel = backendLabel,
+            failurePhase = failurePhase
         )
     }
 }

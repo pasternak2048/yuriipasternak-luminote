@@ -125,7 +125,7 @@ internal class GpuValidationSession private constructor(
             gpuAttempts = observation.preSubmitAttempts,
             gpuSubmittedFrames = observation.submissions,
             initializationAttempts = when (requestedBackend) {
-                VisualEffectsDemoRequestedBackend.GPU_PULSE -> (currentPulse?.shaderInitializationAttempts ?: 0) - (pulseBaseline?.shaderInitializationAttempts ?: 0)
+                VisualEffectsDemoRequestedBackend.GPU_PULSE, VisualEffectsDemoRequestedBackend.GPU_SNAKE, VisualEffectsDemoRequestedBackend.GPU_IMPULSE, VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA -> (currentPulse?.takeIf { it.generation == generation }?.shaderInitializationAttempts ?: 0) - (pulseBaseline?.shaderInitializationAttempts ?: 0)
                 VisualEffectsDemoRequestedBackend.GPU_WITNESS -> (currentWitness?.initializationAttempts ?: 0) - (witnessBaseline?.initializationAttempts ?: 0)
                 else -> 0
             },
@@ -197,7 +197,7 @@ internal class GpuValidationSession private constructor(
     )
 
     private fun observe(pulse: GpuPulseEvidence.Snapshot?, witness: GpuWitnessEvidence.Snapshot?): Observation = when (requestedBackend) {
-        VisualEffectsDemoRequestedBackend.GPU_PULSE -> pulse?.takeIf { it.generation == generation }
+        VisualEffectsDemoRequestedBackend.GPU_PULSE, VisualEffectsDemoRequestedBackend.GPU_SNAKE, VisualEffectsDemoRequestedBackend.GPU_IMPULSE, VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA -> pulse?.takeIf { it.generation == generation }
             ?.minus(pulseBaseline) ?: emptyObservation()
         VisualEffectsDemoRequestedBackend.GPU_WITNESS -> witness?.takeIf { it.generation == generation }
             ?.minus(witnessBaseline) ?: emptyObservation()
@@ -253,7 +253,7 @@ internal class GpuValidationSession private constructor(
         ) = GpuValidationSession(
             id, requestedBackend, selectedOperation, selectedMode, activeModifiers, capabilityDecision,
             appVersion, deviceModel, androidApi, generation,
-            generation?.takeIf { requestedBackend == VisualEffectsDemoRequestedBackend.GPU_PULSE }
+            generation?.takeIf { requestedBackend == VisualEffectsDemoRequestedBackend.GPU_PULSE || requestedBackend == VisualEffectsDemoRequestedBackend.GPU_SNAKE || requestedBackend == VisualEffectsDemoRequestedBackend.GPU_IMPULSE || requestedBackend == VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA }
                 ?.let(GpuPulseEvidence::snapshot),
             generation?.takeIf { requestedBackend == VisualEffectsDemoRequestedBackend.GPU_WITNESS }
                 ?.let(GpuWitnessEvidence::snapshot)

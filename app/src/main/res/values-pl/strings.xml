@@ -209,8 +209,8 @@
     <string name="debug_lab_self_test_description">Sprawdź bieżącą animację GPU i zbierz dowody wykonania.</string>
     <string name="debug_lab_self_test_preview_required">Wyświetl podgląd animacji z wybranym GPU przed uruchomieniem jej autotestu.</string>
     <string name="debug_lab_gpu_under_validation">Obsługa GPU jest w trakcie walidacji. Uruchom podgląd, aby sprawdzić rzeczywiste wykonanie.</string>
-    <string name="debug_lab_selection_unsupported">GPU jest niedostępny dla tego wyboru. Wybierz Pulse z efektami bazowymi lub użyj Canvas.</string>
-    <string name="debug_lab_gpu_effects_pending">Modyfikatory GPU nie są jeszcze zaimplementowane w Gate B. Tryb bazowy zachowuje oryginalną animację.</string>
+    <string name="debug_lab_selection_unsupported">GPU jest niedostępne dla tego wyboru. Użyj Pulse lub Impulse z Baseline; Snake lub Supernova z Baseline albo odpowiednim zestawem produkcyjnym; lub Canvas dla innych opcji.</string>
+    <string name="debug_lab_gpu_effects_pending">GPU obsługuje Pulse i Impulse z Baseline oraz Snake i Supernova z Baseline lub odpowiednim zestawem produkcyjnym. Pozostałe demonstracyjne zestawy modyfikatorów czekają na implementację.</string>
     <string name="debug_lab_effects_operation_limited">Ta animacja obsługuje tylko pokazane konfiguracje efektów.</string>
     <string name="debug_lab_unavailable_effects">Niedostępne efekty</string>
     <string name="debug_lab_hide_unavailable_effects">Ukryj niedostępne efekty</string>
@@ -233,4 +233,11 @@
     <string name="debug_lab_validation_init_attempts">Próby inicjalizacji GPU (generacja): %1$d</string>
     <string name="debug_lab_shader_initialized">Shader zainicjowany: %1$s</string>
     <string name="debug_lab_validation_submitted_frames">Przesłane klatki GPU (generacja): %1$d</string>
+    <string name="debug_lab_production_snake_stack">Standardowy zestaw efektów Snake</string>
+    <string name="debug_lab_production_supernova_stack">Produkcyjny zestaw Supernova</string>
+    <string name="rendering_engine">Silnik renderowania</string>
+    <string name="rendering_engine_standard">Standardowy (Canvas)</string>
+    <string name="rendering_engine_standard_description">Opcja domyślna. Używa standardowego renderowania dla wszystkich efektów świetlnych.</string>
+    <string name="rendering_engine_gpu">Akceleracja GPU</string>
+    <string name="rendering_engine_gpu_description">Używa akceleracji graficznej dla obsługiwanych efektów. Pozostałe efekty lub efekty, dla których akceleracja jest niedostępna, korzystają ze standardowego renderowania.</string>
 </resources>

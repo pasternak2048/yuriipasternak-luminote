@@ -18,6 +18,9 @@ import com.yp.luminote.app.rendering.gpu.DebugGpuFallbackBackend
 import com.yp.luminote.app.rendering.gpu.GpuWitnessDiagnostics
 import com.yp.luminote.app.rendering.gpu.GpuWitnessRenderBackend
 import com.yp.luminote.app.rendering.gpu.GpuPulseRenderBackend
+import com.yp.luminote.app.rendering.gpu.GpuSnakeRenderBackend
+import com.yp.luminote.app.rendering.gpu.GpuSupernovaRenderBackend
+import com.yp.luminote.app.rendering.gpu.GpuImpulseRenderBackend
 import com.yp.luminote.app.animation.plan.VisualPlanSpec
 import com.yp.luminote.app.animation.LIGHT_IMPULSE_DURATION_SECONDS
 import com.yp.luminote.app.animation.definitions.HaloEffectSpec
@@ -33,6 +36,17 @@ import android.view.WindowInsets
 import com.yp.luminote.app.R
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import java.util.Locale
+import com.yp.luminote.app.data.settings.RenderingEngine
+import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
+import com.yp.luminote.app.rendering.gpu.ProductionRenderBackend
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.launch
 
 internal fun finiteDurationFor(renderMode: HaloRenderMode, requestedDuration: Float): Float =
     if (renderMode == HaloRenderMode.LIGHT_IMPULSE) {
@@ -76,10 +90,39 @@ internal class HaloView(
     /** Composition remains at the Android host; animation remains backend-neutral. */
     private var canvasRenderBackend = CanvasRenderBackend(config, outline)
 
-    private var renderingPipeline = HaloRenderingPipeline(canvasRenderBackend)
+    private var renderingPipeline = HaloRenderingPipeline(ProductionRenderBackend(config, outline, RenderingEngine.CANVAS, canvasRenderBackend))
+    private var productionEngine = RenderingEngine.CANVAS
+    private var preferenceScope: CoroutineScope? = null
+    private var preferenceEpoch = 0L
+    private var debugHost = false
+    private var pipelineDisposed = false
+
+    private fun isolateDebugHost() {
+        if (debugHost) return
+        debugHost = true
+        preferenceEpoch++
+        preferenceScope?.cancel(); preferenceScope = null
+        renderingPipeline.dispose()
+        canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+        renderingPipeline = HaloRenderingPipeline(canvasRenderBackend)
+        pipelineDisposed = false
+    }
+
+    private fun switchProductionEngine(engine: RenderingEngine, force: Boolean = false) {
+        if (debugHost || (!force && productionEngine == engine)) return
+        renderingPipeline.dispose()
+        canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+        renderingPipeline = HaloRenderingPipeline(ProductionRenderBackend(currentConfig, outline, engine, canvasRenderBackend))
+        productionEngine = engine
+        pipelineDisposed = false
+        invalidate()
+    }
 
     private var gpuWitnessEnabledForDebug = false
     private var gpuPulseEnabledForDebug = false
+    private var gpuSnakeEnabledForDebug = false
+    private var gpuSupernovaEnabledForDebug = false
+    private var gpuImpulseEnabledForDebug = false
 
     /** Retained only for the debug demo so a backend recreation cannot discard selected input. */
     private var debugVisualPlan: VisualPlanSpec? = null
@@ -188,6 +231,7 @@ internal class HaloView(
      * lifecycle; callers supply only an already-admitted visual plan.
      */
     internal fun replaceVisualPlanForDebug(plan: VisualPlanSpec) {
+        isolateDebugHost()
         debugVisualPlan = plan
         renderingPipeline.updateDebugVisualPlan(plan)
         invalidate()
@@ -205,6 +249,7 @@ internal class HaloView(
      */
     internal fun setGpuWitnessEnabledForDebug(enabled: Boolean): Boolean {
         if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        isolateDebugHost()
         if (gpuWitnessEnabledForDebug == enabled) return true
         renderingPipeline.dispose()
         canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
@@ -222,7 +267,7 @@ internal class HaloView(
             HaloRenderingPipeline(canvasRenderBackend)
         }
         gpuWitnessEnabledForDebug = enabled
-        if (enabled) gpuPulseEnabledForDebug = false
+        if (enabled) { gpuPulseEnabledForDebug = false; gpuSnakeEnabledForDebug = false; gpuImpulseEnabledForDebug = false; gpuSupernovaEnabledForDebug = false }
         debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
         GpuWitnessDiagnostics.record("selection", if (enabled) "requested=GPU actual=pending" else "requested=Canvas actual=Canvas")
         invalidate()
@@ -232,6 +277,7 @@ internal class HaloView(
     /** Gate B's independent DEBUG selector. It admits only the narrow GPU Pulse capability. */
     internal fun setGpuPulseEnabledForDebug(enabled: Boolean): Boolean {
         if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        isolateDebugHost()
         if (gpuPulseEnabledForDebug == enabled) return true
         renderingPipeline.dispose()
         canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
@@ -252,9 +298,72 @@ internal class HaloView(
             ))
         } else HaloRenderingPipeline(canvasRenderBackend)
         gpuPulseEnabledForDebug = enabled
-        if (enabled) gpuWitnessEnabledForDebug = false
+        if (enabled) { gpuWitnessEnabledForDebug = false; gpuSnakeEnabledForDebug = false; gpuImpulseEnabledForDebug = false; gpuSupernovaEnabledForDebug = false }
         debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
         GpuWitnessDiagnostics.record("pulse-selection", if (enabled) "requested=GPU actual=pending" else "requested=Canvas actual=Canvas")
+        invalidate()
+        return true
+    }
+
+    /** Gate C selection uses the existing host/pipeline and leaves production settings untouched. */
+    internal fun setGpuSnakeEnabledForDebug(enabled: Boolean): Boolean {
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        isolateDebugHost()
+        if (gpuSnakeEnabledForDebug == enabled) return true
+        renderingPipeline.dispose()
+        canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+        renderingPipeline = if (enabled) {
+            val gpu = GpuSnakeRenderBackend(outline)
+            HaloRenderingPipeline(DebugGpuFallbackBackend(gpu,canvasRenderBackend,currentConfig,
+                onCanvasFallback = { reason, rendered ->
+                    com.yp.luminote.app.rendering.gpu.GpuPulseEvidence.recordFallback(gpu.generationForDebugEvidence(),reason,rendered)
+                }))
+        } else HaloRenderingPipeline(canvasRenderBackend)
+        gpuSnakeEnabledForDebug = enabled
+        if (enabled) { gpuWitnessEnabledForDebug = false; gpuPulseEnabledForDebug = false; gpuImpulseEnabledForDebug = false; gpuSupernovaEnabledForDebug = false }
+        debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
+        invalidate()
+        return true
+    }
+
+    /** Gate D1 normal Impulse source, separate from the dedicated reminder route. */
+    internal fun setGpuImpulseEnabledForDebug(enabled: Boolean): Boolean {
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        isolateDebugHost()
+        if (gpuImpulseEnabledForDebug == enabled) return true
+        renderingPipeline.dispose()
+        canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+        renderingPipeline = if (enabled) {
+            val gpu = GpuImpulseRenderBackend(outline)
+            HaloRenderingPipeline(DebugGpuFallbackBackend(gpu, canvasRenderBackend, currentConfig,
+                onCanvasFallback = { reason, rendered ->
+                    com.yp.luminote.app.rendering.gpu.GpuPulseEvidence.recordFallback(gpu.generationForDebugEvidence(), reason, rendered)
+                }))
+        } else HaloRenderingPipeline(canvasRenderBackend)
+        gpuImpulseEnabledForDebug = enabled
+        if (enabled) { gpuWitnessEnabledForDebug = false; gpuPulseEnabledForDebug = false; gpuSnakeEnabledForDebug = false; gpuSupernovaEnabledForDebug = false }
+        debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
+        invalidate()
+        return true
+    }
+
+    /** Gate E Supernova source and exact optical stack. */
+    internal fun setGpuSupernovaEnabledForDebug(enabled: Boolean): Boolean {
+        if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) return false
+        isolateDebugHost()
+        if (gpuSupernovaEnabledForDebug == enabled) return true
+        renderingPipeline.dispose()
+        canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+        renderingPipeline = if (enabled) {
+            val gpu = GpuSupernovaRenderBackend(outline)
+            HaloRenderingPipeline(DebugGpuFallbackBackend(gpu, canvasRenderBackend, currentConfig,
+                onCanvasFallback = { reason, rendered ->
+                    com.yp.luminote.app.rendering.gpu.GpuPulseEvidence.recordFallback(gpu.generationForDebugEvidence(), reason, rendered)
+                }))
+        } else HaloRenderingPipeline(canvasRenderBackend)
+        gpuSupernovaEnabledForDebug = enabled
+        if (enabled) { gpuWitnessEnabledForDebug = false; gpuPulseEnabledForDebug = false; gpuSnakeEnabledForDebug = false; gpuImpulseEnabledForDebug = false }
+        debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
         invalidate()
         return true
     }
@@ -430,6 +539,37 @@ internal class HaloView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
 
+        if (!debugHost) {
+            if (pipelineDisposed) switchProductionEngine(productionEngine, force = true)
+            val epoch = ++preferenceEpoch
+            preferenceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { scope ->
+                scope.launch {
+                    LuminoteSettingsRepository(context.applicationContext).settings
+                        .map { it.renderingEngine }.distinctUntilChanged()
+                        .catch { error ->
+                            Log.e(TAG, "Rendering preference unavailable; retaining Canvas", error)
+                            emit(RenderingEngine.CANVAS)
+                        }.collect { engine ->
+                            if (epoch == preferenceEpoch && isAttachedToWindow && !debugHost) switchProductionEngine(engine)
+                        }
+                }
+            }
+        } else if (pipelineDisposed) {
+            pipelineDisposed = false
+            when {
+                gpuWitnessEnabledForDebug -> { gpuWitnessEnabledForDebug = false; setGpuWitnessEnabledForDebug(true) }
+                gpuPulseEnabledForDebug -> { gpuPulseEnabledForDebug = false; setGpuPulseEnabledForDebug(true) }
+                gpuSnakeEnabledForDebug -> { gpuSnakeEnabledForDebug = false; setGpuSnakeEnabledForDebug(true) }
+                gpuImpulseEnabledForDebug -> { gpuImpulseEnabledForDebug = false; setGpuImpulseEnabledForDebug(true) }
+                gpuSupernovaEnabledForDebug -> { gpuSupernovaEnabledForDebug = false; setGpuSupernovaEnabledForDebug(true) }
+                else -> {
+                    canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
+                    renderingPipeline = HaloRenderingPipeline(canvasRenderBackend)
+                    debugVisualPlan?.let(renderingPipeline::updateDebugVisualPlan)
+                }
+            }
+        }
+
         Choreographer.getInstance().postFrameCallback(frameTimeSampler)
 
         requestApplyInsets()
@@ -440,11 +580,12 @@ internal class HaloView(
     override fun onApplyWindowInsets(
         insets: WindowInsets
     ): WindowInsets {
+        val previousOutlineVersion = outline.version
         outline.updateInsets(
             insets
         )
 
-        renderingPipeline.invalidateSurface()
+        if (outline.version != previousOutlineVersion) renderingPipeline.invalidateSurface()
 
         invalidate()
 
@@ -454,11 +595,14 @@ internal class HaloView(
     }
 
     override fun onDetachedFromWindow() {
+        preferenceEpoch++
+        preferenceScope?.cancel(); preferenceScope = null
         Choreographer.getInstance().removeFrameCallback(frameTimeSampler)
 
         cancelAnimation()
 
         renderingPipeline.dispose()
+        pipelineDisposed = true
 
         super.onDetachedFromWindow()
     }
@@ -487,6 +631,12 @@ internal class HaloView(
         renderFrame.viewportHeight = height
         renderFrame.intent = if (gpuWitnessEnabledForDebug) {
             com.yp.luminote.app.rendering.api.RenderIntent.DEBUG_GPU_WITNESS
+        } else if (gpuSupernovaEnabledForDebug) {
+            com.yp.luminote.app.rendering.api.RenderIntent.DEBUG_GPU_SUPERNOVA
+        } else if (gpuImpulseEnabledForDebug) {
+            com.yp.luminote.app.rendering.api.RenderIntent.DEBUG_GPU_IMPULSE
+        } else if (gpuSnakeEnabledForDebug) {
+            com.yp.luminote.app.rendering.api.RenderIntent.DEBUG_GPU_SNAKE
         } else if (gpuPulseEnabledForDebug) {
             com.yp.luminote.app.rendering.api.RenderIntent.DEBUG_GPU_PULSE
         } else {
@@ -500,7 +650,7 @@ internal class HaloView(
             renderingPipeline.render(canvasTarget, renderFrame)
         }
         if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
-            !gpuWitnessEnabledForDebug && !gpuPulseEnabledForDebug && outcome == RenderOutcome.Rendered) {
+            !gpuWitnessEnabledForDebug && !gpuPulseEnabledForDebug && !gpuSnakeEnabledForDebug && !gpuImpulseEnabledForDebug && !gpuSupernovaEnabledForDebug && outcome == RenderOutcome.Rendered) {
             debugCanvasRenderedFrames++
         }
         when (outcome) {

@@ -8,7 +8,10 @@ import com.yp.luminote.app.rendering.gpu.GpuWitnessEvidence
 internal enum class VisualEffectsDemoRequestedBackend {
     CANVAS,
     GPU_WITNESS,
-    GPU_PULSE
+    GPU_PULSE,
+    GPU_SNAKE,
+    GPU_IMPULSE,
+    GPU_SUPERNOVA
 }
 
 /** An observed result only; GPU is never inferred from a DEBUG selection. */
@@ -80,6 +83,15 @@ internal object VisualEffectsDemoDiagnosticsAdapter {
             selectedMode = selectedMode,
             generation = gpuPulseGeneration
         )
+        VisualEffectsDemoRequestedBackend.GPU_SNAKE -> pulseSnapshot(
+            selectedFamily,selectedMode,gpuPulseGeneration,snake = true
+        )
+        VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA -> pulseSnapshot(
+            selectedFamily, selectedMode, gpuPulseGeneration, supernova = true
+        )
+        VisualEffectsDemoRequestedBackend.GPU_IMPULSE -> pulseSnapshot(
+            selectedFamily, selectedMode, gpuPulseGeneration, impulse = true
+        )
     }
 
     private fun witnessSnapshot(
@@ -114,30 +126,39 @@ internal object VisualEffectsDemoDiagnosticsAdapter {
     private fun pulseSnapshot(
         selectedFamily: VisualEffectsDemoFamily,
         selectedMode: VisualEffectsDemoMode,
-        generation: Long?
+        generation: Long?,
+        snake: Boolean = false,
+        impulse: Boolean = false,
+        supernova: Boolean = false
     ): VisualEffectsDemoDiagnosticsSnapshot {
         val evidence = generation?.let(GpuPulseEvidence::snapshot)
         val diagnostics = GpuPulseDiagnostics.snapshotForGeneration(generation)
         val submitted = (evidence?.submissions ?: 0) > 0
         val fallbacks = evidence?.fallbacks ?: 0
         return VisualEffectsDemoDiagnosticsSnapshot(
-            requestedBackend = VisualEffectsDemoRequestedBackend.GPU_PULSE,
+            requestedBackend = if (supernova) VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA else if (impulse) VisualEffectsDemoRequestedBackend.GPU_IMPULSE else if (snake) VisualEffectsDemoRequestedBackend.GPU_SNAKE else VisualEffectsDemoRequestedBackend.GPU_PULSE,
             actualBackend = actualBackend(evidence?.latestActualBackend),
             gpuInitialized = (evidence?.shaderInitializations ?: 0) > 0,
             gpuSubmitted = submitted,
             selectedOperation = "${selectedFamily.label} / ${selectedMode.label}",
-            admittedOperation = diagnostics.admittedOperation.takeIf { submitted },
+            admittedOperation = if (supernova && submitted) "Supernova" else if (impulse && submitted) "LightImpulse / NORMAL_IMPULSE" else if (snake && submitted) "TravelingLuminousSegment / FLOWING_SNAKE" else diagnostics.admittedOperation.takeIf { submitted },
             fallbackReason = evidence?.latestFallbackReason,
-            failureStage = diagnostics.failureStage,
-            failureType = diagnostics.failureType,
-            failureMessage = diagnostics.failureMessage,
+            failureStage = if (snake || impulse || supernova) evidence?.firstFailure?.stage.takeIf { evidence?.latestActualBackend != "GPU" } else diagnostics.failureStage,
+            failureType = if (snake || impulse || supernova) evidence?.firstFailure?.type.takeIf { evidence?.latestActualBackend != "GPU" } else diagnostics.failureType,
+            failureMessage = if (snake || impulse || supernova) evidence?.firstFailure?.message.takeIf { evidence?.latestActualBackend != "GPU" } else diagnostics.failureMessage,
             fallbackCount = fallbacks,
             generation = generation,
             shaderInitialized = (evidence?.shaderInitializations ?: 0) > 0,
             gpuAttempts = evidence?.preSubmitAttempts ?: 0,
             initializationAttempts = evidence?.shaderInitializationAttempts ?: 0,
             gpuSubmittedFrames = evidence?.submissions ?: 0,
-            capabilitySummary = if (selectedFamily == VisualEffectsDemoFamily.FULL_CONTOUR && selectedMode == VisualEffectsDemoMode.BASELINE) {
+            capabilitySummary = if (supernova) {
+                "DEBUG GPU Supernova; Baseline or Production Supernova Stack only."
+            } else if (impulse) {
+                "DEBUG GPU Impulse; normal Impulse Baseline only, no optical modifiers."
+            } else if (snake) {
+                "DEBUG GPU Snake; flowing source, Baseline or Production Snake Stack only."
+            } else if (selectedFamily == VisualEffectsDemoFamily.FULL_CONTOUR && selectedMode == VisualEffectsDemoMode.BASELINE) {
                 "DEBUG GPU Pulse; Full Contour baseline only."
             } else {
                 "Unavailable: GPU Pulse requires Full Contour baseline."

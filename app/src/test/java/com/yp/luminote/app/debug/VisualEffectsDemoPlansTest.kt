@@ -31,7 +31,7 @@ class VisualEffectsDemoPlansTest {
             VisualEffectsDemoFamily.LUMINOUS_SEGMENT,
             VisualEffectsDemoFamily.SUPERNOVA
         ).forEach { family ->
-            VisualEffectsDemoMode.entries.forEach { mode ->
+            VisualEffectsDemoMode.entries.filter { it != VisualEffectsDemoMode.PRODUCTION && it != VisualEffectsDemoMode.PRODUCTION_SUPERNOVA }.forEach { mode ->
                 assertTrue(supportsDemoMode(family, mode))
                 assertTrue(visualEffectsDemoPlan(family, mode) != null)
             }
@@ -51,5 +51,16 @@ class VisualEffectsDemoPlansTest {
             assertFalse(supportsDemoMode(family, VisualEffectsDemoMode.COMBINED))
             assertNull(visualEffectsDemoPlan(family, VisualEffectsDemoMode.GLOW))
         }
+    }
+
+    @Test fun `production Snake stack is independently reachable without changing full stack`() {
+        val family = VisualEffectsDemoFamily.LUMINOUS_SEGMENT
+        assertTrue(demoCapability(VisualEffectsDemoEngine.GPU,family,VisualEffectsDemoMode.BASELINE).admitted)
+        assertTrue(demoCapability(VisualEffectsDemoEngine.GPU,family,VisualEffectsDemoMode.PRODUCTION).admitted)
+        assertFalse(demoCapability(VisualEffectsDemoEngine.GPU,family,VisualEffectsDemoMode.COMBINED).admitted)
+        assertEquals(com.yp.luminote.app.rendering.gpu.GpuSnakeCapability.productionModifiers,
+            visualEffectsDemoPlan(family,VisualEffectsDemoMode.PRODUCTION)!!.emitters.single().modifiers)
+        assertNull(visualEffectsDemoPlan(VisualEffectsDemoFamily.FULL_CONTOUR,VisualEffectsDemoMode.PRODUCTION))
+        assertEquals(10f,visualEffectsDemoPlan(family,VisualEffectsDemoMode.COMBINED)!!.emitters.single().modifiers.filterIsInstance<com.yp.luminote.app.animation.plan.VisualModifier.Blur>().single().radiusPx)
     }
 }

@@ -55,6 +55,7 @@ enum class HaloMode {
 }
 
 data class LuminoteSettings(
+    val renderingEngine: RenderingEngine = RenderingEngine.CANVAS,
     val themeMode: ThemeMode = ThemeMode.SYSTEM,
 
     val haloMode: HaloMode = HaloMode.NOTIFICATIONS,

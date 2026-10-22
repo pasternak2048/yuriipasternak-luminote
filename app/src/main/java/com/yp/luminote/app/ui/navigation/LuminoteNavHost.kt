@@ -135,7 +135,8 @@ fun LuminoteNavHost(
                 onAppearanceClick = { navController.navigate(LuminoteRoutes.APPEARANCE) },
                 onLanguageClick = { navController.navigate(LuminoteRoutes.LANGUAGE) },
                 onUpdatesClick = { navController.navigate(LuminoteRoutes.UPDATES) },
-                onAboutClick = { navController.navigate(LuminoteRoutes.ABOUT) }
+                onAboutClick = { navController.navigate(LuminoteRoutes.ABOUT) },
+                viewModel = settingsViewModel
             )
         }
 

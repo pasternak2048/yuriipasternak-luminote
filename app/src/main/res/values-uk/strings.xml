@@ -209,8 +209,8 @@
     <string name="debug_lab_self_test_description">Перевірити поточну GPU-анімацію та зібрати докази виконання.</string>
     <string name="debug_lab_self_test_preview_required">Перегляньте анімацію з вибраним GPU перед запуском її самоперевірки.</string>
     <string name="debug_lab_gpu_under_validation">Підтримка GPU проходить перевірку. Запустіть перегляд, щоб перевірити фактичне виконання.</string>
-    <string name="debug_lab_selection_unsupported">GPU недоступний для цього вибору. Виберіть Pulse із базовими ефектами або Canvas.</string>
-    <string name="debug_lab_gpu_effects_pending">Модифікатори GPU ще не реалізовані на Gate B. Базовий режим зберігає оригінальну анімацію.</string>
+    <string name="debug_lab_selection_unsupported">GPU недоступний для цього вибору. Використовуйте Pulse або Impulse з Baseline; Snake або Supernova з Baseline чи відповідним продакшн-стеком; або Canvas для інших варіантів.</string>
+    <string name="debug_lab_gpu_effects_pending">GPU підтримує Pulse та Impulse з Baseline, а Snake та Supernova — з Baseline або відповідним продакшн-стеком. Інші демонстраційні стеки модифікаторів очікують реалізації.</string>
     <string name="debug_lab_effects_operation_limited">Ця анімація підтримує лише показані конфігурації ефектів.</string>
     <string name="debug_lab_unavailable_effects">Недоступні ефекти</string>
     <string name="debug_lab_hide_unavailable_effects">Сховати недоступні ефекти</string>
@@ -233,4 +233,11 @@
     <string name="debug_lab_validation_init_attempts">Спроби ініціалізації GPU (покоління): %1$d</string>
     <string name="debug_lab_shader_initialized">Шейдер ініціалізовано: %1$s</string>
     <string name="debug_lab_validation_submitted_frames">Надіслані кадри GPU (покоління): %1$d</string>
+    <string name="debug_lab_production_snake_stack">Стандартний набір ефектів Snake</string>
+    <string name="debug_lab_production_supernova_stack">Продакшн-стек Supernova</string>
+    <string name="rendering_engine">Рушій відтворення</string>
+    <string name="rendering_engine_standard">Стандартний (Canvas)</string>
+    <string name="rendering_engine_standard_description">Типовий варіант. Використовує стандартне відтворення для всіх світлових ефектів.</string>
+    <string name="rendering_engine_gpu">Прискорення GPU</string>
+    <string name="rendering_engine_gpu_description">Використовує графічне прискорення для підтримуваних ефектів. Інші ефекти або ефекти, для яких прискорення недоступне, відтворюються стандартно.</string>
 </resources>

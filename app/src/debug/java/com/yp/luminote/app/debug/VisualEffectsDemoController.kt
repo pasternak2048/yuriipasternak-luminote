@@ -23,6 +23,9 @@ import com.yp.luminote.app.rendering.gpu.GpuPulseEvidence
 import com.yp.luminote.app.rendering.gpu.GpuWitnessEvidence
 import com.yp.luminote.app.animation.definitions.LuminoteHaloAnimations
 import com.yp.luminote.app.rendering.gpu.GpuPulseCapability
+import com.yp.luminote.app.rendering.gpu.GpuSnakeCapability
+import com.yp.luminote.app.rendering.gpu.GpuSupernovaCapability
+import com.yp.luminote.app.rendering.gpu.GpuImpulseCapability
 
 internal enum class VisualEffectsDemoEngine { CANVAS, GPU }
 internal data class DemoCapability(val admitted: Boolean, val reason: String)
@@ -35,8 +38,8 @@ internal fun demoCapability(engine: VisualEffectsDemoEngine, family: VisualEffec
         ?: return DemoCapability(false, "Effect is not supported for this animation.")
     if (engine == VisualEffectsDemoEngine.CANVAS) return DemoCapability(true, "Canvas operation available.")
     val emitter = plan.emitters.single()
-    val admitted = GpuPulseCapability.supports(emitter.appearance, emitter.operation, emitter.modifiers)
-    return DemoCapability(admitted, if (admitted) "GPU Pulse under validation." else "GPU implementation pending for this selection.")
+    val admitted = GpuPulseCapability.supports(emitter.appearance, emitter.operation, emitter.modifiers) || GpuSnakeCapability.supports(emitter) || GpuImpulseCapability.supports(emitter) || GpuSupernovaCapability.supports(emitter)
+    return DemoCapability(admitted, if (admitted) "GPU operation admitted for validation." else "GPU implementation pending for this selection.")
 }
 
 /** The modifier stack variants exposed by the debug-only visual-effects demo. */
@@ -46,6 +49,9 @@ internal enum class VisualEffectsDemoMode {
     BLUR,
     INTENSITY_PULSE,
     COMBINED,
+    /** Exact production normal Snake parameters; demo Full Stack stays unchanged. */
+    PRODUCTION,
+    PRODUCTION_SUPERNOVA,
     /** Deliberately conspicuous DEBUG-only witness for framebuffer comparison. */
     DIAGNOSTIC_GLOW,
     /** Deliberately conspicuous DEBUG-only witness for framebuffer comparison. */
@@ -90,6 +96,9 @@ internal class VisualEffectsDemoController(
     private val haloView = HaloView(context, config)
     private var gpuWitnessEnabled = false
     private var gpuPulseEnabled = false
+    private var gpuSnakeEnabled = false
+    private var gpuSupernovaEnabled = false
+    private var gpuImpulseEnabled = false
     private var gpuWitnessGeneration: Long? = null
     private var gpuPulseGeneration: Long? = null
     private var validationSession: GpuValidationSession? = null
@@ -107,7 +116,12 @@ internal class VisualEffectsDemoController(
         selectCanvasBackend()
         selectFamily(family)
         select(mode)
-        if (engine == VisualEffectsDemoEngine.GPU && !setGpuPulseEnabled(true)) {
+        if (engine == VisualEffectsDemoEngine.GPU && !when (family) {
+            VisualEffectsDemoFamily.LUMINOUS_SEGMENT -> setGpuSnakeEnabled(true)
+            VisualEffectsDemoFamily.LIGHT_IMPULSE -> setGpuImpulseEnabled(true)
+            VisualEffectsDemoFamily.SUPERNOVA -> setGpuSupernovaEnabled(true)
+            else -> setGpuPulseEnabled(true)
+        }) {
             return VisualEffectsDemoSelection.Unsupported("GPU backend is unavailable on this device/build.")
         }
         restart()
@@ -127,6 +141,9 @@ internal class VisualEffectsDemoController(
     private fun selectCanvasBackend() {
         if (gpuWitnessEnabled) setGpuWitnessEnabled(false)
         if (gpuPulseEnabled) setGpuPulseEnabled(false)
+        if (gpuSnakeEnabled) setGpuSnakeEnabled(false)
+        if (gpuImpulseEnabled) setGpuImpulseEnabled(false)
+        if (gpuSupernovaEnabled) setGpuSupernovaEnabled(false)
     }
 
     private fun cancelSelfTest() {
@@ -173,13 +190,17 @@ internal class VisualEffectsDemoController(
     }
 
     fun select(mode: VisualEffectsDemoMode): VisualEffectsDemoSelection {
-        if ((gpuWitnessEnabled || gpuPulseEnabled) && mode != VisualEffectsDemoMode.BASELINE) {
+        if ((gpuWitnessEnabled || gpuPulseEnabled || gpuImpulseEnabled) && mode != VisualEffectsDemoMode.BASELINE) {
             return VisualEffectsDemoSelection.Unsupported(
                 "GPU RuntimeShader witness accepts Baseline only. Disable it before selecting modifiers."
             )
         }
         val plan = visualEffectsDemoPlan(selectedFamily, mode)
             ?: return VisualEffectsDemoSelection.Unsupported(unsupportedDescription(selectedFamily, mode))
+        if (gpuSnakeEnabled && !GpuSnakeCapability.supports(plan.emitters.single())) {
+            return VisualEffectsDemoSelection.Unsupported("GPU Snake requires Baseline or Production Snake Stack.")
+        }
+        if (gpuSupernovaEnabled && !GpuSupernovaCapability.supports(plan.emitters.single())) return VisualEffectsDemoSelection.Unsupported("GPU Supernova requires Baseline or Production Supernova Stack.")
         selectedMode = mode
         validationSession?.cancel()
         haloView.replaceVisualPlanForDebug(plan)
@@ -195,6 +216,9 @@ internal class VisualEffectsDemoController(
         gpuWitnessGeneration = if (enabled) GpuWitnessEvidence.latestGeneration() else null
         if (enabled) {
             gpuPulseEnabled = false
+            gpuSnakeEnabled = false
+            gpuImpulseEnabled = false
+            gpuSupernovaEnabled = false
             gpuPulseGeneration = null
         }
         if (enabled) {
@@ -214,8 +238,54 @@ internal class VisualEffectsDemoController(
         gpuPulseGeneration = if (enabled) GpuPulseEvidence.latestGeneration() else null
         if (enabled) {
             gpuWitnessEnabled = false
+            gpuSnakeEnabled = false
+            gpuImpulseEnabled = false
+            gpuSupernovaEnabled = false
             gpuWitnessGeneration = null
             selectedMode = VisualEffectsDemoMode.BASELINE
+            haloView.replaceVisualPlanForDebug(visualEffectsDemoPlan(selectedFamily, selectedMode)!!)
+        }
+        return true
+    }
+
+    fun setGpuSnakeEnabled(enabled: Boolean): Boolean {
+        if (enabled && (selectedFamily != VisualEffectsDemoFamily.LUMINOUS_SEGMENT ||
+                !GpuSnakeCapability.supports(visualEffectsDemoPlan(selectedFamily,selectedMode)!!.emitters.single()))) return false
+        if (!haloView.setGpuSnakeEnabledForDebug(enabled)) return false
+        gpuSnakeEnabled = enabled
+        validationSession?.cancel()
+        // Shared evidence uses globally unique generations, captured only after this selector.
+        gpuPulseGeneration = if (enabled) GpuPulseEvidence.latestGeneration() else null
+        if (enabled) {
+            gpuPulseEnabled = false; gpuWitnessEnabled = false; gpuImpulseEnabled = false; gpuSupernovaEnabled = false; gpuWitnessGeneration = null
+            haloView.replaceVisualPlanForDebug(visualEffectsDemoPlan(selectedFamily,selectedMode)!!)
+        }
+        return true
+    }
+
+    fun setGpuImpulseEnabled(enabled: Boolean): Boolean {
+        if (enabled && (selectedFamily != VisualEffectsDemoFamily.LIGHT_IMPULSE ||
+                !GpuImpulseCapability.supports(visualEffectsDemoPlan(selectedFamily, selectedMode)!!.emitters.single()))) return false
+        if (!haloView.setGpuImpulseEnabledForDebug(enabled)) return false
+        gpuImpulseEnabled = enabled
+        validationSession?.cancel()
+        gpuPulseGeneration = if (enabled) GpuPulseEvidence.latestGeneration() else null
+        if (enabled) {
+            gpuPulseEnabled = false; gpuSnakeEnabled = false; gpuSupernovaEnabled = false; gpuWitnessEnabled = false; gpuWitnessGeneration = null
+            haloView.replaceVisualPlanForDebug(visualEffectsDemoPlan(selectedFamily, selectedMode)!!)
+        }
+        return true
+    }
+
+    fun setGpuSupernovaEnabled(enabled: Boolean): Boolean {
+        if (enabled && (selectedFamily != VisualEffectsDemoFamily.SUPERNOVA ||
+                !GpuSupernovaCapability.supports(visualEffectsDemoPlan(selectedFamily, selectedMode)!!.emitters.single()))) return false
+        if (!haloView.setGpuSupernovaEnabledForDebug(enabled)) return false
+        gpuSupernovaEnabled = enabled
+        validationSession?.cancel()
+        gpuPulseGeneration = if (enabled) GpuPulseEvidence.latestGeneration() else null
+        if (enabled) {
+            gpuPulseEnabled = false; gpuSnakeEnabled = false; gpuImpulseEnabled = false; gpuWitnessEnabled = false; gpuWitnessGeneration = null
             haloView.replaceVisualPlanForDebug(visualEffectsDemoPlan(selectedFamily, selectedMode)!!)
         }
         return true
@@ -225,6 +295,9 @@ internal class VisualEffectsDemoController(
     fun diagnosticsSnapshot(): VisualEffectsDemoDiagnosticsSnapshot {
         val requestedBackend = when {
             gpuWitnessEnabled -> VisualEffectsDemoRequestedBackend.GPU_WITNESS
+            gpuSnakeEnabled -> VisualEffectsDemoRequestedBackend.GPU_SNAKE
+            gpuSupernovaEnabled -> VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA
+            gpuImpulseEnabled -> VisualEffectsDemoRequestedBackend.GPU_IMPULSE
             gpuPulseEnabled -> VisualEffectsDemoRequestedBackend.GPU_PULSE
             else -> VisualEffectsDemoRequestedBackend.CANVAS
         }
@@ -250,16 +323,28 @@ internal class VisualEffectsDemoController(
         completedValidation = null
         val previousWitness = gpuWitnessEnabled
         val previousPulse = gpuPulseEnabled
+        val previousSnake = gpuSnakeEnabled
+        val previousImpulse = gpuImpulseEnabled
+        val previousSupernova = gpuSupernovaEnabled
         // A deliberate retry owns a fresh backend generation, including a fresh failure latch.
         selectCanvasBackend()
         if (previousWitness) setGpuWitnessEnabled(true)
         if (previousPulse) setGpuPulseEnabled(true)
+        if (previousSnake) setGpuSnakeEnabled(true)
+        if (previousImpulse) setGpuImpulseEnabled(true)
+        if (previousSupernova) setGpuSupernovaEnabled(true)
         val requestedBackend = when {
             gpuWitnessEnabled -> VisualEffectsDemoRequestedBackend.GPU_WITNESS
+            gpuSnakeEnabled -> VisualEffectsDemoRequestedBackend.GPU_SNAKE
+            gpuSupernovaEnabled -> VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA
+            gpuImpulseEnabled -> VisualEffectsDemoRequestedBackend.GPU_IMPULSE
             gpuPulseEnabled -> VisualEffectsDemoRequestedBackend.GPU_PULSE
             else -> VisualEffectsDemoRequestedBackend.CANVAS
         }
         val capability = when (requestedBackend) {
+            VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA -> "Admitted: GPU Supernova Baseline or exact production optical stack."
+            VisualEffectsDemoRequestedBackend.GPU_IMPULSE -> "Admitted: GPU normal Impulse Baseline only."
+            VisualEffectsDemoRequestedBackend.GPU_SNAKE -> "Admitted: GPU normal Snake baseline or exact production optical stack."
             VisualEffectsDemoRequestedBackend.GPU_PULSE ->
                 if (selectedFamily == VisualEffectsDemoFamily.FULL_CONTOUR && selectedMode == VisualEffectsDemoMode.BASELINE) {
                     "Admitted: GPU Pulse requires Full Contour baseline."
@@ -278,7 +363,7 @@ internal class VisualEffectsDemoController(
             deviceModel = Build.MODEL,
             androidApi = Build.VERSION.SDK_INT,
             generation = when (requestedBackend) {
-                VisualEffectsDemoRequestedBackend.GPU_PULSE -> gpuPulseGeneration
+                VisualEffectsDemoRequestedBackend.GPU_PULSE, VisualEffectsDemoRequestedBackend.GPU_SNAKE, VisualEffectsDemoRequestedBackend.GPU_IMPULSE, VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA -> gpuPulseGeneration
                 VisualEffectsDemoRequestedBackend.GPU_WITNESS -> gpuWitnessGeneration
                 VisualEffectsDemoRequestedBackend.CANVAS -> null
             }
@@ -289,6 +374,9 @@ internal class VisualEffectsDemoController(
             selectCanvasBackend()
             if (previousWitness) setGpuWitnessEnabled(true)
             if (previousPulse) setGpuPulseEnabled(true)
+            if (previousSnake) setGpuSnakeEnabled(true)
+            if (previousImpulse) setGpuImpulseEnabled(true)
+            if (previousSupernova) setGpuSupernovaEnabled(true)
             restart()
         }
         restart()
@@ -337,7 +425,7 @@ internal class VisualEffectsDemoController(
         appendLine("shaderInitialized=${current.shaderInitialized} submitted=${current.gpuSubmitted} pixelVerification=${current.pixelVerification}")
         appendLine("initializationAttempts=${current.initializationAttempts} gpuRenderAttempts=${current.gpuAttempts} gpuSubmittedFrames=${current.gpuSubmittedFrames} canvasFallbackFrames=${current.fallbackCount}")
         appendLine("fallbackReason=${current.fallbackReason.orEmpty()}")
-        val pulse = if (current.requestedBackend == VisualEffectsDemoRequestedBackend.GPU_PULSE) current.generation?.let(GpuPulseEvidence::snapshot) else null
+        val pulse = if (current.requestedBackend in setOf(VisualEffectsDemoRequestedBackend.GPU_PULSE, VisualEffectsDemoRequestedBackend.GPU_SNAKE, VisualEffectsDemoRequestedBackend.GPU_IMPULSE, VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA)) current.generation?.let(GpuPulseEvidence::snapshot) else null
         appendLine("geometryField=${pulse?.fieldKey} surfaceEpoch=${pulse?.surfaceEpoch}")
         pulse?.firstFailure?.let { failure ->
             appendLine("firstFailure=${failure.classification} stage=${failure.stage} type=${failure.type} message=${failure.message}")
@@ -345,6 +433,8 @@ internal class VisualEffectsDemoController(
         }
         appendLine("SELF-TEST (separate session; compare generation before interpreting)")
         append(gpuValidationSnapshot().toDiagnosticReport())
+        appendLine()
+        append(com.yp.luminote.app.rendering.gpu.ProductionRenderEvidence.report())
     }
 
     /** Restarts the identical motion at phase zero without changing its timing. */
@@ -372,7 +462,11 @@ internal class VisualEffectsDemoController(
 }
 
 /** The D1 contract keeps unsupported combinations explicit instead of substituting another plan. */
-internal fun supportsDemoMode(family: VisualEffectsDemoFamily, mode: VisualEffectsDemoMode): Boolean = when (family) {
+internal fun supportsDemoMode(family: VisualEffectsDemoFamily, mode: VisualEffectsDemoMode): Boolean = if (mode == VisualEffectsDemoMode.PRODUCTION) {
+    family == VisualEffectsDemoFamily.LUMINOUS_SEGMENT
+} else if (mode == VisualEffectsDemoMode.PRODUCTION_SUPERNOVA) {
+    family == VisualEffectsDemoFamily.SUPERNOVA
+} else when (family) {
     VisualEffectsDemoFamily.FULL_CONTOUR,
     VisualEffectsDemoFamily.LUMINOUS_SEGMENT,
     VisualEffectsDemoFamily.SUPERNOVA -> true
@@ -408,6 +502,8 @@ private val VisualEffectsDemoMode.modifiers: List<VisualModifier>
         // These are intentionally not production presets. They isolate each real modifier at
         // the largest admitted optical radius (or pulse amplitude) so device captures have an
         // unmistakable paired-output witness without changing release rendering.
+        VisualEffectsDemoMode.PRODUCTION -> GpuSnakeCapability.productionModifiers
+        VisualEffectsDemoMode.PRODUCTION_SUPERNOVA -> GpuSupernovaCapability.productionModifiers
         VisualEffectsDemoMode.DIAGNOSTIC_GLOW -> listOf(VisualModifier.Glow(radiusPx = 64f, alphaMultiplier = 1f))
         VisualEffectsDemoMode.DIAGNOSTIC_BLUR -> listOf(VisualModifier.Blur(radiusPx = 64f))
         VisualEffectsDemoMode.DIAGNOSTIC_INTENSITY_PULSE -> listOf(
@@ -425,6 +521,8 @@ internal val VisualEffectsDemoMode.label: String
         VisualEffectsDemoMode.BLUR -> "Blur"
         VisualEffectsDemoMode.INTENSITY_PULSE -> "Intensity Pulse"
         VisualEffectsDemoMode.COMBINED -> "Full Stack"
+        VisualEffectsDemoMode.PRODUCTION -> "Production Snake Stack"
+        VisualEffectsDemoMode.PRODUCTION_SUPERNOVA -> "Production Supernova Stack"
         VisualEffectsDemoMode.DIAGNOSTIC_GLOW -> "Diagnostic Glow (64 px)"
         VisualEffectsDemoMode.DIAGNOSTIC_BLUR -> "Diagnostic Blur (64 px)"
         VisualEffectsDemoMode.DIAGNOSTIC_INTENSITY_PULSE -> "Diagnostic Pulse (100%)"
@@ -436,4 +534,6 @@ private fun VisualEffectsDemoMode.activeModifierLabels(): List<String> = when (t
     VisualEffectsDemoMode.BLUR, VisualEffectsDemoMode.DIAGNOSTIC_BLUR -> listOf("Blur")
     VisualEffectsDemoMode.INTENSITY_PULSE, VisualEffectsDemoMode.DIAGNOSTIC_INTENSITY_PULSE -> listOf("Intensity Pulse")
     VisualEffectsDemoMode.COMBINED -> listOf("Intensity Pulse", "Blur", "Glow")
+    VisualEffectsDemoMode.PRODUCTION -> listOf("Intensity Pulse (.12, .75 Hz)", "Blur (2.75 px)", "Glow (7.5 px, .35)")
+    VisualEffectsDemoMode.PRODUCTION_SUPERNOVA -> listOf("Intensity Pulse (.18, 1.65 Hz)", "Blur (4.5 px)", "Glow (11 px, .50)")
 }

@@ -175,8 +175,8 @@
     <string name="debug_lab_self_test_description">Verify the current GPU animation and capture execution evidence.</string>
     <string name="debug_lab_self_test_preview_required">Preview an animation with GPU selected before running its self-test.</string>
     <string name="debug_lab_gpu_under_validation">GPU support under validation. Preview to check actual execution.</string>
-    <string name="debug_lab_selection_unsupported">GPU is unavailable for this selection. Choose Pulse with Baseline effects, or use Canvas.</string>
-    <string name="debug_lab_gpu_effects_pending">GPU modifiers are not implemented in Gate B. Baseline preserves the original animation.</string>
+    <string name="debug_lab_selection_unsupported">GPU is unavailable for this selection. Use Pulse or Impulse with Baseline; Snake or Supernova with Baseline or their respective Production Stack; or Canvas for other selections.</string>
+    <string name="debug_lab_gpu_effects_pending">GPU supports Pulse and Impulse with Baseline, and Snake and Supernova with Baseline or their respective Production Stack. Other demo modifier stacks are pending.</string>
     <string name="debug_lab_effects_operation_limited">This animation supports only the effect configurations shown.</string>
     <string name="debug_lab_unavailable_effects">Unavailable effects</string>
     <string name="debug_lab_hide_unavailable_effects">Hide unavailable effects</string>
@@ -222,6 +222,7 @@
     <string name="debug_lab_forceblade_crimson">ForceBlade Crimson</string>
     <string name="debug_lab_forceblade_clash">ForceBlade Clash</string>
     <string name="debug_lab_baseline">Baseline</string>
+    <string name="debug_lab_production_snake_stack">Production Snake Stack</string>
     <string name="debug_lab_glow">Glow</string>
     <string name="debug_lab_blur">Blur</string>
     <string name="debug_lab_intensity_pulse">Intensity Pulse</string>
@@ -299,4 +300,10 @@
     <string name="debug_lab_check_clipping">Clipping</string>
     <string name="debug_lab_check_resource_recreation">Resource recreation</string>
     <string name="debug_lab_check_canvas_fallback">Canvas fallback</string>
+    <string name="debug_lab_production_supernova_stack">Production Supernova Stack</string>
+    <string name="rendering_engine">Rendering Engine</string>
+    <string name="rendering_engine_standard">Standard (Canvas)</string>
+    <string name="rendering_engine_standard_description">Default. Uses standard rendering for all lighting effects.</string>
+    <string name="rendering_engine_gpu">GPU Accelerated</string>
+    <string name="rendering_engine_gpu_description">Uses graphics acceleration for supported effects. Other effects, or effects that cannot use acceleration, use standard rendering.</string>
 </resources>

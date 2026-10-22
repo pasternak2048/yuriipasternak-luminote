@@ -11,7 +11,7 @@ import com.yp.luminote.app.rendering.api.RenderMode
 /** Gate B's deliberately narrow admission boundary. Unsupported is an explicit Canvas route. */
 internal object GpuPulseCapability {
     fun unsupportedReason(intent: RenderIntent, mode: RenderMode, commandCount: Int, command: FrameVisualCommand?): String? = when {
-        intent != RenderIntent.DEBUG_GPU_PULSE -> "GPU Pulse is DEBUG-only"
+        intent != RenderIntent.DEBUG_GPU_PULSE && intent != RenderIntent.PRODUCTION -> "GPU Pulse intent is unsupported"
         mode != RenderMode.ANIMATION -> "GPU Pulse does not support static calibration"
         commandCount != 1 || command == null -> "GPU Pulse requires exactly one DisplayOutlineContour command"
         command.operation !is PrimaryVisualOperation.FullContourPulse -> "GPU Pulse supports FullContourPulse only"

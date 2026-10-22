@@ -180,6 +180,28 @@ class GpuValidationSessionTest {
         assertEquals(GpuValidationState.NOT_RUN, snapshot.checks.getValue("Canvas fallback").state)
     }
 
+    @Test fun snakeSessionRejectsPriorPulseGenerationAndPreservesExplicitRoute() {
+        val pulse = GpuPulseEvidence.beginGeneration()
+        GpuPulseEvidence.recordShaderInitializationAttempt(pulse)
+        GpuPulseEvidence.recordSubmission(pulse,255)
+        val snake = GpuPulseEvidence.beginGeneration()
+        val session = GpuValidationSession.start(4,VisualEffectsDemoRequestedBackend.GPU_SNAKE,
+            "Traveling Segment","Production Snake Stack",listOf("Intensity Pulse","Blur","Glow"),
+            "Admitted","1.2.3","Test Device",35,snake)
+        val stale = session.snapshot(GpuPulseEvidence.snapshot(pulse),null)
+        assertEquals(VisualEffectsDemoRequestedBackend.GPU_SNAKE,stale.requestedBackend)
+        assertEquals(VisualEffectsDemoActualBackend.AWAITING,stale.actualBackend)
+        assertEquals(0,stale.initializationAttempts)
+        assertEquals(0,stale.gpuSubmittedFrames)
+        GpuPulseEvidence.recordShaderInitializationAttempt(snake)
+        GpuPulseEvidence.recordSubmission(snake,200)
+        val current = session.snapshot(GpuPulseEvidence.snapshot(snake),null)
+        assertEquals(VisualEffectsDemoActualBackend.GPU,current.actualBackend)
+        assertEquals(1,current.gpuSubmittedFrames)
+        assertEquals(1,current.initializationAttempts)
+        assertEquals(true,current.toDiagnosticReport().contains("requested=GPU_SNAKE"))
+    }
+
     private fun session(generation: Long) = GpuValidationSession.start(
         id = 1,
         requestedBackend = VisualEffectsDemoRequestedBackend.GPU_PULSE,

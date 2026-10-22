@@ -62,7 +62,7 @@ internal class VisualEffectsDemoActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        demoHost = FrameLayout(this)
+        demoHost = FrameLayout(this).apply { setBackgroundColor(android.graphics.Color.BLACK) }
         setContentView(demoHost)
         controller = VisualEffectsDemoController(this, demoHost)
         demoHost.addView(ComposeView(this).apply {
@@ -436,6 +436,8 @@ private fun VisualEffectsDemoFamily.animationLabel(): String = stringResource(Lu
 @Composable
 private fun VisualEffectsDemoMode.label(): String = stringResource(when (this) {
     VisualEffectsDemoMode.BASELINE -> R.string.debug_lab_baseline
+    VisualEffectsDemoMode.PRODUCTION -> R.string.debug_lab_production_snake_stack
+    VisualEffectsDemoMode.PRODUCTION_SUPERNOVA -> R.string.debug_lab_production_supernova_stack
     VisualEffectsDemoMode.GLOW -> R.string.debug_lab_glow
     VisualEffectsDemoMode.BLUR -> R.string.debug_lab_blur
     VisualEffectsDemoMode.INTENSITY_PULSE -> R.string.debug_lab_intensity_pulse
@@ -450,6 +452,9 @@ private fun VisualEffectsDemoRequestedBackend.label(): String = stringResource(w
     VisualEffectsDemoRequestedBackend.CANVAS -> R.string.debug_lab_canvas
     VisualEffectsDemoRequestedBackend.GPU_WITNESS -> R.string.debug_lab_shader_test
     VisualEffectsDemoRequestedBackend.GPU_PULSE -> R.string.debug_lab_gpu
+    VisualEffectsDemoRequestedBackend.GPU_SNAKE -> R.string.debug_lab_gpu
+    VisualEffectsDemoRequestedBackend.GPU_IMPULSE -> R.string.debug_lab_gpu
+    VisualEffectsDemoRequestedBackend.GPU_SUPERNOVA -> R.string.debug_lab_gpu
 })
 
 @Composable

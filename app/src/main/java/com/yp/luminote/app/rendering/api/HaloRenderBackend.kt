@@ -35,7 +35,10 @@ internal enum class RenderIntent {
     PRODUCTION,
     DEBUG_GPU_WITNESS,
     /** Deliberate DEBUG-only Gate B route. Production remains Canvas-selected. */
-    DEBUG_GPU_PULSE
+    DEBUG_GPU_PULSE,
+    DEBUG_GPU_SNAKE,
+    DEBUG_GPU_IMPULSE,
+    DEBUG_GPU_SUPERNOVA
 }
 
 /** Mutable, host-owned frame values, reused across draws to keep frame work allocation-free. */
