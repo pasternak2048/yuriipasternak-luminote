@@ -49,4 +49,16 @@ class GpuSnakeContractTest {
         // A byte-carry boundary must interpolate decoded 16-bit progress, not individual channels.
         assertEquals(256f/65535f,GpuSnakeSourceProfile.interpolateProgress(255f/65535f,257f/65535f,.5f),.000001f)
     }
+
+    @Test fun `single-sample transparent rejection exceeds bilinear neighbor and packing error`() {
+        // A nearest-distance field is 1-Lipschitz. Decoded neighbors can be at most sqrt(2)
+        // plus one complete packed step below the decoded center value.
+        assertTrue(GpuSnakeSourceProfile.NEIGHBOR_SAMPLE_REJECTION_MARGIN >
+            kotlin.math.sqrt(2f) + GpuSnakeSourceProfile.PACKED_DISTANCE_STEP)
+        assertFalse(GpuSnakeSourceProfile.canRejectWithoutNeighborSamples(11.6f,10f))
+        assertTrue(GpuSnakeSourceProfile.canRejectWithoutNeighborSamples(11.6001f,10f))
+        val shader = GpuSnakeRenderBackend.SNAKE_SHADER
+        assertTrue(shader.indexOf("distanceA > cutoff+1.6") < shader.indexOf("field.eval(base+float2(1,0))"))
+    }
+
 }

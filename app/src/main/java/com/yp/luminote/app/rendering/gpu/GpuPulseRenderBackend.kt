@@ -69,7 +69,17 @@ internal class GpuPulseRenderBackend(
         }
         command!!
         diagnostics.record("selected-operation", "generation=$generation operation=${command.operation}")
-        val field = resolveField(command, frame) ?: return RenderOutcome.Unsupported("GPU Pulse could not build complete contour field")
+        val requestedFieldKey = fieldKey(command, frame) ?: return RenderOutcome.Unsupported("GPU Pulse could not build complete contour field")
+        preSubmitFailures.failureFor(requestedFieldKey)?.let {
+            GpuPulseEvidence.recordLatchedFailure(generation)
+            return RenderOutcome.Error(it)
+        }
+        val field = try {
+            resolveField(requestedFieldKey, frame)
+        } catch (error: RuntimeException) {
+            recordPreSubmitFailure(requestedFieldKey, "field-preparation", error)
+            return RenderOutcome.Error(preSubmitFailures.failureFor(requestedFieldKey)!!)
+        } ?: return RenderOutcome.Unsupported("GPU Pulse could not build complete contour field")
         diagnostics.record("admitted-operation", "generation=$generation operation=${command.operation} key=${field.key.hashCode()}")
         preSubmitFailures.failureFor(field.key)?.let {
             GpuPulseEvidence.recordLatchedFailure(generation)
@@ -111,13 +121,16 @@ internal class GpuPulseRenderBackend(
         }
     }
 
-    private fun resolveField(command: FrameVisualCommand, frame: RenderFrame): FieldResource? {
+    private fun fieldKey(command: FrameVisualCommand, frame: RenderFrame): FieldKey? {
         val contour = command.geometry as? GeometryRequest.DisplayOutlineContour ?: return null
         val strokeWidth = RESOLVED_BASE_STROKE_WIDTH + contour.thickness * RESOLVED_STROKE_WIDTH_RANGE
         if (!strokeWidth.isFinite() || strokeWidth <= 0f) return null
-        val key = FieldKey(outline.version, surfaceEpoch, frame.viewportWidth, frame.viewportHeight, strokeWidth,
+        return FieldKey(outline.version, surfaceEpoch, frame.viewportWidth, frame.viewportHeight, strokeWidth,
             outline.opticalInsetPx + outline.dpToPx(contour.edgeCalibrationDp), outline.dpToPx(contour.cornerCalibrationDp), contour.cornerShape,
             FIELD_TEXEL_SCALE, FIELD_MAX_DISTANCE_PX, FIELD_FORMAT_VERSION)
+    }
+
+    private fun resolveField(key: FieldKey, frame: RenderFrame): FieldResource? {
         resource?.takeIf { it.key == key }?.let { return it }
         disposeField()
         // Provider owns all physical geometry and calibration resolution; this executor retains no Path.
@@ -136,6 +149,8 @@ internal class GpuPulseRenderBackend(
         val fieldWidth = frame.viewportWidth
         val fieldHeight = frame.viewportHeight
         val bitmap = Bitmap.createBitmap(fieldWidth, fieldHeight, Bitmap.Config.ARGB_8888)
+        var transferred = false
+        try {
         val pixels = IntArray(fieldWidth * fieldHeight)
         java.util.Arrays.fill(pixels, 0xFFFF0000.toInt())
         var i = 0
@@ -160,8 +175,12 @@ internal class GpuPulseRenderBackend(
         val input = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
         return FieldResource(key, bitmap, input, FIELD_MAX_DISTANCE_PX).also {
             resource = it
+            transferred = true
             GpuPulseEvidence.recordResourceInitialization(generation, key.hashCode(), surfaceEpoch)
             diagnostics.record("field-initialized", "generation=$generation key=${key.hashCode()} ${fieldWidth}x$fieldHeight")
+        }
+        } finally {
+            if (!transferred) bitmap.recycle()
         }
     }
 
@@ -204,10 +223,14 @@ internal class GpuPulseRenderBackend(
     }
 
     private fun recordPreSubmitFailure(field: FieldResource, stage: String, error: RuntimeException) {
+        recordPreSubmitFailure(field.key, stage, error)
+    }
+
+    private fun recordPreSubmitFailure(key: FieldKey, stage: String, error: RuntimeException) {
         val failure = GpuPulsePreSubmitFailure.at(stage, error)
-        preSubmitFailures.record(field.key, failure)
-        GpuPulseEvidence.recordFirstFailure(generation, field.key.hashCode(), failure)
-        diagnostics.recordFailure(generation, field.key.hashCode(), failure)
+        preSubmitFailures.record(key, failure)
+        GpuPulseEvidence.recordFirstFailure(generation, key.hashCode(), failure)
+        diagnostics.recordFailure(generation, key.hashCode(), failure)
     }
     private fun disposeField() { resource?.let { it.bitmap.recycle(); resource = null; GpuPulseEvidence.recordResourceDisposal(generation); diagnostics.record("resource-disposed", "generation=$generation") } }
     override fun dispose() { if (!disposed) { disposed = true; disposeField(); shader = null; paint = null; plan = null; GpuPulseEvidence.recordDisposal(generation); diagnostics.record("disposed", "generation=$generation") } }
@@ -377,28 +400,28 @@ internal object GpuPulseEvidence {
     fun resetForTest() = synchronized(lock) { states.clear() }
     fun latestGeneration(): Long? = synchronized(lock) { states.keys.maxOrNull() }
     fun recordResourceInitialization(g: Long, fieldKey: Int, surfaceEpoch: Int) = synchronized(lock) {
-        states.getValue(g).apply {
+        (states[g] ?: return@synchronized).apply {
             initialized++
             this.fieldKey = fieldKey
             this.surfaceEpoch = surfaceEpoch
         }
         Unit
     }
-    fun recordShaderInitialization(g: Long) = synchronized(lock) { states.getValue(g).shaderInitializations++ }
-    fun recordShaderInitializationAttempt(g: Long) = synchronized(lock) { states.getValue(g).shaderInitializationAttempts++ }
-    fun recordPreSubmitAttempt(g: Long) = synchronized(lock) { states.getValue(g).preSubmitAttempts++ }
+    fun recordShaderInitialization(g: Long) = synchronized(lock) { (states[g] ?: return@synchronized).shaderInitializations++ }
+    fun recordShaderInitializationAttempt(g: Long) = synchronized(lock) { (states[g] ?: return@synchronized).shaderInitializationAttempts++ }
+    fun recordPreSubmitAttempt(g: Long) = synchronized(lock) { (states[g] ?: return@synchronized).preSubmitAttempts++ }
     fun recordLatchedFailure(g: Long) = synchronized(lock) {
-        states.getValue(g).apply {
+        (states[g] ?: return@synchronized).apply {
             latchedFailures++
             pendingLatchedFallbacks++
         }
         Unit
     }
     fun recordSurfaceInvalidation(g: Long, surfaceEpoch: Int) = synchronized(lock) {
-        states.getValue(g).surfaceEpoch = surfaceEpoch
+        (states[g] ?: return@synchronized).surfaceEpoch = surfaceEpoch
     }
     fun recordFirstFailure(g: Long, fieldKey: Int, failure: GpuPulsePreSubmitFailure) = synchronized(lock) {
-        val state = states.getValue(g)
+        val state = states[g] ?: return@synchronized
         if (state.firstFailure == null) {
             state.firstFailure = FailureDetails(
                 fieldKey = fieldKey,
@@ -411,7 +434,7 @@ internal object GpuPulseEvidence {
         }
     }
     fun recordSubmission(g: Long, alpha: Int) = synchronized(lock) {
-        states.getValue(g).apply {
+        (states[g] ?: return@synchronized).apply {
             submissions++
             lastAlpha = alpha
             latestActualBackend = "GPU"
@@ -420,7 +443,7 @@ internal object GpuPulseEvidence {
         lock.notifyAll()
     }
     fun recordFallback(g: Long, reason: String, canvasRendered: Boolean = true) = synchronized(lock) {
-        states.getValue(g).apply {
+        (states[g] ?: return@synchronized).apply {
             fallbacks++
             if (pendingLatchedFallbacks > 0) {
                 pendingLatchedFallbacks--
@@ -432,9 +455,9 @@ internal object GpuPulseEvidence {
         }
         Unit
     }
-    fun recordCanvasPulse(g: Long) = synchronized(lock) { states.getValue(g).canvasPulseCalls++ }
-    fun recordResourceDisposal(g: Long) = synchronized(lock) { states.getValue(g).fieldDisposals++ }
-    fun recordDisposal(g: Long) = synchronized(lock) { states.getValue(g).disposals++ }
+    fun recordCanvasPulse(g: Long) = synchronized(lock) { (states[g] ?: return@synchronized).canvasPulseCalls++ }
+    fun recordResourceDisposal(g: Long) = synchronized(lock) { (states[g] ?: return@synchronized).fieldDisposals++ }
+    fun recordDisposal(g: Long) = synchronized(lock) { (states[g] ?: return@synchronized).disposals++ }
     fun snapshot(g: Long) = synchronized(lock) {
         states[g]?.let {
             Snapshot(

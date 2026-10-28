@@ -174,11 +174,17 @@ internal class GpuSnakeRenderBackend(private val outline: DisplayOutline) : Halo
                 float2 base = floor(p-.5)+.5;
                 float2 t = fract(p-.5);
                 float4 a = float4(field.eval(base));
+                float distanceA = a.r*24.0;
+                float cutoff = strokeWidth*.6+2.0;
+                // Packed nearest-distance values remain 1-Lipschitz across adjacent texels.
+                // This margin exceeds sqrt(2) plus two half-step quantization errors, so all
+                // four bilinear samples would exceed cutoff and produce transparent black.
+                if (distanceA > cutoff+1.6) return half4(0);
                 float4 b = float4(field.eval(base+float2(1,0)));
                 float4 c = float4(field.eval(base+float2(0,1)));
                 float4 d = float4(field.eval(base+float2(1,1)));
                 float distance = mix(mix(a.r,b.r,t.x),mix(c.r,d.r,t.x),t.y)*24.0;
-                if (distance > strokeWidth*.6+2.0) return half4(0);
+                if (distance > cutoff) return half4(0);
                 float ref = progress(a);
                 float q = fract(mix(mix(ref,unwrap(progress(b),ref),t.x),
                     mix(unwrap(progress(c),ref),unwrap(progress(d),ref),t.x),t.y));

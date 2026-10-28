@@ -4,6 +4,13 @@ import kotlin.math.floor
 
 /** Continuous evaluation of the approved Canvas Snake profile; no animation clock. */
 internal object GpuSnakeSourceProfile {
+    /** See the shader's single-sample transparent-pixel rejection proof. */
+    const val PACKED_DISTANCE_STEP = 24f / 255f
+    const val NEIGHBOR_SAMPLE_REJECTION_MARGIN = 1.6f
+
+    fun canRejectWithoutNeighborSamples(centerDistance: Float, cutoff: Float): Boolean =
+        centerDistance > cutoff + NEIGHBOR_SAMPLE_REJECTION_MARGIN
+
     fun wrap(value: Float): Float = value - floor(value)
     fun relative(progress: Float, tail: Float): Float = wrap(progress - tail)
     fun smooth(edge0: Float, edge1: Float, value: Float): Float {
