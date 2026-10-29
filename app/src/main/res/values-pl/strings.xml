@@ -240,4 +240,26 @@
     <string name="rendering_engine_standard_description">Opcja domyślna. Używa standardowego renderowania dla wszystkich efektów świetlnych.</string>
     <string name="rendering_engine_gpu">Akceleracja GPU</string>
     <string name="rendering_engine_gpu_description">Używa akceleracji graficznej dla obsługiwanych efektów. Pozostałe efekty lub efekty, dla których akceleracja jest niedostępna, korzystają ze standardowego renderowania.</string>
+    <string name="resonance_title">Resonance</string>
+    <string name="resonance_description">Muzyka staje się światłem. Fluid Contour reaguje na energię i rytm dozwolonego odtwarzania.</string>
+    <string name="resonance_gpu_requirement">Wymagane renderowanie GPU</string>
+    <string name="resonance_permission_explanation">Android określa RECORD_AUDIO jako uprawnienie do mikrofonu. Resonance używa go wyłącznie do cech miksu wyjściowego Android Visualizer i nigdy nie uruchamia mikrofonu.</string>
+    <string name="resonance_policy_explanation">Visualizer dostarcza niskiej jakości cechy przebiegu i FFT z miksu wyjściowego urządzenia. Dźwięk nigdy nie jest zapisywany ani przesyłany. Dostęp zależy od urządzenia, aplikacji i wyjścia dźwięku; zgodność nie jest gwarantowana.</string>
+    <string name="resonance_device_unsupported">Urządzenie nie obsługuje wymaganego wykonania GPU.</string>
+    <string name="resonance_overlay_required">Przed uruchomieniem zezwól na wyświetlanie nad innymi aplikacjami na ekranie dostępu.</string>
+    <string name="resonance_starting">Inicjalizacja cech dźwięku…</string>
+    <string name="resonance_waiting">Zainicjalizowano · Oczekiwanie na dźwięk</string>
+    <string name="resonance_running">Działa · Wykryto cechy dźwięku</string>
+    <string name="resonance_unsupported">Nieobsługiwane — cechy miksu wyjściowego lub GPU są niedostępne na tym urządzeniu.</string>
+    <string name="resonance_error">Sesja cech dźwięku lub GPU została zakończona. Sprawdź uprawnienia Androida i uruchom ponownie.</string>
+    <string name="resonance_stopped">Zatrzymano</string>
+    <string name="resonance_waiting_help">Włącz muzykę w innej aplikacji. Sama inicjalizacja nie potwierdza dostępu do odtwarzania. Cisza lub niedostępne cechy mogą pozostawić ten stan bez zmian.</string>
+    <string name="resonance_start">Uruchom Resonance</string>
+    <string name="resonance_stop">Zatrzymaj Resonance</string>
+    <string name="resonance_intensity">Intensywność światła</string>
+    <string name="resonance_diagnostics">Klatki GPU: %1$d · Klatki analizy: %2$d</string>
+    <string name="resonance_stopping">Zatrzymywanie…</string>
+    <string name="resonance_provider_ready">Dostawca cech dźwięku: zainicjalizowany</string>
+    <string name="resonance_provider_not_ready">Dostawca cech dźwięku: niezainicjalizowany</string>
+    <string name="resonance_nonzero_frames">Klatki z niezerowymi cechami: %1$d</string>
 </resources>

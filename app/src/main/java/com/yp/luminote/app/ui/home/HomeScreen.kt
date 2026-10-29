@@ -1,5 +1,7 @@
 package com.yp.luminote.app.ui.home
 import com.yp.luminote.app.overlay.service.HaloEffectController
+import com.yp.luminote.app.resonance.ResonanceController
+import com.yp.luminote.app.resonance.ResonanceStatus
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -41,9 +43,12 @@ import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 @Composable
 fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick: () -> Unit,
     onAccessClick: () -> Unit, onSettingsClick: () -> Unit,
-    windowSizeClass: LuminoteWindowSizeClass, viewModel: LuminoteSettingsViewModel) {
+    windowSizeClass: LuminoteWindowSizeClass, viewModel: LuminoteSettingsViewModel,
+    onResonanceClick: () -> Unit = {}) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val settingsLoaded by viewModel.settingsLoaded.collectAsStateWithLifecycle()
+    val resonance by ResonanceController.state.collectAsStateWithLifecycle()
+    val resonanceActive = resonance.status == ResonanceStatus.STARTING || resonance.status == ResonanceStatus.WAITING_FOR_AUDIO || resonance.status == ResonanceStatus.RUNNING
     val context = LocalContext.current
     val uiMetrics = rememberLuminoteUiMetrics()
     val contentModifier = when (windowSizeClass) {
@@ -52,6 +57,7 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
         LuminoteWindowSizeClass.EXPANDED -> Modifier.fillMaxWidth().widthIn(max = 1100.dp)
     }
     val onModeSelected: (HaloMode) -> Unit = { mode ->
+        ResonanceController.stop(context)
         viewModel.setHaloMode(mode)
         when (mode) {
             HaloMode.AMBIENT -> HaloEffectController.ambient(context, settings.copy(haloMode = HaloMode.AMBIENT))
@@ -79,7 +85,8 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
         }
         Spacer(Modifier.height(28.dp))
         Column(contentModifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            HomeModeSelector(settings.haloMode, onModeSelected)
+            HomeModeSelector(settings.haloMode, onModeSelected, resonanceActive, onResonanceClick)
+            if (resonanceActive) HomeAction(stringResource(R.string.resonance_title), Icons.Outlined.Tune, onResonanceClick)
             when (settings.haloMode) {
                 HaloMode.NOTIFICATIONS -> { HomeAction(stringResource(R.string.luminote_halo), Icons.Outlined.Tune, onHaloClick); HomeAction(stringResource(R.string.apps), Icons.Outlined.Apps, onAppsClick) }
                 HaloMode.AMBIENT -> HomeAction(stringResource(R.string.ambient_halo), Icons.Outlined.Notifications, onAmbientClick)
@@ -91,7 +98,8 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
     }
 }
 
-@Composable private fun HomeModeSelector(mode: HaloMode, onModeSelected: (HaloMode) -> Unit) {
+@Composable private fun HomeModeSelector(mode: HaloMode, onModeSelected: (HaloMode) -> Unit,
+    resonanceActive: Boolean, onResonanceClick: () -> Unit) {
     LuminoteSettingsCard {
         Column(Modifier.padding(20.dp)) {
             Text(
@@ -102,9 +110,10 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
             )
             Spacer(Modifier.height(12.dp))
             Column(Modifier.selectableGroup()) {
-                HomeModeChoice(stringResource(R.string.alerts), mode == HaloMode.NOTIFICATIONS) { onModeSelected(HaloMode.NOTIFICATIONS) }
-                HomeModeChoice(stringResource(R.string.ambient), mode == HaloMode.AMBIENT) { onModeSelected(HaloMode.AMBIENT) }
-                HomeModeChoice(stringResource(R.string.off), mode == HaloMode.OFF) { onModeSelected(HaloMode.OFF) }
+                HomeModeChoice(stringResource(R.string.alerts), !resonanceActive && mode == HaloMode.NOTIFICATIONS) { onModeSelected(HaloMode.NOTIFICATIONS) }
+                HomeModeChoice(stringResource(R.string.ambient), !resonanceActive && mode == HaloMode.AMBIENT) { onModeSelected(HaloMode.AMBIENT) }
+                HomeModeChoice(stringResource(R.string.resonance_title), resonanceActive, onResonanceClick)
+                HomeModeChoice(stringResource(R.string.off), !resonanceActive && mode == HaloMode.OFF) { onModeSelected(HaloMode.OFF) }
             }
         }
     }

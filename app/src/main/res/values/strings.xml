@@ -306,4 +306,26 @@
     <string name="rendering_engine_standard_description">Default. Uses standard rendering for all lighting effects.</string>
     <string name="rendering_engine_gpu">GPU Accelerated</string>
     <string name="rendering_engine_gpu_description">Uses graphics acceleration for supported effects. Other effects, or effects that cannot use acceleration, use standard rendering.</string>
+    <string name="resonance_title">Resonance</string>
+    <string name="resonance_description">Music becomes light. Fluid Contour follows the energy and rhythm of permitted playback.</string>
+    <string name="resonance_gpu_requirement">GPU rendering required</string>
+    <string name="resonance_permission_explanation">Android labels RECORD_AUDIO as microphone permission. Resonance uses it only for Android Visualizer output-mix features and never opens the microphone.</string>
+    <string name="resonance_policy_explanation">Visualizer supplies low-quality waveform and FFT features from the device output mix. Audio is never saved, uploaded or transmitted. Access varies by device, playback app and audio output; compatibility is not guaranteed.</string>
+    <string name="resonance_device_unsupported">This device does not support the required GPU execution.</string>
+    <string name="resonance_overlay_required">Allow display over other apps on the Access screen before starting.</string>
+    <string name="resonance_starting">Initializing audio features…</string>
+    <string name="resonance_waiting">Initialized · Waiting for Audio</string>
+    <string name="resonance_running">Running · Audio features detected</string>
+    <string name="resonance_unsupported">Unsupported — output-mix features or GPU execution are unavailable on this device.</string>
+    <string name="resonance_error">Audio feature or GPU session ended. Check Android permissions, then start again.</string>
+    <string name="resonance_stopped">Stopped</string>
+    <string name="resonance_waiting_help">Play music in another app. Initialization alone does not confirm access to playback. Silence or unavailable features may keep this status unchanged.</string>
+    <string name="resonance_start">Start Resonance</string>
+    <string name="resonance_stop">Stop Resonance</string>
+    <string name="resonance_intensity">Visual intensity</string>
+    <string name="resonance_diagnostics">GPU frames: %1$d · Analysis frames: %2$d</string>
+    <string name="resonance_stopping">Stopping…</string>
+    <string name="resonance_provider_ready">Audio feature provider: initialized</string>
+    <string name="resonance_provider_not_ready">Audio feature provider: not initialized</string>
+    <string name="resonance_nonzero_frames">Nonzero feature frames: %1$d</string>
 </resources>

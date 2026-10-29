@@ -8,6 +8,15 @@ import com.yp.luminote.app.overlay.coordination.HaloEffectHostPort
 
 import android.content.Context
 import com.yp.luminote.app.data.settings.LuminoteSettings
+import com.yp.luminote.app.resonance.ResonanceRuntime
+import com.yp.luminote.app.resonance.ResonanceController
+import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
+
+internal fun shouldRestoreAmbientAfterResonance(ambientEnabled: Boolean, sessionActive: Boolean,
+    expectedRevision: Long, actualRevision: Long, generation: Long, suppressedGeneration: Long): Boolean =
+    ambientEnabled && !sessionActive && expectedRevision == actualRevision && generation != suppressedGeneration
 
 /** Stable application boundary consumed by Compose screens. */
 object HaloEffectController {
@@ -40,15 +49,44 @@ object HaloEffectController {
             HaloEffectCommand.Calibration(null, token, generation, CalibrationOperation.STOP)
         )
 
-    fun ambient(context: Context, settings: LuminoteSettings): Boolean =
-        coordinator(context).dispatch(HaloEffectCommand.Ambient(settings))
+    private var ambientRevision = 0L
+    private var suppressRestoreGeneration = 0L
+    private val restorationScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    fun ambient(context: Context, settings: LuminoteSettings): Boolean {
+        ambientRevision++
+        suppressRestoreGeneration = 0L
+        if (ResonanceRuntime.activeGeneration != 0L) return true
+        return coordinator(context).dispatch(HaloEffectCommand.Ambient(settings))
+    }
+
+    internal fun suspendAmbientForResonance(context: Context) {
+        // The application host is reused by Resonance; only the second window needs suppression.
+        HaloAccessibilityService.dispatch(HaloOverlayService.createStopAmbientIntent(context))
+    }
+
+    internal fun restoreAmbientAfterResonance(context: Context, generation: Long) {
+        if (suppressRestoreGeneration == generation) return
+        val revision = ambientRevision
+        val appContext = context.applicationContext
+        restorationScope.launch {
+            val settings = runCatching { LuminoteSettingsRepository(appContext).settings.first() }.getOrNull() ?: return@launch
+            if (shouldRestoreAmbientAfterResonance(settings.ambientEnabled, ResonanceRuntime.activeGeneration != 0L,
+                    revision, ambientRevision, generation, suppressRestoreGeneration)) ambient(appContext, settings)
+        }
+    }
 
     fun stopAmbient(context: Context): Boolean {
+        ambientRevision++
+        suppressRestoreGeneration = ResonanceRuntime.generationForTermination()
         HaloOverlayService.invalidatePendingApplicationAmbient()
         return coordinator(context).dispatch(HaloEffectCommand.StopAmbient)
     }
 
     fun globalOff(context: Context): Boolean {
+        ambientRevision++
+        suppressRestoreGeneration = ResonanceRuntime.generationForTermination()
+        ResonanceController.stop(context)
         HaloOverlayService.invalidatePendingApplicationAmbient()
         return coordinator(context).dispatch(HaloEffectCommand.GlobalOff)
     }

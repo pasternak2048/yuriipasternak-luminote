@@ -240,4 +240,26 @@
     <string name="rendering_engine_standard_description">Типовий варіант. Використовує стандартне відтворення для всіх світлових ефектів.</string>
     <string name="rendering_engine_gpu">Прискорення GPU</string>
     <string name="rendering_engine_gpu_description">Використовує графічне прискорення для підтримуваних ефектів. Інші ефекти або ефекти, для яких прискорення недоступне, відтворюються стандартно.</string>
+    <string name="resonance_title">Resonance</string>
+    <string name="resonance_description">Музика стає світлом. Fluid Contour реагує на енергію та ритм дозволеного відтворення.</string>
+    <string name="resonance_gpu_requirement">Потрібен рендеринг на GPU</string>
+    <string name="resonance_permission_explanation">Android називає RECORD_AUDIO дозволом на мікрофон. Resonance використовує його лише для ознак вихідного аудіоміксу Android Visualizer і ніколи не вмикає мікрофон.</string>
+    <string name="resonance_policy_explanation">Visualizer надає ознаки хвильової форми та FFT низької якості з вихідного аудіоміксу пристрою. Аудіо ніколи не зберігається й не передається. Доступ залежить від пристрою, програми та аудіовиходу; сумісність не гарантована.</string>
+    <string name="resonance_device_unsupported">Пристрій не підтримує потрібне виконання на GPU.</string>
+    <string name="resonance_overlay_required">Перед запуском дозвольте показ поверх інших програм на екрані доступу.</string>
+    <string name="resonance_starting">Ініціалізація аудіоознак…</string>
+    <string name="resonance_waiting">Ініціалізовано · Очікування аудіо</string>
+    <string name="resonance_running">Працює · Виявлено аудіоознаки</string>
+    <string name="resonance_unsupported">Не підтримується — ознаки вихідного аудіоміксу або GPU недоступні на цьому пристрої.</string>
+    <string name="resonance_error">Сеанс аудіоознак або GPU завершено. Перевірте дозволи Android і запустіть знову.</string>
+    <string name="resonance_stopped">Зупинено</string>
+    <string name="resonance_waiting_help">Увімкніть музику в іншій програмі. Сама ініціалізація не підтверджує доступ до відтворення. Тиша або недоступні ознаки можуть залишити цей стан незмінним.</string>
+    <string name="resonance_start">Запустити Resonance</string>
+    <string name="resonance_stop">Зупинити Resonance</string>
+    <string name="resonance_intensity">Інтенсивність світла</string>
+    <string name="resonance_diagnostics">Кадри GPU: %1$d · Кадри аналізу: %2$d</string>
+    <string name="resonance_stopping">Зупинка…</string>
+    <string name="resonance_provider_ready">Постачальник аудіоознак: ініціалізовано</string>
+    <string name="resonance_provider_not_ready">Постачальник аудіоознак: не ініціалізовано</string>
+    <string name="resonance_nonzero_frames">Кадри з ненульовими ознаками: %1$d</string>
 </resources>
