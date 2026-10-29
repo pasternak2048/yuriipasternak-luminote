@@ -104,17 +104,28 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                 float distance=mix(mix(a.r,b.r,t.x),mix(c.r,d.r,t.x),t.y)*24.0;
                 float r=progress(a);
                 float q=fract(mix(mix(r,unwrap(progress(b),r),t.x),mix(unwrap(progress(c),r),unwrap(progress(d),r),t.x),t.y));
-                float wave=.5+.5*sin(6.283185*(q*5.0-motion.x*2.0));
+                float wave=.5+.5*sin(6.283185*(q*5.0-motion.x*1.3));
+                float fine=.5+.5*sin(6.283185*(q*11.0+motion.x*.7));
+                float peaks=.12+.62*pow(wave,5.0)+.26*pow(fine,7.0);
                 float travel=fract(q-motion.x);
                 float impulse=exp(-pow(min(travel,1.0-travel)*19.0,2.0))*motion.y;
-                float deformation=audio.x*(.4+1.8*wave);
-                float width=strokeWidth*(.30+.54*audio.x)+deformation+impulse*2.0;
+                // Audio modifies local light density without shifting the physical contour.
+                float deformation=audio.x*(.4+1.8*peaks);
+                float width=clamp(strokeWidth*(.30+.54*audio.x)+deformation+impulse*2.0,1.2,12.0);
                 float sd=max(0.0,distance-width*.5);
                 float core=1.0-smoothstep(width*.5-.75,width*.5+.75,distance);
-                float glow=exp(-sd/(1.3+audio.z*2.8))*.30;
-                float density=.68+.22*wave*audio.x+.5*impulse;
-                float alpha=clamp((core+glow)*(audio.w*.80+audio.y*.12+audio.z*.08)*density*motion.w,0.0,1.0);
-                float3 tint=mix(float3(.12,.48,1.0),float3(.46,.88,1.0),clamp(audio.z*.45+impulse*.3,0.0,1.0));
+                float nearGlow=exp(-sd/(2.0+audio.z*1.6))*.36;
+                float outerGlow=exp(-sd/(4.5+audio.x*1.8))*.24;
+                float fade=1.0-smoothstep(17.0,20.0,distance);
+                float density=(.08+.92*peaks+.45*impulse)*smoothstep(.015,.7,audio.x+audio.y+audio.z);
+                float light=(core*.55+nearGlow+outerGlow)*(audio.w*.80+audio.y*.12+audio.z*.08)*density*motion.w;
+                float alpha=(1.0-exp(-light*.85))*fade;
+                // Three fixed spectral territories; only light activity travels, never hue.
+                float angle=q*6.283185*3.0;
+                float wb=audio.x*pow(.5+.5*cos(angle),2.0);
+                float wm=audio.y*pow(.5+.5*cos(angle-2.094395),2.0);
+                float wh=audio.z*pow(.5+.5*cos(angle-4.18879),2.0);
+                float3 tint=(float3(.02,.86,.79)*wb+float3(.76,.12,.98)*wm+float3(1.0,.60,.22)*wh)/max(wb+wm+wh,.0001);
                 return half4(half3(tint*alpha),half(alpha));
             }
         """
