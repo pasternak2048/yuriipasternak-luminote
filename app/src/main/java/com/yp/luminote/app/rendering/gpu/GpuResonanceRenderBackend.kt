@@ -66,11 +66,11 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
             node!!.setPosition(0, 0, key.width, key.height)
             val recording = node!!.beginRecording(key.width, key.height)
             try {
-                recording.clipPath(outline.path)
+                // The distance-field shader supplies its own alpha falloff.
+                // Path clipping creates an artificial hard edge in the halo.
                 recording.drawRect(0f, 0f, key.width.toFloat(), key.height.toFloat(), paint!!)
             } finally { node!!.endRecording() }
             save = canvas.save()
-            canvas.clipPath(outline.path)
             canvas.drawRenderNode(node!!)
             ResonanceRuntime.gpuFrames++
             RenderOutcome.Rendered
@@ -105,7 +105,7 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                 float2 base = floor(p - .5) + .5;
                 float2 t = fract(p - .5);
                 float4 a = float4(field.eval(base));
-                if (a.r * 40.0 > 38.0) return half4(0);
+                if (a.r * 40.0 > 39.0) return half4(0);
                 float4 b = float4(field.eval(base + float2(1.0, 0.0)));
                 float4 c = float4(field.eval(base + float2(0.0, 1.0)));
                 float4 d = float4(field.eval(base + float2(1.0, 1.0)));
@@ -164,7 +164,7 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                     max(w4, max(w5, max(w6, max(w7,
                     max(w8, max(w9, max(w10, w11)))))))))));
                 float localEnergy = clamp(spectralMix, 0.0, 1.0);
-                float bandFlash = smoothstep(.035, .72, localEnergy);
+                float bandFlash = smoothstep(.055, .78, localEnergy);
                 bandFlash = bandFlash * bandFlash;
                 float onsetShape = .30 + .70 * waveA;
                 float peak = bandFlash * texture * (1.0 + .85 * impulse * onsetShape);
@@ -177,9 +177,13 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                     bandFlash * 7.0, 1.5, 32.0);
                 float outside = max(0.0, distance - width * .5);
                 float core = 1.0 - smoothstep(width * .5 - 3.2, width * .5 + 4.8, distance);
-                float nearHalo = exp(-outside / (5.8 + 3.2 * bandFlash)) * 1.00;
-                float outerHalo = exp(-outside / (12.0 + 4.0 * bandFlash)) * .82;
-                float fade = 1.0 - smoothstep(34.0, 38.0, distance);
+                // Gaussian tails become visually zero before the 40px SDF limit.
+                // Exponential falloff remained visible when the hard cutoff hit.
+                float nearRadius = 5.4 + 1.4 * bandFlash;
+                float outerRadius = 8.4 + 1.0 * bandFlash;
+                float nearHalo = exp(-pow(outside / nearRadius, 2.0)) * 1.12;
+                float outerHalo = exp(-pow(outside / outerRadius, 2.0)) * .88;
+                float fade = 1.0 - smoothstep(36.0, 39.0, distance);
 
                 // Peak-local intensity preserves dark passages even at slider maximum.
                 // Glow follows the same band envelope as width. Loudness is a subtle

@@ -33,6 +33,7 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
     private var spectralReference = .02f
     private var waveformReference = .03f
     private var envelope = 0f
+    private var levelGate = 0f
     var hasSignal: Boolean = false; private set
 
     fun waveform(bytes: ByteArray, timestampNanos: Long) {
@@ -74,14 +75,17 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
         hasSignal = waveformFresh && waveformRms > 1.5f / 128f && total > .0001f
         spectralReference = max(.02f, max(sqrt(total), spectralReference * .995f))
         waveformReference = max(.03f, max(waveformRms, waveformReference * .995f))
-        val targetEnvelope = if (hasSignal) (waveformRms / waveformReference).coerceIn(0f, 1f) else 0f
-        envelope = smooth(envelope, targetEnvelope, .65f, .12f)
+        // AS_PLAYED carries output level. Do not re-normalize it back to full
+        // intensity: quiet playback must produce genuinely weak illumination.
+        val level = if (hasSignal) ((waveformRms - .012f) / .17f).coerceIn(0f, 1f) else 0f
+        levelGate = level * level
+        envelope = smooth(envelope, levelGate, .75f, .30f)
         bands[0] = smooth(bands[0], normalized(low), .82f, .14f)
         bands[1] = smooth(bands[1], normalized(mid), .55f, .14f)
         bands[2] = smooth(bands[2], normalized(high), .55f, .14f)
         for (i in spectralBands.indices) {
             // Preserve relative spectral contrast: no independent auto-gain per bin.
-            val target = if (hasSignal) (sqrt(spectralPower[i]) * 2.1f / spectralReference).coerceIn(0f, 1f) else 0f
+            val target = if (hasSignal) (sqrt(spectralPower[i]) * 1.5f / spectralReference).coerceIn(0f, 1f) * levelGate else 0f
             spectralBands[i] = smooth(spectralBands[i], target, .88f, .35f)
         }
         var recent = 0f
@@ -91,15 +95,15 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
         history[historyIndex] = envelope
         historyIndex = (historyIndex + 1) % history.size
         historyCount = min(historyCount + 1, history.size)
-        val onset = if (hasSignal) (flux / max(total, .0001f)).coerceIn(0f, 1f) else 0f
+        val onset = if (hasSignal) (flux / max(total, .0001f)).coerceIn(0f, 1f) * levelGate else 0f
         return AudioFeatureSnapshot(generation, timestampNanos, bands[0], bands[1], bands[2], envelope, onset, trend,
             spectralBands.toList())
     }
 
-    private fun normalized(power: Float) = if (hasSignal) (sqrt(power) / spectralReference).coerceIn(0f, 1f) else 0f
+    private fun normalized(power: Float) = if (hasSignal) (sqrt(power) / spectralReference).coerceIn(0f, 1f) * levelGate else 0f
     fun clear() {
         previousSpectrum.fill(0f); bands.fill(0f); spectralBands.fill(0f); spectralPower.fill(0f); history.fill(0f)
-        waveformRms = 0f; waveformTime = 0L; envelope = 0f; hasSignal = false
+        waveformRms = 0f; waveformTime = 0L; envelope = 0f; levelGate = 0f; hasSignal = false
     }
     private fun smooth(previous: Float, target: Float, attack: Float, release: Float) =
         previous + (target - previous) * if (target > previous) attack else release
