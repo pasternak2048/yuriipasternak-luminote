@@ -43,7 +43,9 @@ internal class ResonanceBehavior {
         loudness += (snapshot.loudness * freshness - loudness) * blend
         for (i in spectralEnvelope.indices) {
             val target = (snapshot.spectrum.getOrNull(i) ?: 0f).coerceIn(0f, 1f) * freshness
-            spectralEnvelope[i] += (target - spectralEnvelope[i]) * blend
+            // Faster attack for strong musical changes, gentler release to prevent flicker.
+            val bandRate = if (target > spectralEnvelope[i]) 24f else 8f
+            spectralEnvelope[i] += (target - spectralEnvelope[i]) * (1f - exp(-dt * bandRate))
         }
         impulseTarget *= exp(-dt * 5f)
         if (snapshot.generation == generation && snapshot.timestampNanos != consumedSnapshot) {
@@ -55,6 +57,6 @@ internal class ResonanceBehavior {
         val impulseRate = if (impulseTarget > impulse) 12f else 7f
         impulse += (impulseTarget - impulse) * (1f - exp(-dt * impulseRate))
         buildup += ((loudness + max(0f, snapshot.trend) * freshness) * .65f - buildup) * (1f - exp(-dt * 1.4f))
-        phase = (phase + dt * (.035f + .1f * impulse + .035f * buildup)) % 1f
+        phase = (phase + dt * (.06f + .17f * impulse + .05f * buildup)) % 1f
     }
 }

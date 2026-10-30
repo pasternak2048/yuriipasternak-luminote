@@ -8,7 +8,7 @@ import com.yp.luminote.app.effects.geometry.DisplayOutline
 import com.yp.luminote.app.effects.geometry.EdgePathGeometryProvider
 import kotlin.math.*
 
-/** Provider-derived data only: R unsigned distance/24px, GB unsigned 16-bit arclength fraction.
+/** Provider-derived data only: R unsigned normalized distance, GB unsigned 16-bit arclength fraction.
  * Native texels, no color-managed input sampling; periodic interpolation belongs to the shader.
  * Preparation uses one temporary IntArray, released after upload, and no full-size float array.
  */
@@ -19,6 +19,8 @@ internal class GpuSnakeContourField(val key: Key, val bitmap: Bitmap, val input:
 
     companion object {
         const val MAX_DISTANCE = 24f
+        const val RESONANCE_DISTANCE = 40f
+        internal fun distanceForFormat(format: Int): Float = if (format == 2) RESONANCE_DISTANCE else MAX_DISTANCE
         const val MAX_PIXELS = 8_388_608
         fun key(outline: DisplayOutline, epoch: Int, width: Int, height: Int, geometry: GeometryRequest.DisplayOutlineContour) = Key(
             outline.version, epoch, width, height, 4f + geometry.thickness * 10f,
@@ -32,19 +34,20 @@ internal class GpuSnakeContourField(val key: Key, val bitmap: Bitmap, val input:
             if (length <= 0f || snapshot.measure.nextContour()) return null
             val points = snapshot.path.approximate(.125f)
             if (points.size < 6) return null
+            val radius = distanceForFormat(key.format)
             val pixels = IntArray(key.width * key.height) { 0xffff0000.toInt() }
             var i = 0
             while (i + 5 < points.size) {
                 val ax = points[i+1]; val ay = points[i+2]; val bx = points[i+4]; val by = points[i+5]
                 val dx = bx-ax; val dy = by-ay; val span = dx*dx+dy*dy
-                val left = floor(min(ax,bx)-MAX_DISTANCE).toInt().coerceAtLeast(0)
-                val right = ceil(max(ax,bx)+MAX_DISTANCE).toInt().coerceAtMost(key.width-1)
-                val top = floor(min(ay,by)-MAX_DISTANCE).toInt().coerceAtLeast(0)
-                val bottom = ceil(max(ay,by)+MAX_DISTANCE).toInt().coerceAtMost(key.height-1)
+                val left = floor(min(ax,bx)-radius).toInt().coerceAtLeast(0)
+                val right = ceil(max(ax,bx)+radius).toInt().coerceAtMost(key.width-1)
+                val top = floor(min(ay,by)-radius).toInt().coerceAtLeast(0)
+                val bottom = ceil(max(ay,by)+radius).toInt().coerceAtMost(key.height-1)
                 for (y in top..bottom) for (x in left..right) {
                     val t = if (span <= 0f) 0f else (((x+.5f-ax)*dx+(y+.5f-ay)*dy)/span).coerceIn(0f,1f)
                     val distance = hypot(x+.5f-ax-dx*t,y+.5f-ay-dy*t)
-                    val encoded = (distance/MAX_DISTANCE*255f).roundToInt().coerceIn(0,255)
+                    val encoded = (distance/radius*255f).roundToInt().coerceIn(0,255)
                     val index = y*key.width+x
                     if (encoded < ((pixels[index] ushr 16) and 255)) {
                         val progress = ((points[i]+(points[i+3]-points[i])*t)*65535f).roundToInt().coerceIn(0,65535)
