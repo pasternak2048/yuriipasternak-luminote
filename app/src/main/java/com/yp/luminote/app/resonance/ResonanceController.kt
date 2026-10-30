@@ -92,7 +92,10 @@ object ResonanceController {
         val old = mutableState.value
         // UI notifications are bounded to about 5Hz, independent from analysis and host rendering.
         if (ResonanceRuntime.analysisCount % 5L == 0L || old.status == ResonanceStatus.STARTING) {
-            mutableState.value = old.copy(status = if (nonzero) ResonanceStatus.RUNNING else ResonanceStatus.WAITING_FOR_AUDIO,
+            // A valid FFT callback means the capture pipeline is running, even when
+            // its amplitude is below the visual activation threshold.
+            // WAITING_FOR_AUDIO is reserved for provider startup/missing frames.
+            mutableState.value = old.copy(status = ResonanceStatus.RUNNING,
                 analysisFrames = ResonanceRuntime.analysisCount + 1L, gpuFrames = ResonanceRuntime.gpuFrames,
                 nonzeroFeatureFrames = ResonanceRuntime.nonzeroFeatureCount)
         }
