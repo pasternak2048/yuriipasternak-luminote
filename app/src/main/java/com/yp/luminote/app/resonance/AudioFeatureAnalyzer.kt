@@ -23,6 +23,7 @@ internal class ResonanceBehavior {
     var high = 0f; private set
     var loudness = 0f; private set
     var impulse = 0f; private set
+    private var impulseTarget = 0f
     var buildup = 0f; private set
     var phase = 0f; private set
     private val spectralEnvelope = FloatArray(12)
@@ -44,11 +45,15 @@ internal class ResonanceBehavior {
             val target = (snapshot.spectrum.getOrNull(i) ?: 0f).coerceIn(0f, 1f) * freshness
             spectralEnvelope[i] += (target - spectralEnvelope[i]) * blend
         }
-        impulse *= exp(-dt * 4f)
+        impulseTarget *= exp(-dt * 5f)
         if (snapshot.generation == generation && snapshot.timestampNanos != consumedSnapshot) {
-            impulse = max(impulse, snapshot.onset * freshness)
+            impulseTarget = max(impulseTarget, snapshot.onset * freshness)
             consumedSnapshot = snapshot.timestampNanos
         }
+        // Onset is delivered asynchronously; interpolate it at VSYNC rather
+        // than injecting a full-strength one-frame step into the shader.
+        val impulseRate = if (impulseTarget > impulse) 12f else 7f
+        impulse += (impulseTarget - impulse) * (1f - exp(-dt * impulseRate))
         buildup += ((loudness + max(0f, snapshot.trend) * freshness) * .65f - buildup) * (1f - exp(-dt * 1.4f))
         phase = (phase + dt * (.035f + .1f * impulse + .035f * buildup)) % 1f
     }

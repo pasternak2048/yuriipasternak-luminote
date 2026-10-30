@@ -150,28 +150,32 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                 const float TAU = 6.283185;
 
                 // Local moving pockets are deliberately nonuniform, even at full gain.
-                float waveA = .5 + .5 * sin(TAU * (q * 7.0 - motion.x * 1.5));
-                float waveB = .5 + .5 * sin(TAU * (q * 13.0 + motion.x * .85));
-                float texture = .08 + .62 * pow(waveA, 5.0) + .30 * pow(waveB, 7.0);
+                // Integer phase windings remain seamless across phase 1 -> 0.
+                float waveA = .5 + .5 * sin(TAU * (q * 7.0 - motion.x * 2.0));
+                float waveB = .5 + .5 * sin(TAU * (q * 13.0 + motion.x));
+                float texture = .10 + .64 * pow(waveA, 4.0) + .35 * pow(waveB, 5.0);
                 float travel = fract(q - motion.x);
                 float beat = exp(-pow(min(travel, 1.0 - travel) * 15.0, 2.0)) * impulse;
                 float localEnergy = clamp(spectral * .90, 0.0, 1.0);
                 float active = smoothstep(.018, .75, localEnergy);
-                float peak = active * (texture + beat * .8);
+                float peak = active * (texture + beat * .65);
 
                 // Strong local width swelling, but never deform the actual contour.
-                float width = clamp(strokeWidth * (.16 + .30 * bass) +
-                    peak * (3.5 + 3.5 * bass), 1.0, 12.0);
+                // Broader optical source. The wave swells into the 24px field rather
+                // than painting a uniform opaque stroke around the display.
+                float width = clamp(strokeWidth * (.24 + .42 * bass) +
+                    peak * (5.0 + 6.0 * bass), 1.5, 18.0);
                 float outside = max(0.0, distance - width * .5);
-                float core = 1.0 - smoothstep(width * .5 - 1.5, width * .5 + 2.0, distance);
-                float nearHalo = exp(-outside / (2.5 + 1.5 * localEnergy)) * .40;
-                float outerHalo = exp(-outside / (5.5 + 1.4 * localEnergy)) * .38;
-                float fade = 1.0 - smoothstep(16.0, 20.0, distance);
+                float core = 1.0 - smoothstep(width * .5 - 2.2, width * .5 + 3.0, distance);
+                float nearHalo = exp(-outside / (3.8 + 1.8 * localEnergy)) * .78;
+                float outerHalo = exp(-outside / (7.0 + 2.0 * localEnergy)) * .68;
+                float fade = 1.0 - smoothstep(18.0, 21.5, distance);
 
-                // Do not raise the whole contour to white at maximum intensity.
-                float light = (core * .50 + nearHalo + outerHalo) *
-                    peak * (.30 + .70 * loudness) * intensity * 1.75;
-                float alpha = (1.0 - exp(-light * 1.0)) * fade;
+                // Stronger hot spots, but local low-energy gaps stay dark.
+                float light = (core * .75 + nearHalo + outerHalo) *
+                    pow(max(peak, 0.0), 1.25) *
+                    (.42 + .58 * loudness) * intensity * 3.0;
+                float alpha = (1.0 - exp(-light * 1.35)) * fade;
                 return half4(half3(tint * alpha), half(alpha));
             }
         """
