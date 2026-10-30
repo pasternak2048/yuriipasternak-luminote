@@ -40,7 +40,11 @@ fun ResonanceScreen(onBackClick: () -> Unit, onAccessClick: () -> Unit = {}) {
     }
     val supported = Build.VERSION.SDK_INT >= 33
     val overlayGranted = Settings.canDrawOverlays(context)
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        contentColor = MaterialTheme.colorScheme.onBackground
+    ) {
+    Column(Modifier.fillMaxSize()
         .statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         LuminoteScreenHeader(title = stringResource(R.string.resonance_title),
@@ -104,5 +108,6 @@ fun ResonanceScreen(onBackClick: () -> Unit, onAccessClick: () -> Unit = {}) {
             style = MaterialTheme.typography.bodySmall)
         Text(stringResource(R.string.resonance_nonzero_frames, state.nonzeroFeatureFrames),
             style = MaterialTheme.typography.bodySmall)
+    }
     }
 }
