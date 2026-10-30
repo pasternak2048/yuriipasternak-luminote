@@ -115,14 +115,16 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                     mix(unwrap(progress(c), r), unwrap(progress(d), r), t.x), t.y));
 
                 // Fixed, overlapping frequency ownership. The palette never travels.
+                // Violet midrange (bands 4-7) uses a higher activation threshold:
+                // moderate persistent mids fade, while real peaks can still reach full power.
                 float w0 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.0416667 + 0.5) - 0.5))) * clamp(spectrum0.x, 0.0, 1.0);
                 float w1 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.1250000 + 0.5) - 0.5))) * clamp(spectrum0.y, 0.0, 1.0);
                 float w2 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.2083333 + 0.5) - 0.5))) * clamp(spectrum0.z, 0.0, 1.0);
                 float w3 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.2916667 + 0.5) - 0.5))) * clamp(spectrum0.w, 0.0, 1.0);
-                float w4 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.3750000 + 0.5) - 0.5))) * clamp(spectrum1.x, 0.0, 1.0);
-                float w5 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.4583333 + 0.5) - 0.5))) * clamp(spectrum1.y, 0.0, 1.0);
-                float w6 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.5416667 + 0.5) - 0.5))) * clamp(spectrum1.z, 0.0, 1.0);
-                float w7 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.6250000 + 0.5) - 0.5))) * clamp(spectrum1.w, 0.0, 1.0);
+                float w4 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.3750000 + 0.5) - 0.5))) * smoothstep(0.22, 0.90, clamp(spectrum1.x, 0.0, 1.0));
+                float w5 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.4583333 + 0.5) - 0.5))) * smoothstep(0.22, 0.90, clamp(spectrum1.y, 0.0, 1.0));
+                float w6 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.5416667 + 0.5) - 0.5))) * smoothstep(0.22, 0.90, clamp(spectrum1.z, 0.0, 1.0));
+                float w7 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.6250000 + 0.5) - 0.5))) * smoothstep(0.22, 0.90, clamp(spectrum1.w, 0.0, 1.0));
                 float w8 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.7083333 + 0.5) - 0.5))) * clamp(spectrum2.x, 0.0, 1.0);
                 float w9 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.7916667 + 0.5) - 0.5))) * clamp(spectrum2.y, 0.0, 1.0);
                 float w10 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.8750000 + 0.5) - 0.5))) * clamp(spectrum2.z, 0.0, 1.0);
