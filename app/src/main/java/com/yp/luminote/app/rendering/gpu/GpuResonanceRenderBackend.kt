@@ -164,8 +164,9 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                     max(w4, max(w5, max(w6, max(w7,
                     max(w8, max(w9, max(w10, w11)))))))))));
                 float localEnergy = clamp(spectralMix, 0.0, 1.0);
-                float bandFlash = smoothstep(.055, .78, localEnergy);
-                bandFlash = bandFlash * bandFlash;
+                // Preserve low-volume sensitivity after the absolute-level gate.
+                // The earlier squared threshold suppressed normal audio twice.
+                float bandFlash = smoothstep(.008, .48, localEnergy);
                 float onsetShape = .30 + .70 * waveA;
                 float peak = bandFlash * texture * (1.0 + .85 * impulse * onsetShape);
 
@@ -189,8 +190,8 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                 // Glow follows the same band envelope as width. Loudness is a subtle
                 // multiplier, never a baseline that keeps inactive sectors lit.
                 float light = (core * .82 + nearHalo + outerHalo) *
-                    peak * (.55 + .45 * loudness) *
-                    (1.0 + .65 * bandFlash) * intensity * 3.8;
+                    peak * (.65 + .35 * loudness) *
+                    (1.0 + .65 * bandFlash) * intensity * 4.5;
                 float alpha = (1.0 - exp(-light * 1.10)) * fade;
                 return half4(half3(tint * alpha), half(alpha));
             }

@@ -72,13 +72,16 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
             flux += max(0f, power - previousSpectrum[bin])
             previousSpectrum[bin] = power
         }
-        hasSignal = waveformFresh && waveformRms > 1.5f / 128f && total > .0001f
+        hasSignal = waveformFresh && waveformRms > .003f && total > .00001f
         spectralReference = max(.02f, max(sqrt(total), spectralReference * .995f))
         waveformReference = max(.03f, max(waveformRms, waveformReference * .995f))
         // AS_PLAYED carries output level. Do not re-normalize it back to full
         // intensity: quiet playback must produce genuinely weak illumination.
-        val level = if (hasSignal) ((waveformRms - .012f) / .17f).coerceIn(0f, 1f) else 0f
-        levelGate = level * level
+        // A low output-mix amplitude on real devices is still valid music.
+        // Keep a true silence floor, but avoid the previous squared gate
+        // that made normal AS_PLAYED captures invisible.
+        val level = if (hasSignal) ((waveformRms - .003f) / .085f).coerceIn(0f, 1f) else 0f
+        levelGate = level * sqrt(level)
         envelope = smooth(envelope, levelGate, .75f, .30f)
         bands[0] = smooth(bands[0], normalized(low), .82f, .14f)
         bands[1] = smooth(bands[1], normalized(mid), .55f, .14f)

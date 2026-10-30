@@ -61,7 +61,7 @@ class VisualizerFeatureAdapterTest {
     }
     @Test fun barelyAudibleWaveformDoesNotIlluminateSpectrumAtFullStrength() {
         val adapter = VisualizerFeatureAdapter(17, size)
-        val quiet = ByteArray(size) { if (it % 2 == 0) 132.toByte() else 124.toByte() }
+        val quiet = ByteArray(size) { if (it % 2 == 0) 129.toByte() else 127.toByte() }
         val loud = waveform()
         var lowLevel = AudioFeatureSnapshot()
         repeat(20) {
