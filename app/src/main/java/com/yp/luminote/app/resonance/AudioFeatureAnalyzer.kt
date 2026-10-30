@@ -44,7 +44,7 @@ internal class ResonanceBehavior {
         for (i in spectralEnvelope.indices) {
             val target = (snapshot.spectrum.getOrNull(i) ?: 0f).coerceIn(0f, 1f) * freshness
             // Faster attack for strong musical changes, gentler release to prevent flicker.
-            val bandRate = if (target > spectralEnvelope[i]) 24f else 8f
+            val bandRate = if (target > spectralEnvelope[i]) 38f else 14f
             spectralEnvelope[i] += (target - spectralEnvelope[i]) * (1f - exp(-dt * bandRate))
         }
         impulseTarget *= exp(-dt * 5f)

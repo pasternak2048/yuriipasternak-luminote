@@ -81,8 +81,8 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
         bands[2] = smooth(bands[2], normalized(high), .55f, .14f)
         for (i in spectralBands.indices) {
             // Preserve relative spectral contrast: no independent auto-gain per bin.
-            val target = if (hasSignal) (sqrt(spectralPower[i]) * 1.7f / spectralReference).coerceIn(0f, 1f) else 0f
-            spectralBands[i] = smooth(spectralBands[i], target, .72f, .19f)
+            val target = if (hasSignal) (sqrt(spectralPower[i]) * 2.1f / spectralReference).coerceIn(0f, 1f) else 0f
+            spectralBands[i] = smooth(spectralBands[i], target, .88f, .35f)
         }
         var recent = 0f
         for (i in 0 until historyCount) recent += history[i]

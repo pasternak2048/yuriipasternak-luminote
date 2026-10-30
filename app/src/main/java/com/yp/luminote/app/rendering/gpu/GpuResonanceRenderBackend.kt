@@ -157,27 +157,37 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
                 float texture = .12 + .60 * pow(waveA, 3.0) + .40 * pow(waveB, 4.0);
                 // Onsets brighten existing continuous waves; never teleport a new
                 // narrow highlight to the current phase position.
-                float localEnergy = clamp(spectral * .90, 0.0, 1.0);
-                float active = smoothstep(.012, .58, localEnergy);
-                float onsetShape = .28 + .72 * waveA;
-                float peak = active * (texture * (1.0 + .70 * impulse * onsetShape));
+                // Every spectral band drives its own light amplitude. A quiet band can
+                // almost disappear; active frequencies deliver high-contrast flashes.
+                // Normalize overlaps rather than clipping their sum to constant 1.
+                float spectralMix = max(w0, max(w1, max(w2, max(w3,
+                    max(w4, max(w5, max(w6, max(w7,
+                    max(w8, max(w9, max(w10, w11)))))))))));
+                float localEnergy = clamp(spectralMix, 0.0, 1.0);
+                float bandFlash = smoothstep(.035, .72, localEnergy);
+                bandFlash = bandFlash * bandFlash;
+                float onsetShape = .30 + .70 * waveA;
+                float peak = bandFlash * texture * (1.0 + .85 * impulse * onsetShape);
 
                 // Strong local width swelling, but never deform the actual contour.
                 // Resonance-only 40px SDF allows a significantly wider, soft optical mass.
                 // Local energy controls source expansion, not contour displacement.
-                float width = clamp(strokeWidth * (.30 + .46 * bass) +
-                    peak * (9.0 + 8.0 * bass), 2.0, 27.0);
+                float width = clamp(strokeWidth * (.18 + .32 * bass) +
+                    peak * (13.0 + 11.0 * bass) +
+                    bandFlash * 7.0, 1.5, 32.0);
                 float outside = max(0.0, distance - width * .5);
                 float core = 1.0 - smoothstep(width * .5 - 3.2, width * .5 + 4.8, distance);
-                float nearHalo = exp(-outside / (5.0 + 2.8 * localEnergy)) * 1.00;
-                float outerHalo = exp(-outside / (11.5 + 3.5 * localEnergy)) * .83;
+                float nearHalo = exp(-outside / (5.8 + 3.2 * bandFlash)) * 1.00;
+                float outerHalo = exp(-outside / (12.0 + 4.0 * bandFlash)) * .82;
                 float fade = 1.0 - smoothstep(34.0, 38.0, distance);
 
                 // Peak-local intensity preserves dark passages even at slider maximum.
+                // Glow follows the same band envelope as width. Loudness is a subtle
+                // multiplier, never a baseline that keeps inactive sectors lit.
                 float light = (core * .82 + nearHalo + outerHalo) *
-                    pow(max(peak, 0.0), 1.10) *
-                    (.40 + .60 * loudness) * intensity * 4.3;
-                float alpha = (1.0 - exp(-light * 1.35)) * fade;
+                    peak * (.55 + .45 * loudness) *
+                    (1.0 + .65 * bandFlash) * intensity * 3.8;
+                float alpha = (1.0 - exp(-light * 1.10)) * fade;
                 return half4(half3(tint * alpha), half(alpha));
             }
         """
