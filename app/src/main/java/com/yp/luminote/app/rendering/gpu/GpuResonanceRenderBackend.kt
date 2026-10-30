@@ -57,6 +57,9 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
             }
             behavior.update(command.resonanceFeatures, generation, frame.frameTimeNanos)
             shader!!.setFloatUniform("audio", behavior.low, behavior.mid, behavior.high, behavior.loudness)
+            shader!!.setFloatUniform("spectrum0", behavior.band(0), behavior.band(1), behavior.band(2), behavior.band(3))
+            shader!!.setFloatUniform("spectrum1", behavior.band(4), behavior.band(5), behavior.band(6), behavior.band(7))
+            shader!!.setFloatUniform("spectrum2", behavior.band(8), behavior.band(9), behavior.band(10), behavior.band(11))
             shader!!.setFloatUniform("motion", behavior.phase, behavior.impulse, behavior.buildup,
                 ResonanceController.state.value.intensity)
             shader!!.setFloatUniform("strokeWidth", key.stroke)
@@ -88,45 +91,88 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
             uniform shader field;
             uniform float4 audio;
             uniform float4 motion;
+            uniform float4 spectrum0;
+            uniform float4 spectrum1;
+            uniform float4 spectrum2;
             uniform float strokeWidth;
+
             float progress(float4 v) {
-                return (floor(v.g*255.0+.5)*256.0+floor(v.b*255.0+.5))/65535.0;
+                return (floor(v.g * 255.0 + .5) * 256.0 + floor(v.b * 255.0 + .5)) / 65535.0;
             }
-            float unwrap(float a, float r) { return r+fract(a-r+.5)-.5; }
+            float unwrap(float a, float r) { return r + fract(a - r + .5) - .5; }
+
             half4 main(float2 p) {
-                float2 base=floor(p-.5)+.5;
-                float2 t=fract(p-.5);
-                float4 a=float4(field.eval(base));
-                if (a.r*24.0>22.0) return half4(0);
-                float4 b=float4(field.eval(base+float2(1,0)));
-                float4 c=float4(field.eval(base+float2(0,1)));
-                float4 d=float4(field.eval(base+float2(1,1)));
-                float distance=mix(mix(a.r,b.r,t.x),mix(c.r,d.r,t.x),t.y)*24.0;
-                float r=progress(a);
-                float q=fract(mix(mix(r,unwrap(progress(b),r),t.x),mix(unwrap(progress(c),r),unwrap(progress(d),r),t.x),t.y));
-                float wave=.5+.5*sin(6.283185*(q*5.0-motion.x*1.3));
-                float fine=.5+.5*sin(6.283185*(q*11.0+motion.x*.7));
-                float peaks=.12+.62*pow(wave,5.0)+.26*pow(fine,7.0);
-                float travel=fract(q-motion.x);
-                float impulse=exp(-pow(min(travel,1.0-travel)*19.0,2.0))*motion.y;
-                // Audio modifies local light density without shifting the physical contour.
-                float deformation=audio.x*(.4+1.8*peaks);
-                float width=clamp(strokeWidth*(.30+.54*audio.x)+deformation+impulse*2.0,1.2,12.0);
-                float sd=max(0.0,distance-width*.5);
-                float core=1.0-smoothstep(width*.5-.75,width*.5+.75,distance);
-                float nearGlow=exp(-sd/(2.0+audio.z*1.6))*.36;
-                float outerGlow=exp(-sd/(4.5+audio.x*1.8))*.24;
-                float fade=1.0-smoothstep(17.0,20.0,distance);
-                float density=(.08+.92*peaks+.45*impulse)*smoothstep(.015,.7,audio.x+audio.y+audio.z);
-                float light=(core*.55+nearGlow+outerGlow)*(audio.w*.80+audio.y*.12+audio.z*.08)*density*motion.w;
-                float alpha=(1.0-exp(-light*.85))*fade;
-                // Three fixed spectral territories; only light activity travels, never hue.
-                float angle=q*6.283185*3.0;
-                float wb=audio.x*pow(.5+.5*cos(angle),2.0);
-                float wm=audio.y*pow(.5+.5*cos(angle-2.094395),2.0);
-                float wh=audio.z*pow(.5+.5*cos(angle-4.18879),2.0);
-                float3 tint=(float3(.02,.86,.79)*wb+float3(.76,.12,.98)*wm+float3(1.0,.60,.22)*wh)/max(wb+wm+wh,.0001);
-                return half4(half3(tint*alpha),half(alpha));
+                float2 base = floor(p - .5) + .5;
+                float2 t = fract(p - .5);
+                float4 a = float4(field.eval(base));
+                if (a.r * 24.0 > 22.0) return half4(0);
+                float4 b = float4(field.eval(base + float2(1.0, 0.0)));
+                float4 c = float4(field.eval(base + float2(0.0, 1.0)));
+                float4 d = float4(field.eval(base + float2(1.0, 1.0)));
+                float distance = mix(mix(a.r, b.r, t.x), mix(c.r, d.r, t.x), t.y) * 24.0;
+                float r = progress(a);
+                float q = fract(mix(mix(r, unwrap(progress(b), r), t.x),
+                    mix(unwrap(progress(c), r), unwrap(progress(d), r), t.x), t.y));
+
+                // Fixed, overlapping frequency ownership. The palette never travels.
+                float w0 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.0416667 + 0.5) - 0.5))) * clamp(spectrum0.x, 0.0, 1.0);
+                float w1 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.1250000 + 0.5) - 0.5))) * clamp(spectrum0.y, 0.0, 1.0);
+                float w2 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.2083333 + 0.5) - 0.5))) * clamp(spectrum0.z, 0.0, 1.0);
+                float w3 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.2916667 + 0.5) - 0.5))) * clamp(spectrum0.w, 0.0, 1.0);
+                float w4 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.3750000 + 0.5) - 0.5))) * clamp(spectrum1.x, 0.0, 1.0);
+                float w5 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.4583333 + 0.5) - 0.5))) * clamp(spectrum1.y, 0.0, 1.0);
+                float w6 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.5416667 + 0.5) - 0.5))) * clamp(spectrum1.z, 0.0, 1.0);
+                float w7 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.6250000 + 0.5) - 0.5))) * clamp(spectrum1.w, 0.0, 1.0);
+                float w8 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.7083333 + 0.5) - 0.5))) * clamp(spectrum2.x, 0.0, 1.0);
+                float w9 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.7916667 + 0.5) - 0.5))) * clamp(spectrum2.y, 0.0, 1.0);
+                float w10 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.8750000 + 0.5) - 0.5))) * clamp(spectrum2.z, 0.0, 1.0);
+                float w11 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.9583333 + 0.5) - 0.5))) * clamp(spectrum2.w, 0.0, 1.0);
+                float spectral = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8 + w9 + w10 + w11;
+                float3 weightedColor =
+                    float3(0.02,0.88,0.77) * w0 +
+                    float3(0.02,0.88,0.77) * w1 +
+                    float3(0.02,0.88,0.77) * w2 +
+                    float3(0.02,0.88,0.77) * w3 +
+                    float3(0.72,0.14,0.98) * w4 +
+                    float3(0.72,0.14,0.98) * w5 +
+                    float3(0.72,0.14,0.98) * w6 +
+                    float3(0.72,0.14,0.98) * w7 +
+                    float3(1,0.58,0.18) * w8 +
+                    float3(1,0.58,0.18) * w9 +
+                    float3(1,0.58,0.18) * w10 +
+                    float3(1,0.58,0.18) * w11;
+                float3 tint = weightedColor / max(spectral, .00001);
+
+                float bass = clamp(audio.x, 0.0, 1.0);
+                float loudness = clamp(audio.w, 0.0, 1.0);
+                float impulse = clamp(motion.y, 0.0, 1.0);
+                float intensity = clamp(motion.w, 0.0, 1.0);
+                const float TAU = 6.283185;
+
+                // Local moving pockets are deliberately nonuniform, even at full gain.
+                float waveA = .5 + .5 * sin(TAU * (q * 7.0 - motion.x * 1.5));
+                float waveB = .5 + .5 * sin(TAU * (q * 13.0 + motion.x * .85));
+                float texture = .08 + .62 * pow(waveA, 5.0) + .30 * pow(waveB, 7.0);
+                float travel = fract(q - motion.x);
+                float beat = exp(-pow(min(travel, 1.0 - travel) * 15.0, 2.0)) * impulse;
+                float localEnergy = clamp(spectral * .90, 0.0, 1.0);
+                float active = smoothstep(.018, .75, localEnergy);
+                float peak = active * (texture + beat * .8);
+
+                // Strong local width swelling, but never deform the actual contour.
+                float width = clamp(strokeWidth * (.16 + .30 * bass) +
+                    peak * (3.5 + 3.5 * bass), 1.0, 12.0);
+                float outside = max(0.0, distance - width * .5);
+                float core = 1.0 - smoothstep(width * .5 - 1.5, width * .5 + 2.0, distance);
+                float nearHalo = exp(-outside / (2.5 + 1.5 * localEnergy)) * .40;
+                float outerHalo = exp(-outside / (5.5 + 1.4 * localEnergy)) * .38;
+                float fade = 1.0 - smoothstep(16.0, 20.0, distance);
+
+                // Do not raise the whole contour to white at maximum intensity.
+                float light = (core * .50 + nearHalo + outerHalo) *
+                    peak * (.30 + .70 * loudness) * intensity * 1.75;
+                float alpha = (1.0 - exp(-light * 1.0)) * fade;
+                return half4(half3(tint * alpha), half(alpha));
             }
         """
     }

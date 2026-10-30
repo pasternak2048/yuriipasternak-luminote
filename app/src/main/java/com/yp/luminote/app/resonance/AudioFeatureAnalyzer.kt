@@ -11,7 +11,9 @@ internal data class AudioFeatureSnapshot(
     val high: Float = 0f,
     val loudness: Float = 0f,
     val onset: Float = 0f,
-    val trend: Float = 0f
+    val trend: Float = 0f,
+    // Immutable copy of 12 log-spaced FFT band envelopes, ordered low to high.
+    val spectrum: List<Float> = emptyList()
 )
 
 /** All evolution consumes HaloView VSYNC time; missing capture frames decay without an audio timer. */
@@ -23,6 +25,8 @@ internal class ResonanceBehavior {
     var impulse = 0f; private set
     var buildup = 0f; private set
     var phase = 0f; private set
+    private val spectralEnvelope = FloatArray(12)
+    fun band(index: Int): Float = spectralEnvelope[index]
     private var lastTime = 0L
     private var consumedSnapshot = 0L
 
@@ -36,6 +40,10 @@ internal class ResonanceBehavior {
         mid += (snapshot.mid * freshness - mid) * blend
         high += (snapshot.high * freshness - high) * blend
         loudness += (snapshot.loudness * freshness - loudness) * blend
+        for (i in spectralEnvelope.indices) {
+            val target = (snapshot.spectrum.getOrNull(i) ?: 0f).coerceIn(0f, 1f) * freshness
+            spectralEnvelope[i] += (target - spectralEnvelope[i]) * blend
+        }
         impulse *= exp(-dt * 4f)
         if (snapshot.generation == generation && snapshot.timestampNanos != consumedSnapshot) {
             impulse = max(impulse, snapshot.onset * freshness)

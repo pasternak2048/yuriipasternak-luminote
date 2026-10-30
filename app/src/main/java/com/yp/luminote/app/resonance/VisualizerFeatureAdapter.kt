@@ -20,6 +20,11 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
     init { require(captureSize in 128..4096 && captureSize and (captureSize - 1) == 0) }
     private val previousSpectrum = FloatArray(captureSize / 2 + 1)
     private val bands = FloatArray(3)
+    private val spectralBands = FloatArray(12)
+    private val spectralPower = FloatArray(12)
+    // Log-spaced bins in Hz; low bands are limited by the Visualizer FFT resolution.
+    private val spectralEdges = doubleArrayOf(0.0, 90.0, 140.0, 210.0, 320.0,
+        480.0, 720.0, 1100.0, 1700.0, 2600.0, 4000.0, 6500.0, 16000.0)
     private val history = FloatArray(48)
     private var historyIndex = 0
     private var historyCount = 0
@@ -46,6 +51,7 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
         require(bytes.size == captureSize && samplingRateMilliHertz > 0)
         val waveformFresh = waveformTime != 0L && timestampNanos >= waveformTime && timestampNanos - waveformTime <= 150_000_000L
         var low = 0f; var mid = 0f; var high = 0f; var total = 0f; var flux = 0f
+        spectralPower.fill(0f)
         // DC is decoded by visualizerBinPower but excluded from musical energy. Nyquist is real-only.
         for (bin in 1..captureSize / 2) {
             val power = visualizerBinPower(bytes, bin)
@@ -54,6 +60,12 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
                 hz < 250.0 -> low += power
                 hz < 4000.0 -> mid += power
                 hz <= 16000.0 -> high += power
+            }
+            if (hz < spectralEdges.last()) {
+                val bandIndex = (0 until spectralBands.size).firstOrNull {
+                    hz >= spectralEdges[it] && hz < spectralEdges[it + 1]
+                }
+                if (bandIndex != null) spectralPower[bandIndex] += power
             }
             total += power
             flux += max(0f, power - previousSpectrum[bin])
@@ -67,6 +79,11 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
         bands[0] = smooth(bands[0], normalized(low), .82f, .14f)
         bands[1] = smooth(bands[1], normalized(mid), .55f, .14f)
         bands[2] = smooth(bands[2], normalized(high), .55f, .14f)
+        for (i in spectralBands.indices) {
+            // Preserve relative spectral contrast: no independent auto-gain per bin.
+            val target = if (hasSignal) (sqrt(spectralPower[i]) * 1.7f / spectralReference).coerceIn(0f, 1f) else 0f
+            spectralBands[i] = smooth(spectralBands[i], target, .72f, .19f)
+        }
         var recent = 0f
         for (i in 0 until historyCount) recent += history[i]
         recent /= max(1, historyCount)
@@ -75,12 +92,13 @@ internal class VisualizerFeatureAdapter(private val generation: Long, private va
         historyIndex = (historyIndex + 1) % history.size
         historyCount = min(historyCount + 1, history.size)
         val onset = if (hasSignal) (flux / max(total, .0001f)).coerceIn(0f, 1f) else 0f
-        return AudioFeatureSnapshot(generation, timestampNanos, bands[0], bands[1], bands[2], envelope, onset, trend)
+        return AudioFeatureSnapshot(generation, timestampNanos, bands[0], bands[1], bands[2], envelope, onset, trend,
+            spectralBands.toList())
     }
 
     private fun normalized(power: Float) = if (hasSignal) (sqrt(power) / spectralReference).coerceIn(0f, 1f) else 0f
     fun clear() {
-        previousSpectrum.fill(0f); bands.fill(0f); history.fill(0f)
+        previousSpectrum.fill(0f); bands.fill(0f); spectralBands.fill(0f); spectralPower.fill(0f); history.fill(0f)
         waveformRms = 0f; waveformTime = 0L; envelope = 0f; hasSignal = false
     }
     private fun smooth(previous: Float, target: Float, attack: Float, release: Float) =

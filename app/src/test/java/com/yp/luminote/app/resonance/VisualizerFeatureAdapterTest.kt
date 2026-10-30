@@ -66,6 +66,38 @@ class VisualizerFeatureAdapterTest {
     }
     @Test(expected = IllegalArgumentException::class)
     fun unsupportedCaptureDimensionsFailClosed() { VisualizerAudioProvider.chooseCaptureSize(8192, 16384) }
+
+    @Test fun twelveBandsTrackDifferentFftBinsWithoutLeakingIntoNeighbors() {
+        // At 48kHz / 1024: 140.625Hz => band 2, 1500Hz => band 7, 8015Hz => band 11.
+        for ((bin, expected) in listOf(3 to 2, 32 to 7, 171 to 11)) {
+            val adapter = VisualizerFeatureAdapter(9, size)
+            var snapshot = AudioFeatureSnapshot()
+            repeat(20) { iteration ->
+                val time = 1_000_000_000L + iteration * 50_000_000L
+                adapter.waveform(waveform(), time)
+                snapshot = adapter.fft(frame(bin), 48_000_000, time)
+            }
+            assertEquals(12, snapshot.spectrum.size)
+            assertTrue(snapshot.spectrum[expected] > .7f)
+            assertTrue(snapshot.spectrum.withIndex().all { (i, value) ->
+                i == expected || value < .001f
+            })
+        }
+    }
+    @Test fun spectralSnapshotIsIndependentOfWorkerBufferReuse() {
+        val adapter = VisualizerFeatureAdapter(10, size)
+        val time = 1_000_000_000L
+        adapter.waveform(waveform(), time)
+        val first = adapter.fft(frame(3), 48_000_000, time)
+        repeat(20) {
+            val now = time + (it + 1) * 50_000_000L
+            adapter.waveform(waveform(), now)
+            adapter.fft(frame(171), 48_000_000, now)
+        }
+        assertEquals(12, first.spectrum.size)
+        assertEquals(0f, first.spectrum[11], 0f)
+        assertTrue(first.spectrum[2] > 0f)
+    }
     @Test fun benchmarkNativeFftAdaptationWithoutAnotherTransform() {
         val adapter = VisualizerFeatureAdapter(1, size)
         val wave = waveform(); val spectrum = frame(3)
