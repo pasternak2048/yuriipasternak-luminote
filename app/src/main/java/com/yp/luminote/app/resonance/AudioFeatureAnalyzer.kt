@@ -27,7 +27,11 @@ internal class ResonanceBehavior {
     var buildup = 0f; private set
     var phase = 0f; private set
     private val spectralEnvelope = FloatArray(12)
-    fun band(index: Int): Float = spectralEnvelope[index]
+    // Slowly learned spectral floor: sustained instruments should not keep
+    // the border fully lit. The moving difference is the rhythmic transient.
+    private val spectralFloor = FloatArray(12)
+    private val reactiveSpectrum = FloatArray(12)
+    fun band(index: Int): Float = reactiveSpectrum[index]
     private var lastTime = 0L
     private var consumedSnapshot = 0L
 
@@ -46,6 +50,14 @@ internal class ResonanceBehavior {
             // Faster attack for strong musical changes, gentler release to prevent flicker.
             val bandRate = if (target > spectralEnvelope[i]) 38f else 14f
             spectralEnvelope[i] += (target - spectralEnvelope[i]) * (1f - exp(-dt * bandRate))
+            // Track the ambient energy much slower than the audio envelope.
+            // Bass/vocals remain spatially anchored, but long notes dim.
+            val floorRate = if (spectralEnvelope[i] > spectralFloor[i]) 1.25f else 2.0f
+            spectralFloor[i] += (spectralEnvelope[i] - spectralFloor[i]) * (1f - exp(-dt * floorRate))
+            val transient = max(0f, spectralEnvelope[i] - spectralFloor[i])
+            val reactive = (.09f * spectralEnvelope[i] + 2.7f * transient).coerceIn(0f, 1f)
+            reactiveSpectrum[i] += (reactive - reactiveSpectrum[i]) *
+                (1f - exp(-dt * if (reactive > reactiveSpectrum[i]) 40f else 13f))
         }
         impulseTarget *= exp(-dt * 5f)
         if (snapshot.generation == generation && snapshot.timestampNanos != consumedSnapshot) {
