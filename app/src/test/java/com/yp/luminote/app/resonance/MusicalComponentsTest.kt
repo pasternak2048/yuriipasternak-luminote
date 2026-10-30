@@ -240,12 +240,46 @@ class MusicalComponentsTest {
                 }
             }
             val assigned = (0 until 12).filter { MusicalComponentVisualMapping.componentForSlot(it) == id }
-            // Existing violet slots have an extra 0.22..0.90 activation transfer before the
-            // common flash curve. Requiring >=.45 is a visibility margin, not merely nonzero data.
-            val minimum = if (assigned.any { it in 4..7 }) .45f else .20f
+            // All colors share the approved optical transfer again.
+            // Teal's sustained floor is attenuated but transients still pass.
+            val minimum = .20f
             assertTrue("$id mixed=$mixed Beat0/.5/1 peaks=${peak.toList()} need>$minimum", peak.all { it > minimum })
             println("Musical component route $id mixed=$mixed Beat0/.5/1 peaks=${peak.toList()} fixedSlots=$assigned")
         }
+    }
+
+    @Test fun tealSustainIsSubduedWithoutSuppressingBassAttacks() {
+        val behavior = ResonanceBehavior()
+        val stable = List(12) { .75f }
+        var time = 1_000_000_000L
+        repeat(240) {
+            behavior.update(AudioFeatureSnapshot(generation = 27, timestampNanos = time,
+                spectrum = stable), 27, time)
+            time += 16_666_667L
+        }
+        val tealSteady = behavior.band(1, 0f)
+        val midSteady = behavior.band(5, 0f)
+        assertTrue("Teal sustained floor must be visibly lower", tealSteady < midSteady * .6f)
+        assertTrue("Do not remove teal completely", tealSteady > .15f)
+        val tealRhythmic = behavior.band(1, 1f)
+        val midRhythmic = behavior.band(5, 1f)
+        assertEquals("Beat-only mode still preserves bass transients",
+            midRhythmic, tealRhythmic, .0001f)
+
+        // Repeated percussion-style level jumps must still create bass peaks.
+        repeat(40) {
+            val off = List(12) { if (it == 1) 0f else .75f }
+            behavior.update(AudioFeatureSnapshot(generation = 27, timestampNanos = time,
+                spectrum = off), 27, time)
+            time += 16_666_667L
+        }
+        val before = behavior.band(1, 0f)
+        repeat(6) {
+            behavior.update(AudioFeatureSnapshot(generation = 27, timestampNanos = time,
+                spectrum = stable), 27, time)
+            time += 16_666_667L
+        }
+        assertTrue("Bass attack must exceed quiet baseline", behavior.band(1, 0f) > before + .10f)
     }
 
     @Test fun establishedBeatBlendDimsSustainAndPreservesItsFullRange() {

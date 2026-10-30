@@ -34,7 +34,14 @@ internal class ResonanceBehavior {
     private val reactiveSpectrum = FloatArray(12)
     fun band(index: Int, beatResponse: Float): Float {
         val balance = beatResponse.coerceIn(0f, 1f)
-        return spectralEnvelope[index] * (1f - balance) + reactiveSpectrum[index] * balance
+        // Low-frequency components are often sustained by NORMALIZED capture.
+        // Reduce only the persistent teal floor; fresh bass transients remain
+        // full strength and the Beat Response slider keeps its existing range.
+        val sustained = if (index in 0..3) {
+            val transient = max(0f, spectralEnvelope[index] - spectralFloor[index])
+            (.46f * spectralEnvelope[index] + 1.10f * transient).coerceIn(0f, 1f)
+        } else spectralEnvelope[index]
+        return sustained * (1f - balance) + reactiveSpectrum[index] * balance
     }
     private var lastTime = 0L
     private var consumedSnapshot = 0L
