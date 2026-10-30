@@ -31,7 +31,10 @@ internal class ResonanceBehavior {
     // the border fully lit. The moving difference is the rhythmic transient.
     private val spectralFloor = FloatArray(12)
     private val reactiveSpectrum = FloatArray(12)
-    fun band(index: Int): Float = reactiveSpectrum[index]
+    fun band(index: Int, beatResponse: Float): Float {
+        val balance = beatResponse.coerceIn(0f, 1f)
+        return spectralEnvelope[index] * (1f - balance) + reactiveSpectrum[index] * balance
+    }
     private var lastTime = 0L
     private var consumedSnapshot = 0L
 

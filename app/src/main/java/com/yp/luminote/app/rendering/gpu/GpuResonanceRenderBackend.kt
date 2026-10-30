@@ -57,9 +57,13 @@ internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, pr
             }
             behavior.update(command.resonanceFeatures, generation, frame.frameTimeNanos)
             shader!!.setFloatUniform("audio", behavior.low, behavior.mid, behavior.high, behavior.loudness)
-            shader!!.setFloatUniform("spectrum0", behavior.band(0), behavior.band(1), behavior.band(2), behavior.band(3))
-            shader!!.setFloatUniform("spectrum1", behavior.band(4), behavior.band(5), behavior.band(6), behavior.band(7))
-            shader!!.setFloatUniform("spectrum2", behavior.band(8), behavior.band(9), behavior.band(10), behavior.band(11))
+            val beatResponse = ResonanceController.state.value.beatResponse
+            shader!!.setFloatUniform("spectrum0", behavior.band(0, beatResponse), behavior.band(1, beatResponse),
+                behavior.band(2, beatResponse), behavior.band(3, beatResponse))
+            shader!!.setFloatUniform("spectrum1", behavior.band(4, beatResponse), behavior.band(5, beatResponse),
+                behavior.band(6, beatResponse), behavior.band(7, beatResponse))
+            shader!!.setFloatUniform("spectrum2", behavior.band(8, beatResponse), behavior.band(9, beatResponse),
+                behavior.band(10, beatResponse), behavior.band(11, beatResponse))
             shader!!.setFloatUniform("motion", behavior.phase, behavior.impulse, behavior.buildup,
                 ResonanceController.state.value.intensity)
             shader!!.setFloatUniform("strokeWidth", key.stroke)

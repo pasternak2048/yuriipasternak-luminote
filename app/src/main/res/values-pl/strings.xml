@@ -257,6 +257,9 @@
     <string name="resonance_start">Uruchom Resonance</string>
     <string name="resonance_stop">Zatrzymaj Resonance</string>
     <string name="resonance_intensity">Intensywność światła</string>
+    <string name="resonance_beat_response">Reakcja na rytm</string>
+    <string name="resonance_beat_smooth">Płynne światło</string>
+    <string name="resonance_beat_pulse">Rytmiczne impulsy</string>
     <string name="resonance_diagnostics">Klatki GPU: %1$d · Klatki analizy: %2$d</string>
     <string name="resonance_stopping">Zatrzymywanie…</string>
     <string name="resonance_provider_ready">Dostawca cech dźwięku: zainicjalizowany</string>

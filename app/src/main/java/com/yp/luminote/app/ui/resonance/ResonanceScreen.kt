@@ -31,6 +31,7 @@ import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 fun ResonanceScreen(onBackClick: () -> Unit, onAccessClick: () -> Unit = {}) {
     val context = LocalContext.current
     val state by ResonanceController.state.collectAsStateWithLifecycle()
+    LaunchedEffect(context) { ResonanceController.loadBeatResponse(context) }
     val active = state.status == ResonanceStatus.STARTING || state.status == ResonanceStatus.WAITING_FOR_AUDIO || state.status == ResonanceStatus.RUNNING
     var awaitingConsent by rememberSaveable { mutableStateOf(false) }
     val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -85,6 +86,16 @@ fun ResonanceScreen(onBackClick: () -> Unit, onAccessClick: () -> Unit = {}) {
                 Text(label)
                 Slider(value = state.intensity, onValueChange = ResonanceController::setIntensity,
                     modifier = Modifier.semantics { contentDescription = label })
+                Spacer(Modifier.height(12.dp))
+                val beatLabel = stringResource(R.string.resonance_beat_response)
+                Text(beatLabel)
+                Slider(value = state.beatResponse,
+                    onValueChange = { ResonanceController.setBeatResponse(context, it) },
+                    modifier = Modifier.semantics { contentDescription = beatLabel })
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(stringResource(R.string.resonance_beat_smooth), style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.resonance_beat_pulse), style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         Text(stringResource(R.string.resonance_diagnostics, state.gpuFrames, state.analysisFrames),

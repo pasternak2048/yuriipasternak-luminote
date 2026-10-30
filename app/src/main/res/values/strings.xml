@@ -323,6 +323,9 @@
     <string name="resonance_start">Start Resonance</string>
     <string name="resonance_stop">Stop Resonance</string>
     <string name="resonance_intensity">Visual intensity</string>
+    <string name="resonance_beat_response">Beat response</string>
+    <string name="resonance_beat_smooth">Smooth glow</string>
+    <string name="resonance_beat_pulse">Rhythmic pulses</string>
     <string name="resonance_diagnostics">GPU frames: %1$d · Analysis frames: %2$d</string>
     <string name="resonance_stopping">Stopping…</string>
     <string name="resonance_provider_ready">Audio feature provider: initialized</string>

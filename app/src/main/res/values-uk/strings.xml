@@ -257,6 +257,9 @@
     <string name="resonance_start">Запустити Resonance</string>
     <string name="resonance_stop">Зупинити Resonance</string>
     <string name="resonance_intensity">Інтенсивність світла</string>
+    <string name="resonance_beat_response">Реакція на ритм</string>
+    <string name="resonance_beat_smooth">Плавне світіння</string>
+    <string name="resonance_beat_pulse">Ритмічні спалахи</string>
     <string name="resonance_diagnostics">Кадри GPU: %1$d · Кадри аналізу: %2$d</string>
     <string name="resonance_stopping">Зупинка…</string>
     <string name="resonance_provider_ready">Постачальник аудіоознак: ініціалізовано</string>

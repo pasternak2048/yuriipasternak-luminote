@@ -13,6 +13,7 @@ enum class ResonanceStatus { STOPPED, STARTING, WAITING_FOR_AUDIO, RUNNING, UNSU
 data class ResonanceState(
     val status: ResonanceStatus = ResonanceStatus.STOPPED,
     val intensity: Float = .65f,
+    val beatResponse: Float = .5f,
     val detail: String? = null,
     val gpuFrames: Long = 0L,
     val analysisFrames: Long = 0L,
@@ -35,8 +36,10 @@ object ResonanceController {
             mutableState.value = mutableState.value.copy(status = ResonanceStatus.ERROR, detail = "Overlay permission is required")
             return false
         }
+        val savedBeat = context.getSharedPreferences("resonance_controls", Context.MODE_PRIVATE)
+            .getFloat("beat_response", .5f).coerceIn(0f, 1f)
         val generation = ResonanceRuntime.begin()
-        mutableState.value = mutableState.value.copy(status = ResonanceStatus.STARTING, detail = null, gpuFrames = 0,
+        mutableState.value = mutableState.value.copy(status = ResonanceStatus.STARTING, detail = null, beatResponse = savedBeat, gpuFrames = 0,
             analysisFrames = 0, providerInitialized = false, nonzeroFeatureFrames = 0)
         return try {
             context.startForegroundService(Intent(context, ResonanceCaptureService::class.java)
@@ -55,8 +58,22 @@ object ResonanceController {
         finish(generation, ResonanceStatus.STOPPED, null)
     }
 
+    @Synchronized fun loadBeatResponse(context: Context) {
+        val value = context.applicationContext
+            .getSharedPreferences("resonance_controls", Context.MODE_PRIVATE)
+            .getFloat("beat_response", .5f).coerceIn(0f, 1f)
+        mutableState.value = mutableState.value.copy(beatResponse = value)
+    }
+
     @Synchronized fun setIntensity(value: Float) {
         if (value.isFinite()) mutableState.value = mutableState.value.copy(intensity = value.coerceIn(0f, 1f))
+    }
+    @Synchronized fun setBeatResponse(context: Context, value: Float) {
+        if (!value.isFinite()) return
+        val clamped = value.coerceIn(0f, 1f)
+        mutableState.value = mutableState.value.copy(beatResponse = clamped)
+        context.applicationContext.getSharedPreferences("resonance_controls", Context.MODE_PRIVATE)
+            .edit().putFloat("beat_response", clamped).apply()
     }
     @Synchronized fun permissionDenied() {
         if (ResonanceRuntime.activeGeneration == 0L) mutableState.value = mutableState.value.copy(status = ResonanceStatus.STOPPED, detail = "Audio visualization permission was not granted")
