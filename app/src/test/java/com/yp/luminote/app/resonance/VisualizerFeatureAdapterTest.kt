@@ -67,9 +67,9 @@ class VisualizerFeatureAdapterTest {
     @Test(expected = IllegalArgumentException::class)
     fun unsupportedCaptureDimensionsFailClosed() { VisualizerAudioProvider.chooseCaptureSize(8192, 16384) }
 
-    @Test fun twelveBandsTrackDifferentFftBinsWithoutLeakingIntoNeighbors() {
-        // At 48kHz / 1024: 140.625Hz => band 2, 1500Hz => band 7, 8015Hz => band 11.
-        for ((bin, expected) in listOf(3 to 2, 32 to 7, 171 to 11)) {
+    @Test fun twelveCompatibilitySlotsHaveDeterministicComponentOwnership() {
+        // Intentional range overlap: 1500Hz belongs to both Mids and Vocal Presence.
+        for ((bin, expected) in listOf(3 to setOf(1, 2), 32 to setOf(4, 5, 6), 171 to setOf(9, 10))) {
             val adapter = VisualizerFeatureAdapter(9, size)
             var snapshot = AudioFeatureSnapshot()
             repeat(20) { iteration ->
@@ -78,9 +78,9 @@ class VisualizerFeatureAdapterTest {
                 snapshot = adapter.fft(frame(bin), 48_000_000, time)
             }
             assertEquals(12, snapshot.spectrum.size)
-            assertTrue(snapshot.spectrum[expected] > .7f)
+            assertTrue(expected.all { snapshot.spectrum[it] > .3f })
             assertTrue(snapshot.spectrum.withIndex().all { (i, value) ->
-                i == expected || value < .001f
+                i in expected || value < .001f
             })
         }
     }

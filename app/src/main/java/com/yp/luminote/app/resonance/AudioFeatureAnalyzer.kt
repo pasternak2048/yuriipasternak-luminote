@@ -12,8 +12,9 @@ internal data class AudioFeatureSnapshot(
     val loudness: Float = 0f,
     val onset: Float = 0f,
     val trend: Float = 0f,
-    // Immutable copy of 12 log-spaced FFT band envelopes, ordered low to high.
-    val spectrum: List<Float> = emptyList()
+    // Immutable projection into the twelve existing stationary renderer slots.
+    val spectrum: List<Float> = emptyList(),
+    val components: MusicalComponents = MusicalComponents.EMPTY
 )
 
 /** All evolution consumes HaloView VSYNC time; missing capture frames decay without an audio timer. */
