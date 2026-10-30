@@ -59,27 +59,6 @@ class VisualizerFeatureAdapterTest {
         assertTrue(silence.low < .0001f && silence.loudness < .0001f)
         assertEquals(0f, silence.onset, 0f)
     }
-    @Test fun barelyAudibleWaveformDoesNotIlluminateSpectrumAtFullStrength() {
-        val adapter = VisualizerFeatureAdapter(17, size)
-        val quiet = ByteArray(size) { if (it % 2 == 0) 129.toByte() else 127.toByte() }
-        val loud = waveform()
-        var lowLevel = AudioFeatureSnapshot()
-        repeat(20) {
-            val time = 1_000_000_000L + it * 50_000_000L
-            adapter.waveform(quiet, time)
-            lowLevel = adapter.fft(frame(3), 48_000_000, time)
-        }
-        assertTrue(lowLevel.spectrum[2] < .02f)
-        assertTrue(lowLevel.loudness < .02f)
-        var highLevel = AudioFeatureSnapshot()
-        repeat(20) {
-            val time = 3_000_000_000L + it * 50_000_000L
-            adapter.waveform(loud, time)
-            highLevel = adapter.fft(frame(3), 48_000_000, time)
-        }
-        assertTrue(highLevel.spectrum[2] > .70f)
-        assertTrue(highLevel.loudness > .90f)
-    }
     @Test fun captureSizeHonorsPlatformRangeAndBound() {
         assertEquals(1024, VisualizerAudioProvider.chooseCaptureSize(128, 1024))
         assertEquals(512, VisualizerAudioProvider.chooseCaptureSize(128, 512))

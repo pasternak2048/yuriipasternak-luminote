@@ -53,8 +53,7 @@ internal class VisualizerAudioProvider(
             val rate = minOf(20_000, Visualizer.getMaxCaptureRate())
             check(rate > 0) { "No supported callback rate" }
             checked(engine.setCaptureSize(size), "capture size")
-            // Preserve actual output-mix level; NORMALIZED automatically magnifies quiet playback.
-            checked(engine.setScalingMode(Visualizer.SCALING_MODE_AS_PLAYED), "as-played scaling")
+            checked(engine.setScalingMode(Visualizer.SCALING_MODE_NORMALIZED), "normalized scaling")
             adapter = VisualizerFeatureAdapter(generation, size)
             healthBuffer = ByteArray(size)
             checked(engine.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
