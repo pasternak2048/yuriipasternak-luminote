@@ -11,6 +11,9 @@ import com.yp.luminote.app.rendering.HaloRenderingPipeline
 import com.yp.luminote.app.rendering.api.RenderFrame
 import com.yp.luminote.app.rendering.api.RenderMode
 import com.yp.luminote.app.rendering.api.RenderOutcome
+import com.yp.luminote.app.diagnostics.DiagnosticEventId
+import com.yp.luminote.app.diagnostics.DiagnosticSeverity
+import com.yp.luminote.app.diagnostics.Diagnostics
 import com.yp.luminote.app.rendering.canvas.CanvasRenderBackend
 import com.yp.luminote.app.rendering.canvas.CanvasRenderTarget
 import com.yp.luminote.app.rendering.canvas.CalibrationDiagnostics
@@ -79,7 +82,8 @@ internal fun finiteDurationFor(
 @SuppressLint("ViewConstructor")
 internal class HaloView(
     context: Context,
-    config: HaloConfig
+    config: HaloConfig,
+    private val diagnosticsCorrelationId: String = "overlay"
 ) : View(context) {
 
     private val outline =
@@ -689,6 +693,7 @@ internal class HaloView(
         val outcome = canvasTarget.withCanvas(canvas) {
             renderingPipeline.render(canvasTarget, renderFrame)
         }
+        if (outcome == RenderOutcome.Rendered) Diagnostics.markActivity(diagnosticsCorrelationId)
         if (resonanceGeneration != 0L && outcome != RenderOutcome.Rendered) {
             val failure = resonanceFailure
             resonanceFailure = null
@@ -704,8 +709,8 @@ internal class HaloView(
             debugCanvasRenderedFrames++
         }
         when (outcome) {
-            is RenderOutcome.Error -> Log.e(TAG, "Render backend failed", outcome.cause)
-            is RenderOutcome.Unsupported -> Log.w(TAG, "Render backend unsupported: ${outcome.reason}")
+            is RenderOutcome.Error -> { Diagnostics.record(DiagnosticEventId.RENDERING_ERROR, DiagnosticSeverity.ERROR, "Render backend failed", mapOf("errorType" to outcome.cause.javaClass.simpleName)); Log.e(TAG, "Render backend failed", outcome.cause) }
+            is RenderOutcome.Unsupported -> { Diagnostics.record(DiagnosticEventId.RENDERING_ERROR, DiagnosticSeverity.WARN, "Render backend unsupported", mapOf("errorType" to "unsupported")); Log.w(TAG, "Render backend unsupported: ${outcome.reason}") }
             RenderOutcome.Rendered -> Unit
         }
     }

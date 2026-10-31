@@ -18,6 +18,7 @@ import com.yp.luminote.app.ui.apps.AppsScreen
 import com.yp.luminote.app.ui.easteregg.EasterEggScreen
 import com.yp.luminote.app.ui.effects.HaloScreen
 import com.yp.luminote.app.ui.effects.DisplayCalibrationScreen
+import com.yp.luminote.app.ui.diagnostics.DiagnosticsScreen
 import com.yp.luminote.app.ui.home.HomeScreen
 import com.yp.luminote.app.ui.language.LanguageScreen
 import com.yp.luminote.app.ui.settings.AppearanceScreen
@@ -38,6 +39,7 @@ object LuminoteRoutes {
     const val APPEARANCE = "appearance"
     const val UPDATES = "updates"
     const val DISPLAY_CALIBRATION = "display_calibration"
+    const val DIAGNOSTICS = "diagnostics"
 }
 
 @Composable
@@ -143,6 +145,7 @@ fun LuminoteNavHost(
                 onAppearanceClick = { navController.navigate(LuminoteRoutes.APPEARANCE) },
                 onLanguageClick = { navController.navigate(LuminoteRoutes.LANGUAGE) },
                 onUpdatesClick = { navController.navigate(LuminoteRoutes.UPDATES) },
+                onDiagnosticsClick = { navController.navigate(LuminoteRoutes.DIAGNOSTICS) },
                 onAboutClick = { navController.navigate(LuminoteRoutes.ABOUT) },
                 viewModel = settingsViewModel
             )
@@ -158,6 +161,10 @@ fun LuminoteNavHost(
                 onEasterEggClick = { },
                 showUpdatesOnly = true
             )
+        }
+
+        composable(LuminoteRoutes.DIAGNOSTICS) {
+            DiagnosticsScreen(onBackClick = { navController.popBackStack() })
         }
 
         composable(

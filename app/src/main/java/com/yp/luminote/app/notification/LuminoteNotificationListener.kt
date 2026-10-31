@@ -1,5 +1,7 @@
 package com.yp.luminote.app.notification
 import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.diagnostics.DiagnosticEventId
+import com.yp.luminote.app.diagnostics.Diagnostics
 import com.yp.luminote.app.overlay.service.HaloOverlayService
 
 import android.os.SystemClock
@@ -177,6 +179,7 @@ class LuminoteNotificationListener :
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        Diagnostics.record(DiagnosticEventId.NOTIFICATION_LISTENER_CONNECTED)
 
         val activeNotificationsSnapshot =
             activeNotifications
@@ -204,6 +207,7 @@ class LuminoteNotificationListener :
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        Diagnostics.record(DiagnosticEventId.NOTIFICATION_LISTENER_DISCONNECTED)
 
         Log.d(
             TAG,
@@ -219,6 +223,7 @@ class LuminoteNotificationListener :
             sbn,
             rankingMap
         )
+        Diagnostics.record(DiagnosticEventId.NOTIFICATION_RECEIVED)
 
         Log.d(
             TAG,
@@ -434,8 +439,14 @@ class LuminoteNotificationListener :
                 settings = settings
             )
         ) {
-            NotificationEffectAdmission.Accepted -> Unit
+            NotificationEffectAdmission.Accepted -> {
+                Diagnostics.record(DiagnosticEventId.NOTIFICATION_ACCEPTED)
+            }
             is NotificationEffectAdmission.Rejected -> {
+                Diagnostics.record(
+                    DiagnosticEventId.NOTIFICATION_REJECTED,
+                    metadata = mapOf("reason" to admission.reason.name)
+                )
                 when (admission.reason) {
                     NotificationEffectRejectionReason.OWN_ALERT_WINDOW_NOTIFICATION ->
                         Log.d(

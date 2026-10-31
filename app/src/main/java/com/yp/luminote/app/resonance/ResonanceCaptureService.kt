@@ -10,6 +10,8 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import com.yp.luminote.app.MainActivity
+import com.yp.luminote.app.diagnostics.DiagnosticEventId
+import com.yp.luminote.app.diagnostics.Diagnostics
 import com.yp.luminote.app.R
 import com.yp.luminote.app.data.settings.LuminoteSettingsRepository
 import com.yp.luminote.app.effects.model.HaloConfig
@@ -37,6 +39,8 @@ class ResonanceCaptureService : Service() {
             return START_NOT_STICKY
         }
         generation = requested
+        Diagnostics.record(DiagnosticEventId.RESONANCE_STARTED)
+        Diagnostics.expectRendering("resonance-$generation", true)
         instance = this
         try {
             val manager = getSystemService(NotificationManager::class.java)
@@ -99,6 +103,8 @@ class ResonanceCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        Diagnostics.record(DiagnosticEventId.RESONANCE_STOPPED)
+        Diagnostics.expectRendering("resonance-$generation", false)
         destroyed = true
         if (ResonanceRuntime.isCurrent(generation)) ResonanceController.finish(generation, ResonanceStatus.STOPPED, null)
         terminateOwnedSession()
