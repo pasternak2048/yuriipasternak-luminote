@@ -1,0 +1,99 @@
+package com.yp.luminote.app.resonance
+
+import kotlin.math.*
+
+/** Visualizer supplies a packed signed-complex FFT; no second transform is performed. */
+internal fun visualizerBinPower(fft: ByteArray, bin: Int): Float {
+    require(fft.size >= 2 && bin in 0..fft.size / 2)
+    val real: Int
+    val imaginary: Int
+    when (bin) {
+        0 -> { real = fft[0].toInt(); imaginary = 0 }
+        fft.size / 2 -> { real = fft[1].toInt(); imaginary = 0 }
+        else -> { real = fft[2 * bin].toInt(); imaginary = fft[2 * bin + 1].toInt() }
+    }
+    return (real * real + imaginary * imaginary) / 16384f
+}
+
+/** Worker-confined; callback arrays are borrowed for this call only and never retained. */
+internal class VisualizerFeatureAdapter(private val generation: Long, private val captureSize: Int) {
+    init { require(captureSize in 128..4096 && captureSize and (captureSize - 1) == 0) }
+    private val previousSpectrum = FloatArray(captureSize / 2 + 1)
+    private val bands = FloatArray(3)
+    private val componentAnalyzer = MusicalComponentAnalyzer(captureSize)
+    private val componentBinPower = FloatArray(captureSize / 2 + 1)
+    private val componentBinFlux = FloatArray(captureSize / 2 + 1)
+    private val history = FloatArray(48)
+    private var historyIndex = 0
+    private var historyCount = 0
+    private var waveformRms = 0f
+    private var waveformTime = 0L
+    private var spectralReference = .02f
+    private var waveformReference = .03f
+    private var envelope = 0f
+    var hasSignal: Boolean = false; private set
+
+    fun waveform(bytes: ByteArray, timestampNanos: Long) {
+        require(bytes.size == captureSize)
+        var squares = 0.0
+        for (sample in bytes) {
+            // Waveform alone is unsigned 8-bit centered on 128. FFT components remain signed.
+            val centered = ((sample.toInt() and 255) - 128) / 128.0
+            squares += centered * centered
+        }
+        waveformRms = sqrt(squares / captureSize).toFloat()
+        waveformTime = timestampNanos
+    }
+
+    fun fft(bytes: ByteArray, samplingRateMilliHertz: Int, timestampNanos: Long): AudioFeatureSnapshot {
+        require(bytes.size == captureSize && samplingRateMilliHertz > 0)
+        val waveformFresh = waveformTime != 0L && timestampNanos >= waveformTime && timestampNanos - waveformTime <= 150_000_000L
+        val sampleRateChanged = componentAnalyzer.prepare(samplingRateMilliHertz)
+        if (sampleRateChanged) previousSpectrum.fill(0f)
+        var low = 0f; var mid = 0f; var high = 0f; var total = 0f; var flux = 0f
+        // DC is decoded by visualizerBinPower but excluded from musical energy. Nyquist is real-only.
+        for (bin in 1..captureSize / 2) {
+            val power = visualizerBinPower(bytes, bin)
+            val hz = bin.toDouble() * samplingRateMilliHertz / (1000.0 * captureSize)
+            when {
+                hz < 250.0 -> low += power
+                hz < 4000.0 -> mid += power
+                hz <= 16000.0 -> high += power
+            }
+            total += power
+            val positiveFlux = if (sampleRateChanged) 0f else max(0f, power - previousSpectrum[bin])
+            flux += positiveFlux
+            componentBinPower[bin] = power
+            componentBinFlux[bin] = positiveFlux
+            previousSpectrum[bin] = power
+        }
+        hasSignal = waveformFresh && waveformRms > 1.5f / 128f && total > .0001f
+        spectralReference = max(.02f, max(sqrt(total), spectralReference * .995f))
+        waveformReference = max(.03f, max(waveformRms, waveformReference * .995f))
+        val targetEnvelope = if (hasSignal) (waveformRms / waveformReference).coerceIn(0f, 1f) else 0f
+        envelope = smooth(envelope, targetEnvelope, .65f, .12f)
+        bands[0] = smooth(bands[0], normalized(low), .82f, .14f)
+        bands[1] = smooth(bands[1], normalized(mid), .55f, .14f)
+        bands[2] = smooth(bands[2], normalized(high), .55f, .14f)
+        val components = componentAnalyzer.analyze(componentBinPower, componentBinFlux, spectralReference, hasSignal, timestampNanos)
+        var recent = 0f
+        for (i in 0 until historyCount) recent += history[i]
+        recent /= max(1, historyCount)
+        val trend = (envelope - recent).coerceIn(-1f, 1f)
+        history[historyIndex] = envelope
+        historyIndex = (historyIndex + 1) % history.size
+        historyCount = min(historyCount + 1, history.size)
+        val onset = if (hasSignal) (flux / max(total, .0001f)).coerceIn(0f, 1f) else 0f
+        return AudioFeatureSnapshot(generation, timestampNanos, bands[0], bands[1], bands[2], envelope, onset, trend,
+            MusicalComponentVisualMapping.project(components), components)
+    }
+
+    private fun normalized(power: Float) = if (hasSignal) (sqrt(power) / spectralReference).coerceIn(0f, 1f) else 0f
+    fun clear() {
+        previousSpectrum.fill(0f); bands.fill(0f); componentBinPower.fill(0f); componentBinFlux.fill(0f); history.fill(0f)
+        componentAnalyzer.clear()
+        waveformRms = 0f; waveformTime = 0L; envelope = 0f; hasSignal = false
+    }
+    private fun smooth(previous: Float, target: Float, attack: Float, release: Float) =
+        previous + (target - previous) * if (target > previous) attack else release
+}

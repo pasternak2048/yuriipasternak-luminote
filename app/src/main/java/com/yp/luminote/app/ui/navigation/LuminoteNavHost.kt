@@ -31,6 +31,7 @@ object LuminoteRoutes {
     const val ABOUT = "about"
     const val ACCESS = "access"
     const val AMBIENT = "ambient"
+    const val RESONANCE = "resonance"
     const val EASTER_EGG = "easter_egg"
     const val LANGUAGE = "language"
     const val SETTINGS = "settings"
@@ -117,6 +118,7 @@ fun LuminoteNavHost(
                         LuminoteRoutes.AMBIENT
                     )
                 },
+                onResonanceClick = { navController.navigate(LuminoteRoutes.RESONANCE) },
                 onAccessClick = {
                     navController.navigate(
                         LuminoteRoutes.ACCESS
@@ -129,6 +131,12 @@ fun LuminoteNavHost(
             )
         }
 
+        composable(LuminoteRoutes.RESONANCE) {
+            com.yp.luminote.app.ui.resonance.ResonanceScreen(
+                onBackClick = { navController.popBackStack() },
+                onAccessClick = { navController.navigate(LuminoteRoutes.ACCESS) }
+            )
+        }
         composable(LuminoteRoutes.SETTINGS) {
             SettingsScreen(
                 onBackClick = { navController.popBackStack() },

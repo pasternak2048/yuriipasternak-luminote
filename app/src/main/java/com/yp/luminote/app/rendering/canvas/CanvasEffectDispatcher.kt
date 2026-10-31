@@ -42,6 +42,7 @@ internal class CanvasEffectDispatcher(
 
     /** Plan operation adapter; it deliberately binds to the established render targets. */
     fun resolve(operation: PrimaryVisualOperation): CanvasEffectTarget = when (operation) {
+        PrimaryVisualOperation.ResonanceFluidContour -> error("Resonance is GPU-only; Canvas execution is forbidden")
         PrimaryVisualOperation.LightImpulse -> specializedField
         PrimaryVisualOperation.Supernova -> supernova
         PrimaryVisualOperation.FullContourPulse -> fullContour

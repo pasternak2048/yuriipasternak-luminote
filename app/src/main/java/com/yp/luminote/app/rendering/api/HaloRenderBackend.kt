@@ -43,6 +43,7 @@ internal enum class RenderIntent {
 
 /** Mutable, host-owned frame values, reused across draws to keep frame work allocation-free. */
 internal class RenderFrame {
+    var resonanceFeatures = com.yp.luminote.app.resonance.AudioFeatureSnapshot()
     var mode: RenderMode = RenderMode.ANIMATION
     var animationProgress: Float = 0f
     var effectPhase: Float = 0f

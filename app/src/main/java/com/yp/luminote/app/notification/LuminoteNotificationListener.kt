@@ -120,13 +120,7 @@ class LuminoteNotificationListener :
                 reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
 
                 if (settings.ambientEnabled) {
-                    HaloOverlayService.start(
-                        this@LuminoteNotificationListener,
-                        HaloOverlayService.createAmbientIntent(
-                            this@LuminoteNotificationListener,
-                            settings
-                        )
-                    )
+                    com.yp.luminote.app.overlay.service.HaloEffectController.ambient(this@LuminoteNotificationListener, settings)
 
                     previousSettings = settings
                     cachedSettings.set(settings)

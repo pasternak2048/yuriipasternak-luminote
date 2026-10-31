@@ -36,6 +36,7 @@ internal class FrameCommandBuffer {
 }
 
 internal class FrameVisualCommand {
+    var resonanceFeatures = com.yp.luminote.app.resonance.AudioFeatureSnapshot()
     lateinit var geometry: GeometryRequest
     lateinit var appearance: AppearancePayload
     lateinit var operation: PrimaryVisualOperation
@@ -64,6 +65,7 @@ internal object FrameCommandCompiler {
 
     private fun append(emitter: VisualEmitterSpec, frame: RenderFrame, out: FrameVisualCommand) {
         out.geometry = emitter.geometry
+        out.resonanceFeatures = frame.resonanceFeatures
         out.appearance = emitter.appearance
         out.operation = emitter.operation
         out.modifiers = emitter.modifiers

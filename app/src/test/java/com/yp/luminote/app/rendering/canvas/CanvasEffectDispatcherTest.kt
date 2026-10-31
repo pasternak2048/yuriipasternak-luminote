@@ -15,6 +15,10 @@ import org.junit.Assert.assertSame
 import org.junit.Test
 
 class CanvasEffectDispatcherTest {
+    @Test(expected = IllegalStateException::class)
+    fun `Resonance has no Canvas dispatch target`() {
+        CanvasEffectDispatcher(RecordingSurface()).resolve(PrimaryVisualOperation.ResonanceFluidContour)
+    }
     @Test
     fun `registered definitions dispatch to their Canvas primitives`() {
         val surface = RecordingSurface()

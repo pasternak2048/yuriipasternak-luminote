@@ -219,6 +219,12 @@ class HaloAccessibilityService : AccessibilityService() {
         onFiniteAnimationCompleted:
         (() -> Unit)? = null
     ) {
+        if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_PREVIEW, false) == true ||
+            intent?.getStringExtra(HaloOverlayService.EXTRA_CALIBRATION_TOKEN) != null) {
+            HaloOverlayService.suspendResonancePresentation()
+        }
+        if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_AMBIENT, false) == true &&
+            com.yp.luminote.app.resonance.ResonanceRuntime.activeGeneration != 0L) return
         val commandCalibrationToken = intent?.getStringExtra(HaloOverlayService.EXTRA_CALIBRATION_TOKEN)
         if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_CALIBRATION, false) == true) {
             if (CalibrationPreviewSession.isCurrent(commandCalibrationToken)) {
@@ -704,6 +710,7 @@ class HaloAccessibilityService : AccessibilityService() {
         if (queuedTerminalClaimed) {
             completeQueuedTerminal(queuedCompletion)
         }
+        HaloOverlayService.resumePendingResonance()
     }
 
     /** Global Off must not translate renderer teardown into a queued completion callback. */
@@ -835,6 +842,7 @@ class HaloAccessibilityService : AccessibilityService() {
         onAfterStartAbandoned: () -> Unit,
         onFiniteAnimationCompleted: () -> Unit
     ) {
+        HaloOverlayService.suspendResonancePresentation()
         if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
             pendingCalibrationIntent = lastCalibrationIntent
         }
@@ -1405,6 +1413,11 @@ class HaloAccessibilityService : AccessibilityService() {
         }
 
         internal fun isAvailable(): Boolean = activeService != null
+
+        internal fun hasPriorityPresentation(): Boolean = activeService?.let {
+            it.activeQueuedCompletion != null || it.previewMode ||
+                CalibrationPreviewSession.isCurrent(it.calibrationToken)
+        } == true
 
         /**
          * Generic accessibility commands have no terminal callback. A reminder

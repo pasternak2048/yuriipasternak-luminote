@@ -1,0 +1,209 @@
+package com.yp.luminote.app.rendering.gpu
+
+import android.graphics.*
+import com.yp.luminote.app.animation.plan.*
+import com.yp.luminote.app.effects.geometry.DisplayOutline
+import com.yp.luminote.app.effects.geometry.EdgePathGeometryProvider
+import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.rendering.api.*
+import com.yp.luminote.app.rendering.canvas.CanvasRenderTarget
+import com.yp.luminote.app.resonance.*
+
+/** Strict executor: shader-generated source/optics, existing hardware RenderNode submission only. */
+internal class GpuResonanceRenderBackend(private val outline: DisplayOutline, private val generation: Long) : HaloRenderBackend {
+    private val provider = EdgePathGeometryProvider(outline)
+    private val commands = FrameCommandBuffer()
+    private val behavior = ResonanceBehavior()
+    private var plan: VisualPlanSpec? = null
+    private var field: GpuSnakeContourField? = null
+    private var shader: RuntimeShader? = null
+    private var node: RenderNode? = null
+    private var paint: Paint? = null
+    private var epoch = 0
+    private var disposed = false
+    private var failed = false
+
+    override fun updateConfig(config: HaloConfig) {
+        if (disposed) return
+        plan = VisualPlanSpec(listOf(VisualEmitterSpec(
+            geometry = GeometryRequest.DisplayOutlineContour(config.thickness, config.frame,
+                config.edgeCalibrationDp, config.cornerCalibrationDp, config.cornerShape),
+            appearance = AppearancePayload(config.color, 1f, config.thickness, config.colorMode, emptyList()),
+            operation = PrimaryVisualOperation.ResonanceFluidContour)))
+    }
+    override fun invalidateSurface() { if (!disposed) { epoch++; releaseResources() } }
+    override fun render(target: HaloRenderTarget, frame: RenderFrame): RenderOutcome {
+        if (disposed || failed || !ResonanceRuntime.isCurrent(generation)) return RenderOutcome.Unsupported("Resonance GPU session ended")
+        val canvas = (target as? CanvasRenderTarget)?.canvas ?: return RenderOutcome.Unsupported("GPU target unavailable")
+        if (!canvas.isHardwareAccelerated) return RenderOutcome.Unsupported("Resonance requires hardware GPU rendering")
+        val currentPlan = plan ?: return RenderOutcome.Unsupported("Resonance visual plan unavailable")
+        FrameCommandCompiler.compile(currentPlan, frame, commands)
+        val command = commands[0]
+        if (commands.size != 1 || command.operation != PrimaryVisualOperation.ResonanceFluidContour) return RenderOutcome.Unsupported("Invalid Resonance operation")
+        val key = GpuSnakeContourField.key(outline, epoch, frame.viewportWidth, frame.viewportHeight,
+            command.geometry as GeometryRequest.DisplayOutlineContour).copy(format = 2)
+        var save = -1
+        return try {
+            val current = field?.takeIf { it.key == key } ?: run {
+                releaseResources()
+                val built = GpuSnakeContourField.build(provider, key) ?: return RenderOutcome.Unsupported("Display geometry exceeds Resonance GPU budget")
+                field = built
+                built
+            }
+            if (shader == null) {
+                shader = RuntimeShader(FLUID_SHADER).also { it.setInputBuffer("field", current.input) }
+                paint = Paint().apply { shader = this@GpuResonanceRenderBackend.shader }
+                node = RenderNode("ResonanceFluidContour")
+            }
+            behavior.update(command.resonanceFeatures, generation, frame.frameTimeNanos)
+            shader!!.setFloatUniform("audio", behavior.low, behavior.mid, behavior.high, behavior.loudness)
+            val beatResponse = ResonanceController.state.value.beatResponse
+            shader!!.setFloatUniform("spectrum0", behavior.band(0, beatResponse), behavior.band(1, beatResponse),
+                behavior.band(2, beatResponse), behavior.band(3, beatResponse))
+            shader!!.setFloatUniform("spectrum1", behavior.band(4, beatResponse), behavior.band(5, beatResponse),
+                behavior.band(6, beatResponse), behavior.band(7, beatResponse))
+            shader!!.setFloatUniform("spectrum2", behavior.band(8, beatResponse), behavior.band(9, beatResponse),
+                behavior.band(10, beatResponse), behavior.band(11, beatResponse))
+            shader!!.setFloatUniform("motion", behavior.phase, behavior.impulse, behavior.buildup,
+                ResonanceController.state.value.intensity)
+            shader!!.setFloatUniform("strokeWidth", key.stroke)
+            node!!.setPosition(0, 0, key.width, key.height)
+            val recording = node!!.beginRecording(key.width, key.height)
+            try {
+                // The distance-field shader supplies its own alpha falloff.
+                // Path clipping creates an artificial hard edge in the halo.
+                recording.drawRect(0f, 0f, key.width.toFloat(), key.height.toFloat(), paint!!)
+            } finally { node!!.endRecording() }
+            save = canvas.save()
+            canvas.drawRenderNode(node!!)
+            ResonanceRuntime.gpuFrames++
+            RenderOutcome.Rendered
+        } catch (error: RuntimeException) {
+            failed = true
+            RenderOutcome.Error(error, fallbackEligible = false)
+        } finally { if (save >= 0) canvas.restoreToCount(save) }
+    }
+    private fun releaseResources() {
+        node?.discardDisplayList(); node = null
+        paint?.shader = null; paint = null; shader = null
+        field?.dispose(); field = null
+    }
+    override fun dispose() { if (!disposed) { disposed = true; releaseResources(); plan = null } }
+
+    companion object {
+        const val FLUID_SHADER = """
+            uniform shader field;
+            uniform float4 audio;
+            uniform float4 motion;
+            uniform float4 spectrum0;
+            uniform float4 spectrum1;
+            uniform float4 spectrum2;
+            uniform float strokeWidth;
+
+            float progress(float4 v) {
+                return (floor(v.g * 255.0 + .5) * 256.0 + floor(v.b * 255.0 + .5)) / 65535.0;
+            }
+            float unwrap(float a, float r) { return r + fract(a - r + .5) - .5; }
+
+            half4 main(float2 p) {
+                float2 base = floor(p - .5) + .5;
+                float2 t = fract(p - .5);
+                float4 a = float4(field.eval(base));
+                if (a.r * 40.0 > 39.0) return half4(0);
+                float4 b = float4(field.eval(base + float2(1.0, 0.0)));
+                float4 c = float4(field.eval(base + float2(0.0, 1.0)));
+                float4 d = float4(field.eval(base + float2(1.0, 1.0)));
+                float distance = mix(mix(a.r, b.r, t.x), mix(c.r, d.r, t.x), t.y) * 40.0;
+                float r = progress(a);
+                float q = fract(mix(mix(r, unwrap(progress(b), r), t.x),
+                    mix(unwrap(progress(c), r), unwrap(progress(d), r), t.x), t.y));
+
+                // Fixed, overlapping frequency ownership. The palette never travels.
+                // Violet: retain 88% of the approved raw response and apply only 12%
+                // of Sharaga's stronger suppression; preserve peaks and ownership.
+                float w0 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.0416667 + 0.5) - 0.5))) * clamp(spectrum0.x, 0.0, 1.0);
+                float w1 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.1250000 + 0.5) - 0.5))) * clamp(spectrum0.y, 0.0, 1.0);
+                float w2 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.2083333 + 0.5) - 0.5))) * clamp(spectrum0.z, 0.0, 1.0);
+                float w3 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.2916667 + 0.5) - 0.5))) * clamp(spectrum0.w, 0.0, 1.0);
+                float w4 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.3750000 + 0.5) - 0.5))) * mix(clamp(spectrum1.x, 0.0, 1.0), smoothstep(0.22, 0.90, clamp(spectrum1.x, 0.0, 1.0)), 0.12);
+                float w5 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.4583333 + 0.5) - 0.5))) * mix(clamp(spectrum1.y, 0.0, 1.0), smoothstep(0.22, 0.90, clamp(spectrum1.y, 0.0, 1.0)), 0.12);
+                float w6 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.5416667 + 0.5) - 0.5))) * mix(clamp(spectrum1.z, 0.0, 1.0), smoothstep(0.22, 0.90, clamp(spectrum1.z, 0.0, 1.0)), 0.12);
+                float w7 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.6250000 + 0.5) - 0.5))) * mix(clamp(spectrum1.w, 0.0, 1.0), smoothstep(0.22, 0.90, clamp(spectrum1.w, 0.0, 1.0)), 0.12);
+                float w8 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.7083333 + 0.5) - 0.5))) * clamp(spectrum2.x, 0.0, 1.0);
+                float w9 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.7916667 + 0.5) - 0.5))) * clamp(spectrum2.y, 0.0, 1.0);
+                float w10 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.8750000 + 0.5) - 0.5))) * clamp(spectrum2.z, 0.0, 1.0);
+                float w11 = (1.0 - smoothstep(0.030, 0.128, abs(fract(q - 0.9583333 + 0.5) - 0.5))) * clamp(spectrum2.w, 0.0, 1.0);
+                float spectral = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7 + w8 + w9 + w10 + w11;
+                float3 weightedColor =
+                    float3(0.02,0.88,0.77) * w0 +
+                    float3(0.02,0.88,0.77) * w1 +
+                    float3(0.02,0.88,0.77) * w2 +
+                    float3(0.02,0.88,0.77) * w3 +
+                    float3(0.72,0.14,0.98) * w4 +
+                    float3(0.72,0.14,0.98) * w5 +
+                    float3(0.72,0.14,0.98) * w6 +
+                    float3(0.72,0.14,0.98) * w7 +
+                    float3(1,0.58,0.18) * w8 +
+                    float3(1,0.58,0.18) * w9 +
+                    float3(1,0.58,0.18) * w10 +
+                    float3(1,0.58,0.18) * w11;
+                float3 tint = weightedColor / max(spectral, .00001);
+
+                float bass = clamp(audio.x, 0.0, 1.0);
+                float loudness = clamp(audio.w, 0.0, 1.0);
+                float impulse = clamp(motion.y, 0.0, 1.0);
+                float intensity = clamp(motion.w, 0.0, 1.0);
+                const float TAU = 6.283185;
+
+                // Local moving pockets are deliberately nonuniform, even at full gain.
+                // Integer phase windings remain seamless across phase 1 -> 0.
+                float waveA = .5 + .5 * sin(TAU * (q * 7.0 - motion.x * 2.0));
+                float waveB = .5 + .5 * sin(TAU * (q * 13.0 + motion.x));
+                // Wider moving pockets with no discontinuous onset or baseline neon strip.
+                float texture = .12 + .60 * pow(waveA, 3.0) + .40 * pow(waveB, 4.0);
+                // Onsets brighten existing continuous waves; never teleport a new
+                // narrow highlight to the current phase position.
+                // Every spectral band drives its own light amplitude. A quiet band can
+                // almost disappear; active frequencies deliver high-contrast flashes.
+                // Normalize overlaps rather than clipping their sum to constant 1.
+                float spectralMix = max(w0, max(w1, max(w2, max(w3,
+                    max(w4, max(w5, max(w6, max(w7,
+                    max(w8, max(w9, max(w10, w11)))))))))));
+                float localEnergy = clamp(spectralMix, 0.0, 1.0);
+                // Preserve low-volume sensitivity after the absolute-level gate.
+                // The earlier squared threshold suppressed normal audio twice.
+                // Quiet frequencies stay subdued; strong peaks retain full visual range.
+                // Bands now contain transient energy above their slow baseline.
+                // A small floor remains, while the visual peak is driven by beats.
+                float bandFlash = smoothstep(.035, .68, localEnergy);
+                float onsetShape = .30 + .70 * waveA;
+                float peak = bandFlash * texture * (1.0 + .55 * impulse * onsetShape);
+
+                // Strong local width swelling, but never deform the actual contour.
+                // Resonance-only 40px SDF allows a significantly wider, soft optical mass.
+                // Local energy controls source expansion, not contour displacement.
+                float width = clamp(strokeWidth * (.18 + .32 * bass) +
+                    peak * (13.0 + 11.0 * bass) +
+                    bandFlash * 7.0, 1.5, 32.0);
+                float outside = max(0.0, distance - width * .5);
+                float core = 1.0 - smoothstep(width * .5 - 3.2, width * .5 + 4.8, distance);
+                // Gaussian tails become visually zero before the 40px SDF limit.
+                // Exponential falloff remained visible when the hard cutoff hit.
+                float nearRadius = 5.4 + 1.4 * bandFlash;
+                float outerRadius = 8.4 + 1.0 * bandFlash;
+                float nearHalo = exp(-pow(outside / nearRadius, 2.0)) * 1.12;
+                float outerHalo = exp(-pow(outside / outerRadius, 2.0)) * .88;
+                float fade = 1.0 - smoothstep(36.0, 39.0, distance);
+
+                // Peak-local intensity preserves dark passages even at slider maximum.
+                // Glow follows the same band envelope as width. Loudness is a subtle
+                // multiplier, never a baseline that keeps inactive sectors lit.
+                float light = (core * .82 + nearHalo + outerHalo) *
+                    peak * (.45 + .55 * loudness) *
+                    (1.0 + .65 * bandFlash) * intensity * 4.5;
+                float alpha = (1.0 - exp(-light * 1.10)) * fade;
+                return half4(half3(tint * alpha), half(alpha));
+            }
+        """
+    }
+}

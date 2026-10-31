@@ -95,6 +95,8 @@ internal class HaloView(
     private var preferenceScope: CoroutineScope? = null
     private var preferenceEpoch = 0L
     private var debugHost = false
+    private var resonanceGeneration = 0L
+    private var resonanceFailure: ((String) -> Unit)? = null
     private var pipelineDisposed = false
 
     private fun isolateDebugHost() {
@@ -109,6 +111,7 @@ internal class HaloView(
     }
 
     private fun switchProductionEngine(engine: RenderingEngine, force: Boolean = false) {
+        if (resonanceGeneration != 0L) { productionEngine = engine; return }
         if (debugHost || (!force && productionEngine == engine)) return
         renderingPipeline.dispose()
         canvasRenderBackend = CanvasRenderBackend(currentConfig, outline)
@@ -174,6 +177,7 @@ internal class HaloView(
     private val frameTimeSampler = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
             lastFrameTimeNanos = frameTimeNanos
+            if (resonanceGeneration != 0L) invalidate()
             if (isAttachedToWindow) {
                 Choreographer.getInstance().postFrameCallback(this)
             }
@@ -223,6 +227,46 @@ internal class HaloView(
         }
 
         invalidate()
+    }
+
+    /** Continuous Resonance uses this host's existing VSYNC sampler, with no animator or fallback. */
+    internal fun startResonance(generation: Long, onFailure: (String) -> Unit) {
+        if (!com.yp.luminote.app.resonance.ResonanceRuntime.isCurrent(generation)) return
+        cancelAnimation()
+        preferenceEpoch++
+        preferenceScope?.cancel(); preferenceScope = null
+        resonanceGeneration = generation
+        resonanceFailure = onFailure
+        renderingPipeline.dispose()
+        renderingPipeline = HaloRenderingPipeline(com.yp.luminote.app.rendering.gpu.GpuResonanceRenderBackend(outline, generation))
+        renderingPipeline.updateConfig(currentConfig)
+        pipelineDisposed = false
+        invalidate()
+    }
+
+    internal fun stopResonance() {
+        if (resonanceGeneration == 0L) return
+        resonanceGeneration = 0L
+        resonanceFailure = null
+        switchProductionEngine(productionEngine, force = true)
+        if (isAttachedToWindow) observeProductionPreference()
+    }
+
+    private fun observeProductionPreference() {
+        if (debugHost || preferenceScope != null) return
+        val epoch = ++preferenceEpoch
+        preferenceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { scope ->
+            scope.launch {
+                LuminoteSettingsRepository(context.applicationContext).settings
+                    .map { it.renderingEngine }.distinctUntilChanged()
+                    .catch { error ->
+                        Log.e(TAG, "Rendering preference unavailable; retaining Canvas", error)
+                        emit(RenderingEngine.CANVAS)
+                    }.collect { engine ->
+                        if (epoch == preferenceEpoch && isAttachedToWindow && !debugHost) switchProductionEngine(engine)
+                    }
+            }
+        }
     }
 
     /**
@@ -539,21 +583,15 @@ internal class HaloView(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
 
-        if (!debugHost) {
-            if (pipelineDisposed) switchProductionEngine(productionEngine, force = true)
-            val epoch = ++preferenceEpoch
-            preferenceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate).also { scope ->
-                scope.launch {
-                    LuminoteSettingsRepository(context.applicationContext).settings
-                        .map { it.renderingEngine }.distinctUntilChanged()
-                        .catch { error ->
-                            Log.e(TAG, "Rendering preference unavailable; retaining Canvas", error)
-                            emit(RenderingEngine.CANVAS)
-                        }.collect { engine ->
-                            if (epoch == preferenceEpoch && isAttachedToWindow && !debugHost) switchProductionEngine(engine)
-                        }
-                }
+        if (resonanceGeneration != 0L) {
+            if (pipelineDisposed) {
+                renderingPipeline = HaloRenderingPipeline(com.yp.luminote.app.rendering.gpu.GpuResonanceRenderBackend(outline, resonanceGeneration))
+                renderingPipeline.updateConfig(currentConfig)
+                pipelineDisposed = false
             }
+        } else if (!debugHost) {
+            if (pipelineDisposed) switchProductionEngine(productionEngine, force = true)
+            observeProductionPreference()
         } else if (pipelineDisposed) {
             pipelineDisposed = false
             when {
@@ -627,6 +665,8 @@ internal class HaloView(
         renderFrame.effectPhase = frozen?.phase ?: animationState.phase
         renderFrame.gradientPhase = frozen?.gradientPhase ?: animationState.gradientPhase
         renderFrame.frameTimeNanos = frozen?.frameTimeNanos ?: lastFrameTimeNanos
+        renderFrame.resonanceFeatures = com.yp.luminote.app.resonance.ResonanceRuntime.snapshot
+        if (resonanceGeneration != 0L) renderFrame.animationProgress = 1f
         renderFrame.viewportWidth = width
         renderFrame.viewportHeight = height
         renderFrame.intent = if (gpuWitnessEnabledForDebug) {
@@ -649,7 +689,17 @@ internal class HaloView(
         val outcome = canvasTarget.withCanvas(canvas) {
             renderingPipeline.render(canvasTarget, renderFrame)
         }
+        if (resonanceGeneration != 0L && outcome != RenderOutcome.Rendered) {
+            val failure = resonanceFailure
+            resonanceFailure = null
+            post { failure?.invoke(when (outcome) {
+                is RenderOutcome.Unsupported -> "GPU unavailable: ${outcome.reason}"
+                is RenderOutcome.Error -> "Resonance GPU execution failed: ${outcome.cause.javaClass.simpleName}"
+                else -> "Resonance GPU stopped"
+            }) }
+        }
         if (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0 &&
+            resonanceGeneration == 0L &&
             !gpuWitnessEnabledForDebug && !gpuPulseEnabledForDebug && !gpuSnakeEnabledForDebug && !gpuImpulseEnabledForDebug && !gpuSupernovaEnabledForDebug && outcome == RenderOutcome.Rendered) {
             debugCanvasRenderedFrames++
         }

@@ -117,6 +117,7 @@ internal class AppearancePayload(
 
 /** One family-specific operation per emitter keeps existing specialized renderers intact. */
 internal sealed interface PrimaryVisualOperation {
+    object ResonanceFluidContour : PrimaryVisualOperation
     object FullContourPulse : PrimaryVisualOperation
     data class TravelingLuminousSegment(val lengthFraction: Float) : PrimaryVisualOperation {
         init {

@@ -1,0 +1,85 @@
+package com.yp.luminote.app.resonance
+
+import kotlin.math.*
+
+/** No callback audio arrays escape the visualization worker. Only these bounded, immutable statistics are published. */
+internal data class AudioFeatureSnapshot(
+    val generation: Long = 0L,
+    val timestampNanos: Long = 0L,
+    val low: Float = 0f,
+    val mid: Float = 0f,
+    val high: Float = 0f,
+    val loudness: Float = 0f,
+    val onset: Float = 0f,
+    val trend: Float = 0f,
+    // Immutable projection into the twelve existing stationary renderer slots.
+    val spectrum: List<Float> = emptyList(),
+    val components: MusicalComponents = MusicalComponents.EMPTY
+)
+
+/** All evolution consumes HaloView VSYNC time; missing capture frames decay without an audio timer. */
+internal class ResonanceBehavior {
+    var low = 0f; private set
+    var mid = 0f; private set
+    var high = 0f; private set
+    var loudness = 0f; private set
+    var impulse = 0f; private set
+    private var impulseTarget = 0f
+    var buildup = 0f; private set
+    var phase = 0f; private set
+    private val spectralEnvelope = FloatArray(12)
+    // Slowly learned spectral floor: sustained instruments should not keep
+    // the border fully lit. The moving difference is the rhythmic transient.
+    private val spectralFloor = FloatArray(12)
+    private val reactiveSpectrum = FloatArray(12)
+    fun band(index: Int, beatResponse: Float): Float {
+        val balance = beatResponse.coerceIn(0f, 1f)
+        // Low-frequency components are often sustained by NORMALIZED capture.
+        // Reduce only the persistent teal floor; fresh bass transients remain
+        // full strength and the Beat Response slider keeps its existing range.
+        val sustained = if (index in 0..3) {
+            val transient = max(0f, spectralEnvelope[index] - spectralFloor[index])
+            (.46f * spectralEnvelope[index] + 1.10f * transient).coerceIn(0f, 1f)
+        } else spectralEnvelope[index]
+        return sustained * (1f - balance) + reactiveSpectrum[index] * balance
+    }
+    private var lastTime = 0L
+    private var consumedSnapshot = 0L
+
+    fun update(snapshot: AudioFeatureSnapshot, generation: Long, timeNanos: Long) {
+        val dt = if (lastTime == 0L) 0f else ((timeNanos - lastTime) / 1e9f).coerceIn(0f, .1f)
+        lastTime = timeNanos
+        val age = ((timeNanos - snapshot.timestampNanos) / 1e9f).coerceAtLeast(0f)
+        val freshness = if (snapshot.generation != generation) 0f else exp(-max(0f, age - .15f) * 5f)
+        val blend = 1f - exp(-dt * 18f)
+        low += (snapshot.low * freshness - low) * blend
+        mid += (snapshot.mid * freshness - mid) * blend
+        high += (snapshot.high * freshness - high) * blend
+        loudness += (snapshot.loudness * freshness - loudness) * blend
+        for (i in spectralEnvelope.indices) {
+            val target = (snapshot.spectrum.getOrNull(i) ?: 0f).coerceIn(0f, 1f) * freshness
+            // Faster attack for strong musical changes, gentler release to prevent flicker.
+            val bandRate = if (target > spectralEnvelope[i]) 38f else 14f
+            spectralEnvelope[i] += (target - spectralEnvelope[i]) * (1f - exp(-dt * bandRate))
+            // Track the ambient energy much slower than the audio envelope.
+            // Bass/vocals remain spatially anchored, but long notes dim.
+            val floorRate = if (spectralEnvelope[i] > spectralFloor[i]) 1.25f else 2.0f
+            spectralFloor[i] += (spectralEnvelope[i] - spectralFloor[i]) * (1f - exp(-dt * floorRate))
+            val transient = max(0f, spectralEnvelope[i] - spectralFloor[i])
+            val reactive = (.09f * spectralEnvelope[i] + 2.7f * transient).coerceIn(0f, 1f)
+            reactiveSpectrum[i] += (reactive - reactiveSpectrum[i]) *
+                (1f - exp(-dt * if (reactive > reactiveSpectrum[i]) 40f else 13f))
+        }
+        impulseTarget *= exp(-dt * 5f)
+        if (snapshot.generation == generation && snapshot.timestampNanos != consumedSnapshot) {
+            impulseTarget = max(impulseTarget, snapshot.onset * freshness)
+            consumedSnapshot = snapshot.timestampNanos
+        }
+        // Onset is delivered asynchronously; interpolate it at VSYNC rather
+        // than injecting a full-strength one-frame step into the shader.
+        val impulseRate = if (impulseTarget > impulse) 12f else 7f
+        impulse += (impulseTarget - impulse) * (1f - exp(-dt * impulseRate))
+        buildup += ((loudness + max(0f, snapshot.trend) * freshness) * .65f - buildup) * (1f - exp(-dt * 1.4f))
+        phase = (phase + dt * (.06f + .17f * impulse + .05f * buildup)) % 1f
+    }
+}
