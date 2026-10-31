@@ -73,7 +73,7 @@ fun AmbientHaloScreen(
         settings.ambientEffectSpeed,
         settings.ambientGradientFlowSpeed
     ) {
-        if (settings.ambientEnabled) {
+        if (settings.ambientEnabled && HaloEffectController.permitsPresentation(com.yp.luminote.app.effects.model.HaloRenderMode.AMBIENT)) {
             HaloEffectController.ambient(context, settings)
         }
     }

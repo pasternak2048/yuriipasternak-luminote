@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class LuminoteApplication : Application() {
     override fun onCreate() {
         super.onCreate()
+        com.yp.luminote.app.overlay.service.HaloEffectController.initialize(this)
         val diagnostics = DiagnosticsRepository.get(this)
         diagnostics.inspectPreviousExit()
         val previous = Thread.getDefaultUncaughtExceptionHandler()

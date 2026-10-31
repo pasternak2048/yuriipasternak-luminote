@@ -82,10 +82,15 @@ class LuminoteNotificationListener :
     private val activeNotificationsLock =
         Any()
 
+    private val snapshotAccess = NotificationListenerSnapshotAccess { error ->
+        Log.w(TAG, "Notification snapshot access ended before disconnect callback", error)
+    }
+    private val refreshOrder = NotificationListenerRefreshOrder()
+
     private val reminderCoordinator by lazy {
         HaloReminderCoordinator(
             dispatchCycle = { packages ->
-                val settings = cachedSettings.get() ?: return@HaloReminderCoordinator false
+                val settings = effectiveSettings() ?: return@HaloReminderCoordinator false
                 HaloOverlayService.start(
                     this,
                     HaloOverlayService.createReminderIntent(
@@ -115,59 +120,22 @@ class LuminoteNotificationListener :
 
         serviceScope.launch {
             settingsRepository.settings.collect { settings ->
-                val previous =
-                    previousSettings
+                refreshOrder.run {
+                    val previous =
+                        previousSettings
 
-                // Always update/cancel the reminder lifecycle before mode-specific early returns.
-                reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
+                    // Always update/cancel the reminder lifecycle before mode-specific early returns.
+                    reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
 
-                if (settings.ambientEnabled) {
-                    com.yp.luminote.app.overlay.service.HaloEffectController.ambient(this@LuminoteNotificationListener, settings)
-
+                    // Mode lifecycle is owned by HaloEffectController. A stale IO collector
+                    // must never stop a newer foreground-selected Resonance session.
                     previousSettings = settings
                     cachedSettings.set(settings)
                     settingsReady.complete(settings)
 
-                    return@collect
+                    if (settings.notificationProcessingEnabled) refreshActiveNotifications(settings)
+                    reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
                 }
-
-                if (!settings.haloEnabled) {
-                    if (
-                        previous?.ambientEnabled == true ||
-                        previous?.haloEnabled == true
-                    ) {
-                        HaloOverlayService.start(
-                            this@LuminoteNotificationListener,
-                            HaloOverlayService.createStopAllIntent(
-                                this@LuminoteNotificationListener
-                            )
-                        )
-                    }
-
-                    previousSettings = settings
-                    cachedSettings.set(settings)
-                    settingsReady.complete(settings)
-
-                    return@collect
-                }
-
-                if (
-                    previous?.ambientEnabled == true
-                ) {
-                    HaloOverlayService.start(
-                        this@LuminoteNotificationListener,
-                        HaloOverlayService.createStopAmbientIntent(
-                            this@LuminoteNotificationListener
-                        )
-                    )
-                }
-
-                previousSettings = settings
-                cachedSettings.set(settings)
-                settingsReady.complete(settings)
-
-                refreshActiveNotifications(settings)
-                reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
             }
         }
 
@@ -180,23 +148,17 @@ class LuminoteNotificationListener :
     override fun onListenerConnected() {
         super.onListenerConnected()
         Diagnostics.record(DiagnosticEventId.NOTIFICATION_LISTENER_CONNECTED)
-
-        val activeNotificationsSnapshot =
-            activeNotifications
-
-        val rankingMap =
-            currentRanking
+        val connection = snapshotAccess.onConnected()
 
         serviceScope.launch {
-            val settings =
-                cachedSettings.get()
-                    ?: settingsReady.await()
-
-            restoreActiveNotifications(
-                activeNotificationsSnapshot,
-                rankingMap,
-                settings
-            )
+            // Do not wait for initial settings while holding the publication lock.
+            if (cachedSettings.get() == null) settingsReady.await()
+            refreshOrder.run {
+                val settings = effectiveSettings() ?: return@run
+                if (refreshActiveNotifications(settings, connection)) {
+                    reminderCoordinator.update(settings) { relevantReminderPackages(settings) }
+                }
+            }
         }
 
         Log.d(
@@ -207,6 +169,7 @@ class LuminoteNotificationListener :
 
     override fun onListenerDisconnected() {
         super.onListenerDisconnected()
+        snapshotAccess.onDisconnected()
         Diagnostics.record(DiagnosticEventId.NOTIFICATION_LISTENER_DISCONNECTED)
 
         Log.d(
@@ -232,8 +195,10 @@ class LuminoteNotificationListener :
                     "postTime=${sbn.postTime}"
         )
 
+        val settings = effectiveSettings()
+
         if (
-            cachedSettings.get()?.ambientEnabled ==
+            settings?.ambientEnabled ==
             true
         ) {
             Log.d(
@@ -245,7 +210,7 @@ class LuminoteNotificationListener :
         }
 
         if (
-            cachedSettings.get()?.haloEnabled ==
+            settings?.notificationProcessingEnabled ==
             false
         ) {
             Log.d(
@@ -337,9 +302,6 @@ class LuminoteNotificationListener :
             }
         }
 
-        val settings =
-            cachedSettings.get()
-
         if (settings != null) {
             trackRelevantNotification(
                 sbn = sbn,
@@ -377,8 +339,9 @@ class LuminoteNotificationListener :
          * Only the first callback after listener startup can take this path.
          */
         serviceScope.launch {
-            val readySettings =
-                settingsReady.await()
+            val initiallyReady = settingsReady.await()
+            val readySettings = effectiveSettings() ?: initiallyReady
+            if (!readySettings.notificationProcessingEnabled) return@launch
 
             trackRelevantNotification(
                 sbn = sbn,
@@ -579,13 +542,16 @@ class LuminoteNotificationListener :
      * notifications are relevant to KEEP_VISIBLE, but inspecting them here
      * must not consume the next MediaChanged live event.
      */
+    private fun effectiveSettings(): LuminoteSettings? =
+        com.yp.luminote.app.overlay.service.HaloEffectController.currentModeSettings(cachedSettings.get())
+
     private fun restoreActiveNotifications(
         notifications: Array<StatusBarNotification>,
         rankingMap: NotificationListenerService.RankingMap,
         settings: LuminoteSettings
     ) {
         if (
-            !settings.haloEnabled ||
+            !settings.notificationProcessingEnabled ||
             settings.ambientEnabled
         ) {
             return
@@ -670,13 +636,13 @@ class LuminoteNotificationListener :
      * guarantee, so rebuild the in-memory snapshot from the system list.
      */
     private fun refreshActiveNotifications(
-        settings: LuminoteSettings
-    ) {
-        restoreActiveNotifications(
-            notifications = activeNotifications,
-            rankingMap = currentRanking,
-            settings = settings
-        )
+        settings: LuminoteSettings,
+        connection: Long? = null
+    ): Boolean {
+        val snapshot = snapshotAccess.read(connection) { activeNotifications to currentRanking } ?: return false
+        return snapshotAccess.applyIfCurrent(snapshot) { (notifications, rankingMap) ->
+            restoreActiveNotifications(notifications, rankingMap, settings)
+        }
     }
 
     private fun hasActiveNotifications(): Boolean =
@@ -801,8 +767,7 @@ class LuminoteNotificationListener :
                 activeNotificationPackages.isEmpty()
             }
 
-        val settings =
-            cachedSettings.get()
+        val settings = effectiveSettings()
 
         if (noRelevantNotifications) {
             reminderCoordinator.onNoRelevantNotifications()
@@ -810,7 +775,7 @@ class LuminoteNotificationListener :
 
         if (
             settings?.ambientEnabled == true ||
-            settings?.haloEnabled == false
+            settings?.notificationProcessingEnabled == false
         ) {
             return
         }
@@ -838,6 +803,7 @@ class LuminoteNotificationListener :
                 )
 
     override fun onDestroy() {
+        snapshotAccess.onDisconnected()
         synchronized(dedupLock) {
             recentNotifications.clear()
             recentNotificationOrder.clear()

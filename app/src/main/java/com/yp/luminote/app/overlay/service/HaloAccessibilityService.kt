@@ -1,8 +1,12 @@
 package com.yp.luminote.app.overlay.service
+import com.yp.luminote.app.overlay.coordination.ResonancePresentationLease
+import com.yp.luminote.app.resonance.ResonanceRuntime
+import com.yp.luminote.app.resonance.ResonanceController
 import com.yp.luminote.app.effects.model.HaloConfig
 import com.yp.luminote.app.overlay.coordination.AnimationPropertyIntentCodec
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.overlay.host.HaloView
+import com.yp.luminote.app.overlay.host.removeOverlayWindowImmediately
 import com.yp.luminote.app.overlay.host.OverlayDisplayMetrics
 import com.yp.luminote.app.overlay.host.finiteDurationFor
 import com.yp.luminote.app.animation.HaloAnimation
@@ -64,6 +68,8 @@ class HaloAccessibilityService : AccessibilityService() {
     private var activeConfig:
             HaloConfig? = null
 
+    private var resonanceLease: ResonancePresentationLease? = null
+
     private var previewMode =
         false
 
@@ -106,12 +112,15 @@ class HaloAccessibilityService : AccessibilityService() {
                 intent: Intent
             ) {
                 when (intent.action) {
-                    Intent.ACTION_SCREEN_OFF ->
+                    Intent.ACTION_SCREEN_OFF -> {
+                        if (resonanceLease != null) removeResonanceWindow()
                         pausePersistentAmbientForScreenOff()
+                    }
 
                     Intent.ACTION_SCREEN_ON ->
                         handler.post {
                             resumePersistentAmbientAfterScreenOn()
+                            HaloOverlayService.resumePendingResonance(retryAccessibility = true)
                         }
                 }
             }
@@ -147,6 +156,8 @@ class HaloAccessibilityService : AccessibilityService() {
 
         activeService =
             this
+
+        HaloOverlayService.resumePendingResonance(retryAccessibility = true)
 
         HaloOverlayService
             .takePendingApplicationAmbientIntent()
@@ -192,6 +203,8 @@ class HaloAccessibilityService : AccessibilityService() {
                 null
         }
 
+        removeResonanceWindow()
+        HaloOverlayService.resumePendingResonance()
         handler.removeCallbacks(
             removeOverlayTask
         )
@@ -227,13 +240,15 @@ class HaloAccessibilityService : AccessibilityService() {
         onFiniteAnimationCompleted:
         (() -> Unit)? = null
     ) {
+        if (!HaloEffectController.isCurrentModeCommand(intent)) return
         Diagnostics.record(DiagnosticEventId.ACCESSIBILITY_PRESENTATION_REQUESTED)
-        if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_PREVIEW, false) == true ||
-            intent?.getStringExtra(HaloOverlayService.EXTRA_CALIBRATION_TOKEN) != null) {
-            HaloOverlayService.suspendResonancePresentation()
-        }
-        if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_AMBIENT, false) == true &&
-            com.yp.luminote.app.resonance.ResonanceRuntime.activeGeneration != 0L) return
+        if (HaloEffectController.hasResonance(this) &&
+            intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_ALL, false) != true &&
+            intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_AMBIENT, false) != true &&
+            intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_PREVIEW, false) != true &&
+            intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_CALIBRATION, false) != true &&
+            intent?.getBooleanExtra(HaloOverlayService.EXTRA_PAUSE_CALIBRATION, false) != true) return
+        if (resonanceLease != null && intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_ALL, false) != true) return
         val commandCalibrationToken = intent?.getStringExtra(HaloOverlayService.EXTRA_CALIBRATION_TOKEN)
         if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_STOP_CALIBRATION, false) == true) {
             if (CalibrationPreviewSession.isCurrent(commandCalibrationToken)) {
@@ -267,6 +282,7 @@ class HaloAccessibilityService : AccessibilityService() {
                 false
             ) == true
         ) {
+            ResonanceController.stop(this)
             cancelQueuedPlaybackForGlobalStop()
             HaloOverlayService.cancelTransientPlaybackForGlobalStop()
             HaloReminderRuntime.onReminderPlaybackCancelled(
@@ -335,6 +351,8 @@ class HaloAccessibilityService : AccessibilityService() {
                 intent
             )
 
+        if (!HaloEffectController.permitsPresentation(config.renderMode,
+                intent?.getBooleanExtra(HaloOverlayService.EXTRA_PREVIEW, false) == true)) return
         val palette =
             intent?.getIntArrayExtra(
                 HaloOverlayService.EXTRA_PALETTE_COLORS
@@ -649,6 +667,66 @@ class HaloAccessibilityService : AccessibilityService() {
         }
     }
 
+    private fun suspendOrdinaryWindow() {
+        handler.removeCallbacks(removeOverlayTask)
+        queuedCompletionLease.invalidate(queuedRequestToken)
+        queuedRequestToken++
+        cancelQueuedWatchdog()
+        activeQueuedCompletion = null
+        activeQueuedBeforeStartFailure = null
+        activeQueuedAfterStartAbandoned = null
+        queuedRendererStarted = false
+        pendingCalibrationIntent = null
+        lastCalibrationIntent = null
+        calibrationToken = null
+        removeOverlay(immediately = true)
+    }
+
+    private fun removeResonanceWindow() {
+        val lease = resonanceLease ?: return
+        HaloEffectController.invalidateResonancePresentation(this, lease)
+        resonanceLease = null
+        overlayView?.stopResonance()
+        removeOverlay(immediately = true)
+    }
+
+    private fun attachResonance(config: HaloConfig, lease: ResonancePresentationLease): Boolean {
+        if (!ResonanceRuntime.isCurrent(lease.generation) || !HaloEffectController.ownsResonancePresentation(this, lease)) return false
+        removeResonanceWindow()
+        suspendOrdinaryWindow()
+        val display = displayManager.getDisplay(Display.DEFAULT_DISPLAY) ?: return false
+        val metrics = OverlayDisplayMetrics.realMetrics(display)
+        val windowContext = createDisplayContext(display).createWindowContext(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY, null)
+        windowManager = windowContext.getSystemService(WindowManager::class.java)
+        val view = HaloView(windowContext, config)
+        val params = WindowManager.LayoutParams(metrics.widthPixels, metrics.heightPixels,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS, PixelFormat.TRANSLUCENT).apply {
+            gravity = Gravity.TOP or Gravity.START
+            layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            setFitInsetsTypes(0)
+            setFitInsetsSides(0)
+            setFitInsetsIgnoringVisibility(true)
+        }
+        resonanceLease = lease
+        overlayView = view
+        layoutParams = params
+        activeConfig = config
+        return try {
+            windowManager.addView(view, params)
+            view.startResonance(lease.generation) { reason ->
+                if (resonanceLease == lease && HaloEffectController.ownsResonancePresentation(this, lease))
+                    ResonanceController.fail(lease.generation, reason)
+            }
+            true
+        } catch (_: RuntimeException) {
+            removeResonanceWindow()
+            false
+        }
+    }
+
     private fun pausePersistentAmbientForScreenOff() {
         val config =
             activeConfig
@@ -675,7 +753,7 @@ class HaloAccessibilityService : AccessibilityService() {
             ?.resumeAmbientEffect()
     }
 
-    private fun removeOverlay() {
+    private fun removeOverlay(immediately: Boolean = false) {
         val detachedCorrelation = diagnosticsOverlayCorrelation
         val queuedCompletion =
             activeQueuedCompletion
@@ -707,14 +785,11 @@ class HaloAccessibilityService : AccessibilityService() {
                 view.cancelAnimation()
 
                 runCatching {
-                    if (
-                        view.isAttachedToWindow
-                    ) {
-                        windowManager.removeView(
-                            view
-                        )
+                    if (immediately || view.isAttachedToWindow) {
+                        if (immediately) removeOverlayWindowImmediately(windowManager, view)
+                        else windowManager.removeView(view)
                     }
-                }
+                }.getOrElse { if (immediately) throw it }
             }
 
         overlayView =
@@ -869,7 +944,7 @@ class HaloAccessibilityService : AccessibilityService() {
         onAfterStartAbandoned: () -> Unit,
         onFiniteAnimationCompleted: () -> Unit
     ) {
-        HaloOverlayService.suspendResonancePresentation()
+        if (!HaloEffectController.permitsPresentation(request.config.renderMode) || HaloEffectController.hasResonance(this)) return
         if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
             pendingCalibrationIntent = lastCalibrationIntent
         }
@@ -1452,6 +1527,15 @@ class HaloAccessibilityService : AccessibilityService() {
         }
 
         internal fun isAvailable(): Boolean = activeService != null
+        internal fun suspendOrdinaryPresentation() { activeService?.suspendOrdinaryWindow() }
+        internal fun hasResonancePresentation(generation: Long): Boolean = activeService?.let { service ->
+            service.resonanceLease?.let { lease -> lease.generation == generation &&
+                HaloEffectController.ownsResonancePresentation(service, lease) && service.overlayView?.isAttachedToWindow == true } == true
+        } == true
+        internal fun presentResonance(config: HaloConfig, lease: ResonancePresentationLease): Boolean =
+            activeService?.let { service -> runCatching { service.attachResonance(config, lease) }
+                .getOrElse { service.removeResonanceWindow(); false } } == true
+        internal fun removeResonancePresentation() { activeService?.removeResonanceWindow() }
 
         internal fun hasPriorityPresentation(): Boolean = activeService?.let {
             it.activeQueuedCompletion != null || it.previewMode ||

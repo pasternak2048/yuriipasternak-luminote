@@ -51,6 +51,7 @@ enum class ThemeMode {
 enum class HaloMode {
     NOTIFICATIONS,
     AMBIENT,
+    RESONANCE,
     OFF
 }
 
@@ -119,6 +120,10 @@ data class LuminoteSettings(
 ) {
     val haloEnabled: Boolean
         get() = haloMode == HaloMode.NOTIFICATIONS
+
+    /** Collection and bounded queuing continue under Resonance presentation. */
+    val notificationProcessingEnabled: Boolean
+        get() = haloMode == HaloMode.NOTIFICATIONS || haloMode == HaloMode.RESONANCE
 
     val ambientEnabled: Boolean
         get() = haloMode == HaloMode.AMBIENT

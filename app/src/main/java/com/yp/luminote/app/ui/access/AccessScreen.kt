@@ -3,6 +3,8 @@ import com.yp.luminote.app.overlay.service.HaloAccessibilityService
 import com.yp.luminote.app.overlay.service.HaloEffectController
 
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.ContextWrapper
@@ -10,6 +12,9 @@ import android.content.Intent
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +40,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +74,11 @@ fun AccessScreen(
     val backDescription = stringResource(R.string.back)
     var refreshKey by remember { mutableIntStateOf(0) }
     var showLockScreenDisclosure by remember { mutableStateOf(false) }
+    val audioPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        refreshKey++
+        HaloEffectController.refreshSelectedModeAccess(context)
+    }
+    LaunchedEffect(context) { HaloEffectController.refreshSelectedModeAccess(context) }
 
     val settings by
     viewModel.settings.collectAsStateWithLifecycle()
@@ -76,7 +87,10 @@ fun AccessScreen(
     activity?.let {
         DisposableEffect(activity) {
             val observer = LifecycleEventObserver { _, event ->
-                if (event == Lifecycle.Event.ON_RESUME) refreshKey++
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    refreshKey++
+                    HaloEffectController.refreshSelectedModeAccess(context)
+                }
             }
             activity.lifecycle.addObserver(observer)
             onDispose { activity.lifecycle.removeObserver(observer) }
@@ -87,6 +101,12 @@ fun AccessScreen(
     val overlayAllowed = remember(refreshKey) { Settings.canDrawOverlays(context) }
     val notificationAccessAllowed = remember(refreshKey) { hasNotificationAccess(context) }
     val lockScreenAccessAllowed = remember(refreshKey) { hasLockScreenAccess(context) }
+    val audioAllowed = remember(refreshKey) {
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    }
+    val openAppSettings = {
+        context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, "package:${context.packageName}".toUri()))
+    }
 
     val haloReady =
         overlayAllowed &&
@@ -165,6 +185,14 @@ fun AccessScreen(
                 }
             )
 
+            Spacer(modifier = Modifier.height(12.dp))
+
+            AudioVisualizationAccess(
+                granted = audioAllowed,
+                onRequest = { audioPermission.launch(Manifest.permission.RECORD_AUDIO) },
+                onSettings = openAppSettings
+            )
+
             Spacer(modifier = Modifier.height(20.dp))
 
             AccessStatusCard(
@@ -184,6 +212,35 @@ fun AccessScreen(
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             }
         )
+    }
+}
+
+@Composable
+private fun AudioVisualizationAccess(granted: Boolean, onRequest: () -> Unit, onSettings: () -> Unit) {
+    Column {
+        AccessItem(
+            title = stringResource(R.string.audio_visualization_access),
+            description = stringResource(R.string.resonance_permission_explanation),
+            granted = granted,
+            onClick = if (granted) onSettings else onRequest
+        )
+        Text(
+            stringResource(R.string.audio_visualization_privacy),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        if (!granted) {
+            Text(
+                stringResource(R.string.audio_visualization_settings_help),
+                modifier = Modifier.padding(horizontal = 20.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = onSettings, modifier = Modifier.padding(horizontal = 8.dp)) {
+                Text(stringResource(R.string.open_android_settings))
+            }
+        }
     }
 }
 

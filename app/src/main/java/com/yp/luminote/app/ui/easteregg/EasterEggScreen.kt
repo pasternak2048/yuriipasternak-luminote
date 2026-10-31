@@ -154,7 +154,7 @@ private fun SuspendAmbientHaloForEasterEgg(ambientSettings: LuminoteSettings) {
         }
 
         onDispose {
-            if (restoreAmbientHalo) {
+            if (restoreAmbientHalo && HaloEffectController.permitsPresentation(com.yp.luminote.app.effects.model.HaloRenderMode.AMBIENT)) {
                 HaloEffectController.ambient(context, ambientSettings)
             }
         }

@@ -6,9 +6,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResonancePresentationPolicyTest {
-    @Test fun eachHigherPriorityOwnerSuppressesPresentation() {
+    @Test fun liveResonancePreemptsEveryOrdinaryOwner() {
         for (owner in 0..3) {
-            assertFalse(canPresentResonance(true, owner == 0, owner == 1, owner == 2, owner == 3))
+            assertTrue(canPresentResonance(true, owner == 0, owner == 1, owner == 2, owner == 3))
         }
     }
 
