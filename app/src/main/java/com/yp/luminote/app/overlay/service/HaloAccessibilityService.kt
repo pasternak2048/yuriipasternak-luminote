@@ -31,6 +31,8 @@ import com.yp.luminote.app.data.settings.HaloColorMode
 import com.yp.luminote.app.data.settings.HaloFrame
 import com.yp.luminote.app.data.settings.HaloAnimationStorage
 import com.yp.luminote.app.notification.HaloReminderRuntime
+import com.yp.luminote.app.diagnostics.Diagnostics
+import com.yp.luminote.app.diagnostics.DiagnosticEventId
 import kotlin.math.max
 
 /**
@@ -64,6 +66,10 @@ class HaloAccessibilityService : AccessibilityService() {
 
     private var previewMode =
         false
+
+    /* This is diagnostic-only and deliberately unrelated to renderer ownership. */
+    private var diagnosticsOverlaySequence = 0L
+    private var diagnosticsOverlayCorrelation: String? = null
 
     private var calibrationToken: String? = null
 
@@ -113,6 +119,7 @@ class HaloAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        Diagnostics.record(DiagnosticEventId.ACCESSIBILITY_SERVICE_CONNECTED)
 
         displayManager =
             getSystemService(
@@ -176,6 +183,7 @@ class HaloAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        Diagnostics.record(DiagnosticEventId.ACCESSIBILITY_SERVICE_DISCONNECTED)
         if (
             activeService ===
             this
@@ -219,6 +227,7 @@ class HaloAccessibilityService : AccessibilityService() {
         onFiniteAnimationCompleted:
         (() -> Unit)? = null
     ) {
+        Diagnostics.record(DiagnosticEventId.ACCESSIBILITY_PRESENTATION_REQUESTED)
         if (intent?.getBooleanExtra(HaloOverlayService.EXTRA_PREVIEW, false) == true ||
             intent?.getStringExtra(HaloOverlayService.EXTRA_CALIBRATION_TOKEN) != null) {
             HaloOverlayService.suspendResonancePresentation()
@@ -505,6 +514,12 @@ class HaloAccessibilityService : AccessibilityService() {
                 params
             )
 
+            diagnosticsOverlayCorrelation = "accessibility-${++diagnosticsOverlaySequence}"
+            Diagnostics.record(
+                DiagnosticEventId.ACCESSIBILITY_OVERLAY_ATTACHED,
+                correlationId = diagnosticsOverlayCorrelation
+            )
+
             if (CalibrationPreviewSession.isCurrent(calibrationToken)) {
                 view.showStaticFrame()
             } else {
@@ -512,6 +527,12 @@ class HaloAccessibilityService : AccessibilityService() {
                 scheduleRemoval(resolvedConfig)
             }
         }.onFailure {
+            Diagnostics.record(
+                DiagnosticEventId.ACCESSIBILITY_OVERLAY_FAILED,
+                severity = com.yp.luminote.app.diagnostics.DiagnosticSeverity.ERROR,
+                metadata = mapOf("errorType" to it.javaClass.simpleName),
+                correlationId = "accessibility-${++diagnosticsOverlaySequence}"
+            )
             Log.e(
                 TAG,
                 "Unable to attach accessibility halo overlay",
@@ -655,6 +676,7 @@ class HaloAccessibilityService : AccessibilityService() {
     }
 
     private fun removeOverlay() {
+        val detachedCorrelation = diagnosticsOverlayCorrelation
         val queuedCompletion =
             activeQueuedCompletion
 
@@ -697,6 +719,11 @@ class HaloAccessibilityService : AccessibilityService() {
 
         overlayView =
             null
+
+        diagnosticsOverlayCorrelation = null
+        detachedCorrelation?.let {
+            Diagnostics.record(DiagnosticEventId.ACCESSIBILITY_OVERLAY_DETACHED, correlationId = it)
+        }
 
         layoutParams =
             null
@@ -1223,12 +1250,24 @@ class HaloAccessibilityService : AccessibilityService() {
                 params
             )
 
+            diagnosticsOverlayCorrelation = "accessibility-${++diagnosticsOverlaySequence}"
+            Diagnostics.record(
+                DiagnosticEventId.ACCESSIBILITY_OVERLAY_ATTACHED,
+                correlationId = diagnosticsOverlayCorrelation
+            )
+
             startAnimation(
                 view,
                 resolvedConfig
             )
 
         }.onFailure {
+            Diagnostics.record(
+                DiagnosticEventId.ACCESSIBILITY_OVERLAY_FAILED,
+                severity = com.yp.luminote.app.diagnostics.DiagnosticSeverity.ERROR,
+                metadata = mapOf("errorType" to it.javaClass.simpleName),
+                correlationId = "accessibility-${++diagnosticsOverlaySequence}"
+            )
             Log.e(
                 TAG,
                 "Unable to attach queued accessibility halo overlay",

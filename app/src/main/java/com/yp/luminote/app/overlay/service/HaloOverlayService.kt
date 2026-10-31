@@ -1,5 +1,7 @@
 package com.yp.luminote.app.overlay.service
 import com.yp.luminote.app.effects.model.HaloConfig
+import com.yp.luminote.app.diagnostics.DiagnosticEventId
+import com.yp.luminote.app.diagnostics.Diagnostics
 import com.yp.luminote.app.effects.model.HaloRenderMode
 import com.yp.luminote.app.overlay.host.HaloView
 import com.yp.luminote.app.overlay.host.OverlayDisplayMetrics
@@ -130,6 +132,10 @@ class HaloOverlayService : Service() {
     private var resonanceConfig: HaloConfig? = null
     private var resonanceVisible = false
 
+    /* A new host gets a new diagnostics identity, so stale View callbacks cannot refresh it. */
+    private var diagnosticsOverlaySequence = 0L
+    private var diagnosticsOverlayCorrelationId: String? = null
+
     private fun resumeResonance(): Boolean {
         val generation = resonanceGeneration ?: return false
         if (!ResonanceRuntime.isCurrent(generation)) return false
@@ -209,6 +215,7 @@ class HaloOverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Diagnostics.record(DiagnosticEventId.OVERLAY_SERVICE_CREATED)
         resonanceHost = this
 
         displayManager =
@@ -621,6 +628,10 @@ class HaloOverlayService : Service() {
         onFiniteAnimationFailedBeforeStart: (() -> Unit)? = null,
         resonance: Long? = null
     ) {
+        val diagnosticsCorrelationId = "overlay-${++diagnosticsOverlaySequence}"
+        diagnosticsOverlayCorrelationId = diagnosticsCorrelationId
+        Diagnostics.record(DiagnosticEventId.RENDERING_STARTED, correlationId = diagnosticsCorrelationId)
+        Diagnostics.expectRendering(diagnosticsCorrelationId, true)
         if (resonance == null && resonanceVisible) {
             overlayView?.stopResonance()
             resonanceVisible = false
@@ -770,7 +781,8 @@ class HaloOverlayService : Service() {
         val view =
             HaloView(
                 windowContext,
-                resolvedConfig
+                resolvedConfig,
+                diagnosticsCorrelationId
             )
 
         view.setOnFiniteAnimationCompletedListener(
@@ -825,6 +837,11 @@ class HaloOverlayService : Service() {
             windowManager.addView(
                 view,
                 params
+            )
+            Diagnostics.record(
+                DiagnosticEventId.OVERLAY_ATTACHED,
+                correlationId = diagnosticsCorrelationId,
+                metadata = mapOf("mode" to resolvedConfig.renderMode.name)
             )
 
             if (hasCurrentStaticCalibration()) {
@@ -1106,6 +1123,10 @@ class HaloOverlayService : Service() {
     private fun removeOverlay(
         immediately: Boolean = false
     ) {
+        val correlationId = diagnosticsOverlayCorrelationId
+        correlationId?.let { Diagnostics.expectRendering(it, false) }
+        Diagnostics.record(DiagnosticEventId.RENDERING_STOPPED, correlationId = correlationId)
+        diagnosticsOverlayCorrelationId = null
         resonanceVisible = false
         overlayView?.let { view ->
             try {
@@ -1121,6 +1142,10 @@ class HaloOverlayService : Service() {
                             view
                         )
                     }
+                    Diagnostics.record(
+                        DiagnosticEventId.OVERLAY_DETACHED,
+                        correlationId = correlationId
+                    )
                 }
             } catch (
                 exception: Exception
@@ -1147,6 +1172,7 @@ class HaloOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        Diagnostics.record(DiagnosticEventId.OVERLAY_SERVICE_DESTROYED)
         if (resonanceHost === this) resonanceHost = null
         resonanceGeneration?.let { onResonanceFailure(it, "Overlay host was destroyed") }
         val abandonedReminder = activeQueuedAttempt?.delivery?.request?.reminderColors?.isNotEmpty() == true

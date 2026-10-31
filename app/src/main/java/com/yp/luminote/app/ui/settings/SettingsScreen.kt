@@ -7,10 +7,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,7 +32,7 @@ import com.yp.luminote.app.ui.components.LuminoteSelectionRow
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
 
 @Composable
-fun SettingsScreen(onBackClick: () -> Unit, onAppearanceClick: () -> Unit, onLanguageClick: () -> Unit, onUpdatesClick: () -> Unit, onAboutClick: () -> Unit, viewModel: LuminoteSettingsViewModel) {
+fun SettingsScreen(onBackClick: () -> Unit, onAppearanceClick: () -> Unit, onLanguageClick: () -> Unit, onUpdatesClick: () -> Unit, onDiagnosticsClick: () -> Unit, onAboutClick: () -> Unit, viewModel: LuminoteSettingsViewModel) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     SettingsPage(title = stringResource(R.string.settings), onBackClick = onBackClick) {
         LuminoteSettingsCard {
@@ -55,6 +55,7 @@ fun SettingsScreen(onBackClick: () -> Unit, onAppearanceClick: () -> Unit, onLan
         SettingsItem(stringResource(R.string.appearance), Icons.Outlined.Palette, onAppearanceClick)
         SettingsItem(stringResource(R.string.language), Icons.Outlined.Language, onLanguageClick)
         SettingsItem(stringResource(R.string.updates), Icons.Outlined.SystemUpdate, onUpdatesClick)
+        SettingsItem(stringResource(R.string.diagnostics), Icons.Outlined.Info, onDiagnosticsClick)
         SettingsItem(stringResource(R.string.about), Icons.Outlined.Info, onAboutClick)
     }
 }

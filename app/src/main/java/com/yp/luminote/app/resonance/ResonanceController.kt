@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
+import com.yp.luminote.app.diagnostics.DiagnosticEventId
+import com.yp.luminote.app.diagnostics.Diagnostics
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -103,6 +105,7 @@ object ResonanceController {
     }
     @Synchronized internal fun publish(snapshot: AudioFeatureSnapshot, analysisNanos: Long, nonzero: Boolean = snapshot.loudness > .025f) {
         if (!ResonanceRuntime.isCurrent(snapshot.generation)) return
+        Diagnostics.markActivity(ResonanceRuntime.diagnosticsCorrelationId)
         ResonanceRuntime.snapshot = snapshot
         ResonanceRuntime.analysisNanos += analysisNanos
         if (nonzero) ResonanceRuntime.nonzeroFeatureCount++
@@ -117,7 +120,10 @@ object ResonanceController {
                 nonzeroFeatureFrames = ResonanceRuntime.nonzeroFeatureCount)
         }
         ResonanceRuntime.analysisCount++
+        if (ResonanceRuntime.analysisCount % AUDIO_ACTIVITY_EVENT_INTERVAL == 0L) Diagnostics.record(DiagnosticEventId.RESONANCE_AUDIO_ACTIVITY)
     }
+
+    private const val AUDIO_ACTIVITY_EVENT_INTERVAL = 300L
 }
 
 internal object ResonanceRuntime {
@@ -129,6 +135,7 @@ internal object ResonanceRuntime {
     @Volatile var analysisNanos = 0L
     @Volatile var nonzeroFeatureCount = 0L
     @Volatile var cleanupPending = false; private set
+    @Volatile var diagnosticsCorrelationId = "resonance-0"; private set
     @Volatile private var cleanupGeneration = 0L
     fun generationForTermination() = activeGeneration.takeIf { it != 0L }
         ?: cleanupGeneration.takeIf { cleanupPending } ?: 0L
@@ -137,6 +144,7 @@ internal object ResonanceRuntime {
         val value = ++nextGeneration
         snapshot = AudioFeatureSnapshot(generation = value); gpuFrames = 0; analysisCount = 0; analysisNanos = 0; nonzeroFeatureCount = 0
         activeGeneration = value
+        diagnosticsCorrelationId = "resonance-$value"
         return value
     }
     fun isCurrent(generation: Long) = generation != 0L && activeGeneration == generation
