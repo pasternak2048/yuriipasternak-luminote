@@ -1,7 +1,6 @@
 package com.yp.luminote.app.ui.home
 import com.yp.luminote.app.overlay.service.HaloEffectController
 import com.yp.luminote.app.resonance.ResonanceController
-import com.yp.luminote.app.resonance.ResonanceStatus
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -25,7 +24,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +37,7 @@ import com.yp.luminote.app.ui.components.LuminoteSelectionControl
 import com.yp.luminote.app.ui.components.LuminoteSelectionRow
 import com.yp.luminote.app.ui.components.LuminoteSettingsCard
 import com.yp.luminote.app.viewmodel.LuminoteSettingsViewModel
+import com.yp.luminote.app.ui.resonance.ResonanceModeStatusCard
 
 @Composable
 fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick: () -> Unit,
@@ -48,22 +47,12 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val settingsLoaded by viewModel.settingsLoaded.collectAsStateWithLifecycle()
     val resonance by ResonanceController.state.collectAsStateWithLifecycle()
-    val resonanceActive = resonance.status == ResonanceStatus.STARTING || resonance.status == ResonanceStatus.WAITING_FOR_AUDIO || resonance.status == ResonanceStatus.RUNNING
-    val context = LocalContext.current
+    val resonanceAccess by HaloEffectController.resonanceAccessState.collectAsStateWithLifecycle()
     val uiMetrics = rememberLuminoteUiMetrics()
     val contentModifier = when (windowSizeClass) {
         LuminoteWindowSizeClass.COMPACT -> Modifier.fillMaxWidth()
         LuminoteWindowSizeClass.MEDIUM -> Modifier.fillMaxWidth().widthIn(max = 840.dp)
         LuminoteWindowSizeClass.EXPANDED -> Modifier.fillMaxWidth().widthIn(max = 1100.dp)
-    }
-    val onModeSelected: (HaloMode) -> Unit = { mode ->
-        ResonanceController.stop(context)
-        viewModel.setHaloMode(mode)
-        when (mode) {
-            HaloMode.AMBIENT -> HaloEffectController.ambient(context, settings.copy(haloMode = HaloMode.AMBIENT))
-            HaloMode.NOTIFICATIONS -> HaloEffectController.stopAmbient(context)
-            HaloMode.OFF -> HaloEffectController.globalOff(context)
-        }
     }
     if (!settingsLoaded) {
         Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background), Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
@@ -85,11 +74,14 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
         }
         Spacer(Modifier.height(28.dp))
         Column(contentModifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            HomeModeSelector(settings.haloMode, onModeSelected, resonanceActive, onResonanceClick)
-            if (resonanceActive) HomeAction(stringResource(R.string.resonance_title), Icons.Outlined.Tune, onResonanceClick)
+            HomeModeSelector(settings.haloMode, viewModel::setHaloMode)
             when (settings.haloMode) {
                 HaloMode.NOTIFICATIONS -> { HomeAction(stringResource(R.string.luminote_halo), Icons.Outlined.Tune, onHaloClick); HomeAction(stringResource(R.string.apps), Icons.Outlined.Apps, onAppsClick) }
                 HaloMode.AMBIENT -> HomeAction(stringResource(R.string.ambient_halo), Icons.Outlined.Notifications, onAmbientClick)
+                HaloMode.RESONANCE -> {
+                    HomeAction(stringResource(R.string.resonance_settings), Icons.Outlined.Tune, onResonanceClick)
+                    ResonanceModeStatusCard(resonanceAccess, resonance, selected = true, onAccessClick = onAccessClick)
+                }
                 HaloMode.OFF -> Unit
             }
             HomeAction(stringResource(R.string.access), Icons.Outlined.Security, onAccessClick)
@@ -98,8 +90,7 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
     }
 }
 
-@Composable private fun HomeModeSelector(mode: HaloMode, onModeSelected: (HaloMode) -> Unit,
-    resonanceActive: Boolean, onResonanceClick: () -> Unit) {
+@Composable private fun HomeModeSelector(mode: HaloMode, onModeSelected: (HaloMode) -> Unit) {
     LuminoteSettingsCard {
         Column(Modifier.padding(20.dp)) {
             Text(
@@ -110,10 +101,10 @@ fun HomeScreen(onHaloClick: () -> Unit, onAmbientClick: () -> Unit, onAppsClick:
             )
             Spacer(Modifier.height(12.dp))
             Column(Modifier.selectableGroup()) {
-                HomeModeChoice(stringResource(R.string.alerts), !resonanceActive && mode == HaloMode.NOTIFICATIONS) { onModeSelected(HaloMode.NOTIFICATIONS) }
-                HomeModeChoice(stringResource(R.string.ambient), !resonanceActive && mode == HaloMode.AMBIENT) { onModeSelected(HaloMode.AMBIENT) }
-                HomeModeChoice(stringResource(R.string.resonance_title), resonanceActive, onResonanceClick)
-                HomeModeChoice(stringResource(R.string.off), !resonanceActive && mode == HaloMode.OFF) { onModeSelected(HaloMode.OFF) }
+                HomeModeChoice(stringResource(R.string.alerts), mode == HaloMode.NOTIFICATIONS) { onModeSelected(HaloMode.NOTIFICATIONS) }
+                HomeModeChoice(stringResource(R.string.ambient), mode == HaloMode.AMBIENT) { onModeSelected(HaloMode.AMBIENT) }
+                HomeModeChoice(stringResource(R.string.resonance_title), mode == HaloMode.RESONANCE) { onModeSelected(HaloMode.RESONANCE) }
+                HomeModeChoice(stringResource(R.string.off), mode == HaloMode.OFF) { onModeSelected(HaloMode.OFF) }
             }
         }
     }

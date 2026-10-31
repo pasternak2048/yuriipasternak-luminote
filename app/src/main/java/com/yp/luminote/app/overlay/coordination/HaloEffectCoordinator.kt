@@ -1,6 +1,7 @@
 package com.yp.luminote.app.overlay.coordination
 
 import com.yp.luminote.app.effects.model.HaloRenderMode
+import com.yp.luminote.app.data.settings.HaloMode
 import java.util.ArrayDeque
 import java.util.Collections
 import java.util.IdentityHashMap
@@ -27,15 +28,75 @@ internal class HaloEffectCoordinator(private val nowMillis: () -> Long = ::monot
     private var rendererOwner: Any? = null
     private var onAttemptStarted: ((HaloEffectAttempt) -> Unit)? = null
     private var legacyRenderer = false
+    private var suspensionGeneration = 0L
+    private var selectedMode: HaloMode? = null
+    private var cleanupPending = false
+    fun setCleanupPending(pending: Boolean) {
+        cleanupPending = pending
+        if (pending && activeAttempt != null) { parkedSegment = activeAttempt!!.segment; activeAttempt = null }
+        resumeIfAllowed()
+    }
+    private var frozenAt = 0L
+    private var parkedSegment = 0
+
+    /** Desired admission is independent from capture, including missing permissions. */
+    fun selectMode(mode: HaloMode, resume: Boolean = true) {
+        val frozen = expiryFrozen()
+        selectedMode = mode
+        if (!canPresent() && activeAttempt != null) {
+            parkedSegment = activeAttempt!!.segment
+            activeAttempt = null
+        }
+        updateExpiryClock(frozen)
+        if (resume) resumeIfAllowed()
+    }
+    fun resumeSelectedMode() = resumeIfAllowed()
+    private fun canPresent() = !cleanupPending && suspensionGeneration == 0L && (selectedMode == null || selectedMode == HaloMode.NOTIFICATIONS)
+    private fun expiryFrozen() = suspensionGeneration != 0L || selectedMode == HaloMode.RESONANCE
+    private fun updateExpiryClock(wasFrozen: Boolean) {
+        if (!wasFrozen && expiryFrozen()) frozenAt = nowMillis()
+        if (wasFrozen && !expiryFrozen()) {
+            val now = nowMillis()
+            (pendingRequests.toList() + listOfNotNull(activeDelivery?.request)).forEach {
+                it.enqueuedAt += now - maxOf(frozenAt, it.enqueuedAt)
+            }
+        }
+    }
+    private fun resumeIfAllowed() {
+        if (!canPresent()) return
+        if (activeDelivery != null && activeAttempt == null) dispatchAttempt(parkedSegment, HaloEffectRoute.ACCESSIBILITY)
+        else startPendingIfIdle()
+    }
+    /** Invalidate the attempt before host cancellation; retain delivery and segment. */
+    fun suspendPresentation(generation: Long): Boolean {
+        if (generation == 0L || suspensionGeneration != 0L) return false
+        val frozen = expiryFrozen()
+        suspensionGeneration = generation
+        parkedSegment = activeAttempt?.segment ?: parkedSegment
+        activeAttempt = null
+        updateExpiryClock(frozen)
+        return true
+    }
+    fun resumePresentation(generation: Long): Boolean {
+        if (generation == 0L || suspensionGeneration != generation) return false
+        val frozen = expiryFrozen()
+        suspensionGeneration = 0L
+        updateExpiryClock(frozen)
+        resumeIfAllowed()
+        return true
+    }
+
+    fun ownsAttempt(attempt: HaloEffectAttempt): Boolean = activeAttempt === attempt
+    fun isPresentationSuspended(): Boolean = !canPresent()
 
     fun enqueue(request: HaloEffectRequest) {
         discardExpiredRequests()
         val active = activeDelivery?.request
         if (active?.packageName == request.packageName || pendingRequests.any { it.packageName == request.packageName }) return
-        if (active == null) { start(request); return }
+        if (active == null && canPresent()) { start(request); return }
         if (pendingRequests.size >= MAX_PENDING_REQUESTS) return
         pendingRequests.addLast(request)
-        if (active.isReminder() && !request.isReminder()) expirySuspendedRequests += request
+        if (active?.isReminder() == true && !request.isReminder()) expirySuspendedRequests += request
     }
 
     /** Registers a lease before synchronously invoking the host. */
@@ -43,7 +104,10 @@ internal class HaloEffectCoordinator(private val nowMillis: () -> Long = ::monot
         rendererOwner = owner
         legacyRenderer = false
         this.onAttemptStarted = onAttemptStarted
-        startPendingIfIdle()
+        if (canPresent()) {
+            if (activeDelivery != null && activeAttempt == null) dispatchAttempt(parkedSegment, HaloEffectRoute.ACCESSIBILITY)
+            else startPendingIfIdle()
+        }
     }
 
     /** Compatibility surface for existing pure FIFO callers. */
@@ -92,7 +156,7 @@ internal class HaloEffectCoordinator(private val nowMillis: () -> Long = ::monot
     }
 
     /** Must run before host cancellation so teardown callbacks are stale. */
-    fun clear() { pendingRequests.clear(); expirySuspendedRequests.clear(); activeAttempt = null; activeDelivery = null; rendererOwner = null; onAttemptStarted = null; legacyRenderer = false }
+    fun clear() { suspensionGeneration = 0L; frozenAt = nowMillis(); pendingRequests.clear(); expirySuspendedRequests.clear(); activeAttempt = null; activeDelivery = null; rendererOwner = null; onAttemptStarted = null; legacyRenderer = false }
     fun isBusy(): Boolean = activeDelivery != null || pendingRequests.isNotEmpty()
 
     private fun start(request: HaloEffectRequest) {
@@ -103,7 +167,7 @@ internal class HaloEffectCoordinator(private val nowMillis: () -> Long = ::monot
     }
     private fun dispatchAttempt(segment: Int, route: HaloEffectRoute) {
         val delivery = activeDelivery ?: return
-        if (onAttemptStarted == null) return
+        if (onAttemptStarted == null || !canPresent()) return
         if (isExpired(delivery.request)) { finishActive(); return }
         HaloEffectAttempt(delivery, ++nextAttemptLease, segment, route).also { attempt ->
             activeAttempt = attempt
@@ -128,9 +192,9 @@ internal class HaloEffectCoordinator(private val nowMillis: () -> Long = ::monot
         if (reminder) rebaseNormalRequestsHeldByReminder()
         startNext()
     }
-    private fun startNext() { discardExpiredRequests(); if (activeDelivery == null) pendingRequests.pollFirst()?.let(::start) }
+    private fun startNext() { if (!canPresent()) return; discardExpiredRequests(); if (activeDelivery == null) pendingRequests.pollFirst()?.let(::start) }
     private fun startPendingIfIdle() { if (activeDelivery == null && pendingRequests.isNotEmpty()) startNext() }
-    private fun discardExpiredRequests() { while (pendingRequests.firstOrNull()?.let(::isExpired) == true) pendingRequests.removeFirst() }
+    private fun discardExpiredRequests() { if (expiryFrozen()) return; while (pendingRequests.firstOrNull()?.let(::isExpired) == true) pendingRequests.removeFirst() }
     private fun isExpired(request: HaloEffectRequest) = request !in expirySuspendedRequests && nowMillis() - request.enqueuedAt >= MAX_REQUEST_AGE_MS
     private fun rebaseNormalRequestsHeldByReminder() { val now = nowMillis(); expirySuspendedRequests.forEach { it.enqueuedAt = now }; expirySuspendedRequests.clear() }
     private fun HaloEffectRequest.isReminder() = config.renderMode == HaloRenderMode.LIGHT_IMPULSE && reminderColors.isNotEmpty()

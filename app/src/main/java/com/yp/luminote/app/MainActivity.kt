@@ -3,6 +3,13 @@ package com.yp.luminote.app
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.os.Bundle
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import com.yp.luminote.app.overlay.service.HaloEffectController
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -25,13 +32,16 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         UpdateScheduler.schedule(applicationContext)
         enableEdgeToEdge()
+        val settingsViewModel = ViewModelProvider(this, LuminoteSettingsViewModelFactory(
+            LuminoteSettingsRepository(applicationContext)))[LuminoteSettingsViewModel::class.java]
+        HaloEffectController.prepareSelectedModeViewModel(settingsViewModel)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                val lease = HaloEffectController.bindSelectedMode(applicationContext, settingsViewModel)
+                try { awaitCancellation() } finally { HaloEffectController.releaseSelectedModeForeground(lease) }
+            }
+        }
         setContent {
-            val settingsViewModel: LuminoteSettingsViewModel =
-                viewModel(
-                    factory = LuminoteSettingsViewModelFactory(
-                        LuminoteSettingsRepository(applicationContext)
-                    )
-                )
             val settingsLoaded by settingsViewModel.settingsLoaded.collectAsStateWithLifecycle()
             val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
 

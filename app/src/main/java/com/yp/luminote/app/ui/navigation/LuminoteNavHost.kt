@@ -136,6 +136,7 @@ fun LuminoteNavHost(
         composable(LuminoteRoutes.RESONANCE) {
             com.yp.luminote.app.ui.resonance.ResonanceScreen(
                 onBackClick = { navController.popBackStack() },
+                viewModel = settingsViewModel,
                 onAccessClick = { navController.navigate(LuminoteRoutes.ACCESS) }
             )
         }

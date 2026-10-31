@@ -45,12 +45,11 @@ class ResonanceCaptureService : Service() {
         try {
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel(CHANNEL, getString(R.string.resonance_title), NotificationManager.IMPORTANCE_LOW))
-            val stopIntent = PendingIntent.getBroadcast(this, 2203, Intent(this, ResonanceStopReceiver::class.java), PendingIntent.FLAG_IMMUTABLE)
             val openIntent = PendingIntent.getActivity(this, 2204, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
             val notification = Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_halo_notification).setContentTitle(getString(R.string.resonance_title))
                 .setContentText(getString(R.string.resonance_description))
-                .setContentIntent(openIntent).addAction(Notification.Action.Builder(null, getString(R.string.resonance_stop), stopIntent).build())
+                .setContentIntent(openIntent)
                 .setOngoing(true).build()
             // Low-fidelity output-mix visualization is neither microphone recording nor projection.
             startForeground(2202, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
@@ -121,8 +120,4 @@ class ResonanceCaptureService : Service() {
             }
         }
     }
-}
-
-class ResonanceStopReceiver : android.content.BroadcastReceiver() {
-    override fun onReceive(context: Context, intent: Intent?) { ResonanceController.stop(context) }
 }

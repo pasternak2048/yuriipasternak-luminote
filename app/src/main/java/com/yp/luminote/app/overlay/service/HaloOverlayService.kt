@@ -49,6 +49,8 @@ import com.yp.luminote.app.data.settings.LuminoteSettings
 import com.yp.luminote.app.notification.HaloReminderRuntime
 import com.yp.luminote.app.animation.definitions.HaloAnimationId
 import kotlin.math.max
+import com.yp.luminote.app.overlay.coordination.ResonancePresentationLease
+import com.yp.luminote.app.overlay.host.removeOverlayWindowImmediately
 import com.yp.luminote.app.resonance.ResonanceRuntime
 import com.yp.luminote.app.resonance.ResonanceController
 
@@ -76,10 +78,11 @@ internal class ApplicationOverlayReuseLifecycle(
     }
 }
 
-/** A live session retains its intent while a higher priority presentation owns the host. */
+/** Resonance owns visual priority; ordinary work waits without stopping notification collection. */
+@Suppress("UNUSED_PARAMETER")
 internal fun canPresentResonance(sessionCurrent: Boolean, notificationBusy: Boolean,
     calibrationBusy: Boolean, previewBusy: Boolean, accessibilityBusy: Boolean): Boolean =
-    sessionCurrent && !notificationBusy && !calibrationBusy && !previewBusy && !accessibilityBusy
+    sessionCurrent
 
 /** Owns only the overlay window, incoming configuration and service lifetime. */
 class HaloOverlayService : Service() {
@@ -131,6 +134,8 @@ class HaloOverlayService : Service() {
     private var resonanceGeneration: Long? = null
     private var resonanceConfig: HaloConfig? = null
     private var resonanceVisible = false
+    private var resonanceLease: ResonancePresentationLease? = null
+    private var failedAccessibilityGeneration = 0L
 
     /* A new host gets a new diagnostics identity, so stale View callbacks cannot refresh it. */
     private var diagnosticsOverlaySequence = 0L
@@ -138,16 +143,42 @@ class HaloOverlayService : Service() {
 
     private fun resumeResonance(): Boolean {
         val generation = resonanceGeneration ?: return false
-        if (!ResonanceRuntime.isCurrent(generation)) return false
+        if (!canPresentResonance(ResonanceRuntime.isCurrent(generation), effectCoordinator.isBusy(),
+                hasCurrentStaticCalibration(), previewMode, HaloAccessibilityService.hasPriorityPresentation())) return false
         val config = resonanceConfig ?: return false
-        if (!canPresentResonance(true, effectCoordinator.isBusy(), hasCurrentStaticCalibration() || pendingCalibrationIntent != null,
-                previewMode, HaloAccessibilityService.hasPriorityPresentation())) return true
-        if (resonanceVisible && overlayView?.isAttachedToWindow == true) return true
+        if (displayManager.getDisplay(Display.DEFAULT_DISPLAY)?.state == Display.STATE_OFF) return true
+        if (HaloAccessibilityService.isAvailable() && failedAccessibilityGeneration != generation) {
+            if (HaloAccessibilityService.hasResonancePresentation(generation)) return true
+            invalidateResonanceWindow()
+            removeOverlay(immediately = true)
+            val lease = HaloEffectController.newResonancePresentation(this, generation, HaloEffectHost.ACCESSIBILITY) ?: return false
+            if (HaloAccessibilityService.presentResonance(config, lease)) return true
+            failedAccessibilityGeneration = generation
+            HaloEffectController.invalidateResonancePresentation(this, lease)
+        }
+        if (resonanceVisible && overlayView?.isAttachedToWindow == true && resonanceLease?.let {
+                HaloEffectController.ownsResonancePresentation(this, it) } == true) return true
+        invalidateResonanceWindow()
+        HaloAccessibilityService.removeResonancePresentation()
+        removeOverlay(immediately = true)
+        resonanceLease = HaloEffectController.newResonancePresentation(this, generation, HaloEffectHost.OVERLAY) ?: return false
         handler.removeCallbacks(removeOverlayTask)
-        showOverlay(config, restart = true, preview = false, paletteColors = null,
-            scheduleRemoval = false, resonance = generation)
-        if (overlayView == null) onResonanceFailure(generation, "Unable to attach GPU overlay")
+        try {
+            showOverlay(config, restart = true, preview = false, paletteColors = null,
+                scheduleRemoval = false, resonance = generation)
+        } catch (_: RuntimeException) {
+            resonanceLease?.let { onResonanceFailure(it, "Unable to create GPU overlay") }
+            removeOverlay(immediately = true)
+        }
+        if (overlayView == null) resonanceLease?.let { onResonanceFailure(it, "Unable to attach GPU overlay") }
         return true
+    }
+
+    private fun invalidateResonanceWindow() {
+        resonanceLease?.let { HaloEffectController.invalidateResonancePresentation(this, it) }
+        resonanceLease = null
+        overlayView?.stopResonance()
+        resonanceVisible = false
     }
 
     private val removeOverlayTask =
@@ -209,6 +240,13 @@ class HaloOverlayService : Service() {
                     Display.DEFAULT_DISPLAY
                 ) {
                     updateOverlayBounds()
+                    if (resonanceGeneration != null) {
+                        if (displayManager.getDisplay(displayId)?.state == Display.STATE_OFF) {
+                            invalidateResonanceWindow()
+                            removeOverlay(immediately = true)
+                            HaloAccessibilityService.removeResonancePresentation()
+                        } else { failedAccessibilityGeneration = 0L; resumeResonance() }
+                    }
                 }
             }
         }
@@ -241,17 +279,19 @@ class HaloOverlayService : Service() {
         flags: Int,
         startId: Int
     ): Int {
+        if (!HaloEffectController.isCurrentModeCommand(intent)) return START_NOT_STICKY
         if (intent?.action == ACTION_RESONANCE_START) {
             val generation = intent.getLongExtra(EXTRA_RESONANCE_GENERATION, -1L)
             val request = pendingResonance?.takeIf { it.first == generation } ?: return START_NOT_STICKY
             if (!ResonanceRuntime.isCurrent(generation)) return START_NOT_STICKY
             if (!foregroundStarted) {
-                onResonanceFailure(generation, "Overlay foreground service unavailable")
+                ResonanceController.fail(generation, "Overlay foreground service unavailable")
                 stopSelf(startId)
                 return START_NOT_STICKY
             }
             resonanceGeneration = generation
             resonanceConfig = request.second
+            effectCoordinator.attachAttemptRenderer(this, ::startQueuedEffect)
             resumeResonance()
             return START_NOT_STICKY
         }
@@ -261,9 +301,8 @@ class HaloOverlayService : Service() {
                 resonanceGeneration = null
                 resonanceConfig = null
                 if (resonanceVisible) {
-                    resonanceVisible = false
-                    overlayView?.stopResonance()
-                    removeOverlay()
+                    invalidateResonanceWindow()
+                    removeOverlay(immediately = true)
                 }
                 // Keep this host alive until any Ambient restoration command has been delivered.
                 handler.post {
@@ -331,8 +370,15 @@ class HaloOverlayService : Service() {
             return START_NOT_STICKY
         }
 
+        if (HaloEffectController.hasResonance(this) && !isNotificationEffect &&
+            intent?.getBooleanExtra(EXTRA_STOP_AMBIENT, false) != true &&
+            intent?.getBooleanExtra(EXTRA_STOP_PREVIEW, false) != true &&
+            intent?.getBooleanExtra(EXTRA_STOP_CALIBRATION, false) != true &&
+            intent?.getBooleanExtra(EXTRA_PAUSE_CALIBRATION, false) != true) return START_NOT_STICKY
+
         if (
             !isNotificationEffect &&
+            !HaloEffectController.hasResonance(this) &&
             intent?.getBooleanExtra(EXTRA_DIRECT_OVERLAY_COMMAND, false) != true &&
             !CalibrationPreviewCommandPolicy.bypassAccessibilityRoute(
                 intent?.getStringExtra(EXTRA_CALIBRATION_TOKEN),
@@ -353,6 +399,7 @@ class HaloOverlayService : Service() {
                 false
             ) == true
         ) {
+            if (HaloEffectController.hasResonance(this)) return START_NOT_STICKY
             if (hasCurrentStaticCalibration()) return START_NOT_STICKY
             if (resonanceVisible) return START_NOT_STICKY
             if (activeConfig?.renderMode == HaloRenderMode.AMBIENT || overlayView == null) {
@@ -632,6 +679,8 @@ class HaloOverlayService : Service() {
         diagnosticsOverlayCorrelationId = diagnosticsCorrelationId
         Diagnostics.record(DiagnosticEventId.RENDERING_STARTED, correlationId = diagnosticsCorrelationId)
         Diagnostics.expectRendering(diagnosticsCorrelationId, true)
+        if (resonance == null && !HaloEffectController.permitsPresentation(config.renderMode, preview)) return
+        if (resonance == null && HaloEffectController.hasResonance(this)) return
         if (resonance == null && resonanceVisible) {
             overlayView?.stopResonance()
             resonanceVisible = false
@@ -693,7 +742,7 @@ class HaloOverlayService : Service() {
 
                 if (resonance != null) {
                     resonanceVisible = true
-                    view.startResonance(resonance) { reason -> onResonanceFailure(resonance, reason) }
+                    resonanceLease?.let { lease -> view.startResonance(resonance) { reason -> onResonanceFailure(lease, reason) } }
                 } else startAnimation(view, resolvedConfig)
 
                 if (resolvedConfig.renderMode != HaloRenderMode.AMBIENT && scheduleRemoval) {
@@ -848,7 +897,7 @@ class HaloOverlayService : Service() {
                 view.showStaticFrame()
             } else if (resonance != null) {
                 resonanceVisible = true
-                view.startResonance(resonance) { reason -> onResonanceFailure(resonance, reason) }
+                resonanceLease?.let { lease -> view.startResonance(resonance) { reason -> onResonanceFailure(lease, reason) } }
             } else {
                 startAnimation(view, resolvedConfig)
             }
@@ -871,7 +920,8 @@ class HaloOverlayService : Service() {
                 null
             )
 
-            removeOverlay()
+            if (resonance != null) resonanceLease?.let { onResonanceFailure(it, "Unable to attach GPU overlay") }
+            removeOverlay(immediately = resonance != null)
             completeWithoutAnimation()
         }
     }
@@ -1123,6 +1173,7 @@ class HaloOverlayService : Service() {
     private fun removeOverlay(
         immediately: Boolean = false
     ) {
+        if (resonanceLease != null) invalidateResonanceWindow()
         val correlationId = diagnosticsOverlayCorrelationId
         correlationId?.let { Diagnostics.expectRendering(it, false) }
         Diagnostics.record(DiagnosticEventId.RENDERING_STOPPED, correlationId = correlationId)
@@ -1130,18 +1181,9 @@ class HaloOverlayService : Service() {
         resonanceVisible = false
         overlayView?.let { view ->
             try {
-                if (
-                    view.isAttachedToWindow
-                ) {
-                    if (immediately) {
-                        windowManager.removeViewImmediate(
-                            view
-                        )
-                    } else {
-                        windowManager.removeView(
-                            view
-                        )
-                    }
+                if (immediately || view.isAttachedToWindow) {
+                    if (immediately) removeOverlayWindowImmediately(windowManager, view)
+                    else windowManager.removeView(view)
                     Diagnostics.record(
                         DiagnosticEventId.OVERLAY_DETACHED,
                         correlationId = correlationId
@@ -1155,6 +1197,7 @@ class HaloOverlayService : Service() {
                     "Unable to remove halo overlay",
                     exception
                 )
+                if (immediately) throw exception
             }
         }
 
@@ -1174,7 +1217,8 @@ class HaloOverlayService : Service() {
     override fun onDestroy() {
         Diagnostics.record(DiagnosticEventId.OVERLAY_SERVICE_DESTROYED)
         if (resonanceHost === this) resonanceHost = null
-        resonanceGeneration?.let { onResonanceFailure(it, "Overlay host was destroyed") }
+        val recoverGeneration = resonanceGeneration
+        invalidateResonanceWindow()
         val abandonedReminder = activeQueuedAttempt?.delivery?.request?.reminderColors?.isNotEmpty() == true
         activeQueuedAttempt = null
         queuedAttemptStarted = false
@@ -1210,7 +1254,7 @@ class HaloOverlayService : Service() {
 
         overlayView?.cancelAnimation()
 
-        removeOverlay()
+        removeOverlay(immediately = recoverGeneration != null)
 
         if (foregroundStarted) {
             stopForeground(
@@ -1224,6 +1268,15 @@ class HaloOverlayService : Service() {
         )
 
         super.onDestroy()
+        if (recoverGeneration != null && ResonanceRuntime.isCurrent(recoverGeneration)) {
+            handler.post {
+                if (ResonanceRuntime.isCurrent(recoverGeneration) && resonanceHost == null &&
+                    !startOverlay(applicationContext, Intent(applicationContext, HaloOverlayService::class.java).apply {
+                        action = ACTION_RESONANCE_START
+                        putExtra(EXTRA_RESONANCE_GENERATION, recoverGeneration)
+                    })) ResonanceController.fail(recoverGeneration, "Overlay host could not be restored")
+            }
+        }
     }
 
     private fun startAsForeground() {
@@ -1289,9 +1342,27 @@ class HaloOverlayService : Service() {
         }
     }
 
+    private fun suspendOrdinaryPresentation() {
+        activeQueuedAttempt = null
+        queuedAttemptStarted = false
+        activeCompletionLease?.let(queuedCompletionLease::invalidate)
+        activeCompletionLease = null
+        cancelQueuedCompletionWatchdog()
+        handler.removeCallbacks(removeOverlayTask)
+        pendingCalibrationIntent = null
+        lastCalibrationIntent = null
+        calibrationToken = null
+        calibrationGeneration = null
+        overlayView?.setOnFiniteAnimationCompletedListener(null)
+        overlayView?.setOnFiniteAnimationStartedListener(null)
+        overlayView?.cancelAnimation()
+        removeOverlay(immediately = true)
+    }
+
     private fun startQueuedEffect(
         attempt: HaloEffectAttempt
     ) {
+        if (!effectCoordinator.ownsAttempt(attempt) || effectCoordinator.isPresentationSuspended()) return
         activeQueuedAttempt = attempt
         queuedAttemptStarted = false
         val delivery = attempt.delivery
@@ -1318,15 +1389,15 @@ class HaloOverlayService : Service() {
             HaloAccessibilityService.dispatchQueuedEffect(
                 request = request,
                 onFiniteAnimationStarted = {
-                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    if (activeQueuedAttempt !== attempt || !effectCoordinator.ownsAttempt(attempt)) return@dispatchQueuedEffect
                     effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.Started)
                 },
                 onBeforeStartFailure = {
-                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    if (activeQueuedAttempt !== attempt || !effectCoordinator.ownsAttempt(attempt)) return@dispatchQueuedEffect
                     effectCoordinator.onAttemptOutcome(attempt, HaloEffectAttemptOutcome.RetryableBeforeStart)
                 },
                 onAfterStartAbandoned = {
-                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    if (activeQueuedAttempt !== attempt || !effectCoordinator.ownsAttempt(attempt)) return@dispatchQueuedEffect
                     if (activeQueuedAttempt === attempt) {
                         activeQueuedAttempt = null
                         queuedAttemptStarted = false
@@ -1340,7 +1411,7 @@ class HaloOverlayService : Service() {
                     }
                 },
                 onFiniteAnimationCompleted = {
-                    if (activeQueuedAttempt !== attempt) return@dispatchQueuedEffect
+                    if (activeQueuedAttempt !== attempt || !effectCoordinator.ownsAttempt(attempt)) return@dispatchQueuedEffect
                     val completedReminder = request.reminderColors.isNotEmpty() &&
                         attempt.segment == request.reminderColors.lastIndex
                     if (activeQueuedAttempt === attempt) {
@@ -1400,7 +1471,7 @@ class HaloOverlayService : Service() {
                 request.paletteColors,
             scheduleRemoval = false,
             onFiniteAnimationCompleted = {
-                if (activeQueuedAttempt !== attempt) return@showOverlay
+                if (activeQueuedAttempt !== attempt || !effectCoordinator.ownsAttempt(attempt)) return@showOverlay
                 onQueuedEffectCompleted(
                     request, deliveryToken, delivery, completionLease, attempt
                 )
@@ -1462,7 +1533,7 @@ class HaloOverlayService : Service() {
         attempt: HaloEffectAttempt,
         fromWatchdog: Boolean = false
     ) {
-        if (activeQueuedAttempt !== attempt) return
+        if (activeQueuedAttempt !== attempt || !effectCoordinator.ownsAttempt(attempt)) return
         if (
             queuedWatchdogRequest != null &&
             (
@@ -1650,43 +1721,69 @@ class HaloOverlayService : Service() {
         private const val ACTION_RESONANCE_START = "com.yp.luminote.RESONANCE_OVERLAY_START"
         private const val ACTION_RESONANCE_STOP = "com.yp.luminote.RESONANCE_OVERLAY_STOP"
         private const val EXTRA_RESONANCE_GENERATION = "resonance_generation"
+        internal fun dispatchToRunningHost(intent: Intent): Boolean {
+            val host = resonanceHost ?: return false
+            host.onStartCommand(intent, 0, 0)
+            return true
+        }
+        internal fun updateCaptureCleanup(pending: Boolean) { effectCoordinator.setCleanupPending(pending) }
+        private var selectedMode: com.yp.luminote.app.data.settings.HaloMode? = null
+        internal fun selectMode(mode: com.yp.luminote.app.data.settings.HaloMode) {
+            val changed = selectedMode != mode
+            selectedMode = mode
+            effectCoordinator.selectMode(mode, resume = false)
+            if (changed && ResonanceRuntime.activeGeneration == 0L && !ResonanceRuntime.cleanupPending) {
+                resonanceHost?.suspendOrdinaryPresentation()
+                HaloAccessibilityService.suspendOrdinaryPresentation()
+            }
+            effectCoordinator.resumeSelectedMode()
+        }
         private var pendingResonance: Pair<Long, HaloConfig>? = null
         private var resonanceHost: HaloOverlayService? = null
 
-        private fun onResonanceFailure(generation: Long, reason: String) {
-            if (pendingResonance?.first == generation) ResonanceController.fail(generation, reason)
+        private fun onResonanceFailure(lease: ResonancePresentationLease, reason: String) {
+            val context = resonanceHost ?: return
+            if (pendingResonance?.first == lease.generation && HaloEffectController.ownsResonancePresentation(context, lease))
+                ResonanceController.fail(lease.generation, reason)
         }
 
         fun startResonance(context: Context, generation: Long, config: HaloConfig): Boolean {
-            if (!ResonanceRuntime.isCurrent(generation)) return false
+            if (!ResonanceRuntime.isCurrent(generation) || !HaloEffectController.acquireResonance(context, generation)) return false
             pendingResonance = generation to config
-            HaloEffectController.suspendAmbientForResonance(context)
+            effectCoordinator.suspendPresentation(generation)
+            resonanceHost?.suspendOrdinaryPresentation()
+            HaloAccessibilityService.suspendOrdinaryPresentation()
+            invalidatePendingApplicationAmbient()
             return startOverlay(context, Intent(context, HaloOverlayService::class.java).apply {
                 action = ACTION_RESONANCE_START
                 putExtra(EXTRA_RESONANCE_GENERATION, generation)
-            })
+            }).also { started ->
+                if (!started) {
+                    // Warm settings may restore synchronously: end capture ownership first.
+                    ResonanceController.fail(generation, "Android rejected Resonance overlay start")
+                    stopResonance(context, generation)
+                }
+            }
         }
 
         fun stopResonance(context: Context, generation: Long) {
             if (pendingResonance?.first != generation) return
             pendingResonance = null
+            HaloEffectController.releaseResonance(context, generation)
+            HaloAccessibilityService.removeResonancePresentation()
             resonanceHost?.onStartCommand(Intent(context, HaloOverlayService::class.java).apply {
                 action = ACTION_RESONANCE_STOP
                 putExtra(EXTRA_RESONANCE_GENERATION, generation)
             }, 0, 0)
+            effectCoordinator.resumePresentation(generation)
             HaloEffectController.restoreAmbientAfterResonance(context, generation)
         }
 
-        internal fun resumePendingResonance() { resonanceHost?.handler?.post { resonanceHost?.resumeResonance() } }
-
-        internal fun suspendResonancePresentation() {
-            resonanceHost?.let { host ->
-                if (host.resonanceVisible) {
-                    host.resonanceVisible = false
-                    host.overlayView?.stopResonance()
-                    host.removeOverlay()
-                }
-            }
+        internal fun resumePendingResonance(retryAccessibility: Boolean = false) {
+            resonanceHost?.let { host -> host.handler.post {
+                if (retryAccessibility) host.failedAccessibilityGeneration = 0L
+                if (resonanceHost === host) host.resumeResonance()
+            } }
         }
 
         const val EXTRA_COLOR =

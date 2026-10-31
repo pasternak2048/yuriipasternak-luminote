@@ -29,12 +29,36 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+internal class SettingsWriteAcknowledgment {
+    var revision = 0L; private set
+    var committedRevision = 0L; private set
+    fun nextRevision(): Long = ++revision
+    fun complete(completedRevision: Long, successful: Boolean): Boolean {
+        if (!successful || completedRevision != revision) return false
+        committedRevision = completedRevision
+        return true
+    }
+}
+
+/** Transient write acknowledgment; no additional persisted mode or revision. */
+data class SettingsPublication(
+    val session: Long,
+    val revision: Long,
+    val committedRevision: Long,
+    val loaded: Boolean,
+    val settings: LuminoteSettings
+) { val committed: Boolean get() = loaded && revision == committedRevision }
+
 class LuminoteSettingsViewModel(
-    private val repository: LuminoteSettingsRepository
+    private val repository: LuminoteSettingsRepository,
+    private val save: suspend (LuminoteSettings) -> Unit = repository::saveSettings
 ) : ViewModel() {
 
     private val _settingsLoaded =
@@ -62,18 +86,47 @@ class LuminoteSettingsViewModel(
      * persisted. Each UI change therefore owns a monotonically increasing
      * revision, and only the latest revision may clear hasPendingSave.
      */
-    private var settingsRevision = 0L
+    private val writeAcknowledgment = SettingsWriteAcknowledgment()
+    private val settingsRevision: Long get() = writeAcknowledgment.revision
+    private val publicationSession = publicationSessions.incrementAndGet()
+    private val committedRevision: Long get() = writeAcknowledgment.committedRevision
+    private val mutablePublication = MutableStateFlow(SettingsPublication(publicationSession, 0, 0, false, _settings.value))
+    val publication: StateFlow<SettingsPublication> = mutablePublication.asStateFlow()
+    private fun publish() {
+        mutablePublication.value = SettingsPublication(publicationSession, settingsRevision, committedRevision,
+            _settingsLoaded.value, _settings.value)
+    }
 
-    init {
-        viewModelScope.launch {
+    private var repositoryObserver: Job? = null
+    private var repositoryEpoch = 0L
+    init { observeRepository() }
+
+    private fun observeRepository() {
+        repositoryObserver?.cancel()
+        val epoch = ++repositoryEpoch
+        repositoryObserver = viewModelScope.launch {
             repository.settings.collect { persistedSettings ->
+                if (epoch != repositoryEpoch) return@collect
                 if (!hasPendingSave) {
                     _settings.value = persistedSettings
                 }
 
                 _settingsLoaded.value = true
+                publish()
             }
         }
+    }
+
+    /** Transfer the existing desired settings before a replacement Activity renders them. */
+    internal fun adoptPendingSettings(retained: SettingsPublication?) {
+        if (retained == null || !retained.loaded || retained.committed ||
+            retained.session == publicationSession || settingsRevision != 0L) return
+        repositoryObserver?.cancel()
+        ++repositoryEpoch
+        _settings.value = retained.settings
+        _settingsLoaded.value = true
+        // A fresh local owner retries once. Old-owner acknowledgments cannot mutate it.
+        updateSettings { this }
     }
 
     fun setHaloColor(
@@ -423,9 +476,10 @@ class LuminoteSettingsViewModel(
             _settings.value
 
         val revision =
-            ++settingsRevision
+            writeAcknowledgment.nextRevision()
 
         hasPendingSave = true
+        publish()
 
         pendingSaveJob?.cancel()
 
@@ -456,22 +510,27 @@ class LuminoteSettingsViewModel(
         revision: Long
     ) {
         viewModelScope.launch {
-            try {
-                repository.saveSettings(
-                    settings
-                )
-            } finally {
-                if (
-                    revision ==
-                    settingsRevision
-                ) {
+            // A requested mode write belongs to DataStore, even if its Activity is finishing.
+            withContext(NonCancellable) {
+                var successful = false
+                try {
+                    save(settings)
+                    successful = true
+                } catch (_: java.io.IOException) {
+                    // Failed persistence cannot hand authority back or hide desired selection.
+                }
+                if (writeAcknowledgment.complete(revision, successful)) {
                     hasPendingSave = false
+                    publish()
+                    // Invalidate queued old emissions before resubscribing after exact success.
+                    observeRepository()
                 }
             }
         }
     }
 
     companion object {
+        private val publicationSessions = AtomicLong()
         private const val SETTINGS_WRITE_DEBOUNCE_MS =
             250L
     }

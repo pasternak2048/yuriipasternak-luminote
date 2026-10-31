@@ -26,7 +26,7 @@ internal object NotificationEffectAdmissionPolicy {
             )
         }
 
-        if (!settings.haloEnabled || settings.ambientEnabled) {
+        if (!settings.notificationProcessingEnabled || settings.ambientEnabled) {
             return NotificationEffectAdmission.Rejected(
                 NotificationEffectRejectionReason.NOTIFICATION_MODE_DISABLED_OR_AMBIENT
             )
